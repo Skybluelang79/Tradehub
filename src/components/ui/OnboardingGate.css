@@ -1,0 +1,236 @@
+.onboarding-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+  padding: 20px;
+}
+
+.onboarding-card {
+  max-width: 480px;
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 32px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.12);
+  animation: gate-fade-in 0.4s ease-out;
+}
+
+@keyframes gate-fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.onboarding-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.onboarding-header h1 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--accent);
+  margin: 0;
+}
+
+.onboarding-header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+
+.onboarding-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.onboarding-step {
+  display: flex;
+  gap: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  transition: all 0.3s;
+}
+
+.onboarding-step.step--active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
+.onboarding-step.step--done {
+  border-color: #22c55e;
+  background: color-mix(in srgb, #22c55e 5%, transparent);
+  opacity: 0.8;
+}
+
+.onboarding-step.step--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.step-indicator {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 2px solid var(--border);
+}
+
+.step--active .step-indicator {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.step--done .step-indicator {
+  background: #22c55e;
+  color: #fff;
+  border-color: #22c55e;
+}
+
+.step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.step-content h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--text-primary);
+}
+
+.step-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px;
+  line-height: 1.4;
+}
+
+.step-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cookie-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.gate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.gate-btn:hover { border-color: var(--accent); }
+.gate-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.gate-btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.gate-btn--primary:hover { opacity: 0.9; }
+
+.gate-btn--secondary {
+  background: transparent;
+}
+
+.gate-btn--ghost {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+}
+.gate-btn--ghost:hover { color: var(--text-primary); }
+
+.gate-cookie-customize {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--bg-primary);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.gate-cookie-pref {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.pref--locked { opacity: 0.6; cursor: not-allowed; }
+
+.pref-toggle {
+  width: 34px;
+  height: 18px;
+  background: var(--border);
+  border-radius: 9px;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.pref-toggle--on { background: var(--accent); }
+
+.pref-toggle__thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+
+.pref-toggle--on .pref-toggle__thumb { transform: translateX(16px); }
+
+.step-done-text {
+  font-size: 12px;
+  color: #22c55e;
+  font-weight: 500;
+  margin: 4px 0 0;
+}
+
+.step-error {
+  font-size: 12px;
+  color: #ef4444;
+  margin: 4px 0 0;
+}
+
+.onboarding-footer {
+  margin-top: 24px;
+  display: flex;
+  justify-content: center;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}

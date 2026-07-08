@@ -1,0 +1,52 @@
+.language-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.language-switcher__label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.language-switcher__options {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.language-switcher__btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.language-switcher__btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.language-switcher__btn--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.language-switcher__btn--active:hover {
+  opacity: 0.9;
+  color: #fff;
+}
+
+.language-switcher--compact .language-switcher__btn {
+  padding: 2px 6px;
+  font-size: 11px;
+}

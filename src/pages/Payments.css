@@ -1,0 +1,414 @@
+.payments-page {
+  padding-bottom: 24px;
+}
+
+.buyer-protection-card {
+  background: linear-gradient(135deg, var(--secondary), var(--primary));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.protection-icon {
+  width: 44px;
+  height: 44px;
+  background: var(--success);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.protection-icon svg {
+  width: 24px;
+  height: 24px;
+  color: white;
+}
+
+.protection-content {
+  flex: 1;
+}
+
+.protection-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.protection-text {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.section {
+  padding: 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.payment-card-item {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.card-brand-icon {
+  width: 48px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 12px;
+  color: white;
+}
+
+.card-brand-icon.visa {
+  background: linear-gradient(135deg, #1a1f71, #2b3990);
+}
+
+.card-brand-icon.mastercard {
+  background: linear-gradient(135deg, #eb001b, #f79e1b);
+}
+
+.card-brand-icon.amex {
+  background: linear-gradient(135deg, #006fcf, #00a1e4);
+}
+
+.card-details {
+  flex: 1;
+}
+
+.card-number {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: monospace;
+}
+
+.card-expiry {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.default-tag {
+  padding: 4px 10px;
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: var(--radius-full);
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.card-action-btn {
+  padding: 8px 12px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.card-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.card-action-btn.danger:hover {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.add-card-btn {
+  width: 100%;
+  padding: 16px;
+  background: var(--surface);
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+
+.add-card-btn:hover {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.05);
+}
+
+.add-card-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.transaction-item {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.transaction-icon {
+  width: 44px;
+  height: 44px;
+  background: var(--background);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+
+.transaction-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.transaction-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-date {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.transaction-amount {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.transaction-amount.received {
+  color: var(--success);
+}
+
+.transaction-amount.sent {
+  color: var(--text-primary);
+}
+
+.transaction-status {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.transaction-status.completed {
+  background: rgba(74, 222, 128, 0.15);
+  color: var(--success);
+}
+
+.transaction-status.pending {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--warning);
+}
+
+.filter-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+
+.filter-tab {
+  padding: 8px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.filter-tab:hover {
+  border-color: var(--accent);
+}
+
+.filter-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card-type-selector {
+  display: flex;
+  gap: 12px;
+}
+
+.card-type-option {
+  flex: 1;
+  padding: 12px;
+  background: var(--background);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.card-type-option:hover {
+  border-color: var(--accent);
+}
+
+.card-type-option.active {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+}
+
+.card-type-option span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.checkbox-label input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.protection-learn {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.release-btn {
+  padding: 6px 12px;
+  background: var(--success);
+  color: var(--background);
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all var(--transition-fast);
+}
+
+.release-btn:hover {
+  background: var(--success-dark);
+  transform: scale(1.05);
+}
+
+.escrow-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--warning);
+  font-weight: 600;
+  padding: 3px 8px;
+  background: rgba(251, 191, 36, 0.15);
+  border-radius: var(--radius-full);
+}
+
+.transaction-status.refunded {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--error);
+}
+
+.escrow-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.escrow-step {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.escrow-step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.escrow-protection-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(74, 222, 128, 0.1);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  color: var(--success);
+  font-weight: 500;
+}

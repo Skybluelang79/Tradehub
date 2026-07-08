@@ -1,0 +1,323 @@
+.ad-banner {
+  position: relative;
+  margin: 16px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.ad-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.ad-dismiss:hover {
+  background: rgba(0, 0, 0, 0.7);
+  transform: scale(1.1);
+}
+
+.ad-dismiss svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ad-content {
+  position: relative;
+  height: 180px;
+}
+
+.ad-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ad-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.8) 0%, transparent 60%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 16px;
+}
+
+.ad-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 4px;
+}
+
+.ad-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: white;
+  margin: 0 0 4px;
+}
+
+.ad-description {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  margin: 0 0 12px;
+}
+
+.ad-cta {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  width: fit-content;
+  transition: all 0.2s ease;
+}
+
+.ad-cta:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+}
+
+.ad-dots {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  display: flex;
+  gap: 6px;
+}
+
+.ad-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s ease;
+}
+
+.ad-dot.active {
+  background: white;
+  width: 20px;
+  border-radius: 4px;
+}
+
+.ad-card {
+  position: relative;
+  background: linear-gradient(135deg, var(--surface) 0%, var(--secondary) 100%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin: 16px;
+  text-align: center;
+}
+
+.ad-card-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+  transition: color 0.2s ease;
+}
+
+.ad-card-dismiss:hover {
+  color: var(--text-primary);
+}
+
+.ad-card-dismiss svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ad-card-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--accent);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+}
+
+.ad-card-icon svg {
+  width: 24px;
+  height: 24px;
+  color: white;
+}
+
+.ad-card-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 4px;
+}
+
+.ad-card-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 16px;
+}
+
+.ad-card-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.ad-card-btn:hover {
+  background: var(--accent-hover);
+}
+
+.ad-card-sponsored {
+  display: block;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-top: 12px;
+}
+
+.ad-inline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  margin: 0 16px;
+}
+
+.ad-inline-badge {
+  background: var(--text-tertiary);
+  color: var(--background);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.ad-inline-text {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.ad-push {
+  position: relative;
+  background: linear-gradient(135deg, var(--accent), #ff6b8a);
+  border-radius: var(--radius-lg);
+  margin: 16px;
+  padding: 16px;
+  animation: slideInUp 0.3s ease;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ad-push-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  transition: color 0.2s ease;
+}
+
+.ad-push-dismiss:hover {
+  color: white;
+}
+
+.ad-push-dismiss svg {
+  width: 14px;
+  height: 14px;
+}
+
+.ad-push-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ad-push-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ad-push-icon svg {
+  width: 20px;
+  height: 20px;
+  color: white;
+}
+
+.ad-push-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ad-push-text strong {
+  color: white;
+  font-size: 14px;
+}
+
+.ad-push-text span {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+}
+
+.ad-push-btn {
+  background: white;
+  color: var(--accent);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.ad-push-btn:hover {
+  transform: scale(1.05);
+}

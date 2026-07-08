@@ -1,0 +1,227 @@
+.admin-reports {
+  max-width: 1400px;
+}
+
+.stat-item.danger {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.stat-item.danger .stat-count {
+  color: #EF4444;
+}
+
+.stat-item.success {
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.stat-item.success .stat-count {
+  color: #4ADE80;
+}
+
+.reports-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.report-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 20px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.report-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.report-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.report-type-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.report-type-badge.large {
+  font-size: 15px;
+}
+
+.type-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.type-user {
+  background: #3B82F6;
+}
+
+.type-listing {
+  background: #10B981;
+}
+
+.type-transaction {
+  background: #F59E0B;
+}
+
+.status-resolved {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ADE80;
+}
+
+.status-dismissed {
+  background: rgba(107, 107, 123, 0.15);
+  color: var(--text-tertiary);
+}
+
+.report-body {
+  margin-bottom: 16px;
+}
+
+.report-item {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.report-reason {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.5;
+}
+
+.report-meta {
+  display: flex;
+  gap: 24px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.report-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.report-actions .action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  border: none;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.report-actions .action-btn.resolve {
+  background: #4ADE80;
+  color: white;
+}
+
+.report-actions .action-btn.resolve:hover {
+  background: #22C55E;
+}
+
+.report-actions .action-btn.dismiss {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.report-actions .action-btn.dismiss:hover {
+  background: var(--border);
+  color: var(--text-primary);
+}
+
+.report-actions .action-btn.view {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3B82F6;
+}
+
+.report-actions .action-btn.view:hover {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.report-detail-modal {
+  text-align: left;
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.detail-row {
+  background: var(--surface-hover);
+  padding: 12px 16px;
+  border-radius: 10px;
+}
+
+.detail-row .label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+
+.detail-row .value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.report-detail-modal .detail-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 0;
+  border-top: none;
+}
+
+.report-detail-modal .btn-success {
+  flex: 1;
+}
+
+.report-detail-modal .btn-secondary {
+  flex: 1;
+}
+
+@media (max-width: 640px) {
+  .report-meta {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .report-actions {
+    flex-direction: column;
+  }
+
+  .report-actions .action-btn {
+    justify-content: center;
+  }
+}
