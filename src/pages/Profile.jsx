@@ -1,45 +1,93 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Header } from '../components/layout';
 import { Avatar, Rating, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
-import { PinIcon, SettingsIcon, LogOutIcon, EditIcon, ShieldIcon, HelpIcon, BellIcon, MoonIcon, GlobeIcon, MapPinIcon } from '../components/ui/Icons';
+import {
+  PinIcon, SettingsIcon, LogOutIcon, EditIcon, ShieldIcon, HelpIcon,
+  BellIcon, MoonIcon, GlobeIcon, MapPinIcon, EyeIcon, HeartIcon,
+  TrashIcon, ZapIcon, TrendingUpIcon, MessageIcon, ClockIcon,
+} from '../components/ui/Icons';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
-import { formatDate } from '../utils/helpers';
+import { formatDate, formatPrice } from '../utils/helpers';
+import AddListing from './AddListing';
 import '../styles/globals.css';
 import './Profile.css';
 
+const conditionLabels = {
+  new: 'New',
+  like_new: 'Like New',
+  good: 'Good',
+  fair: 'Fair',
+};
+
+const PLACEHOLDER_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72"%3E%3Crect fill="%231f1f2e" width="72" height="72" rx="8"/%3E%3Ctext x="36" y="40" text-anchor="middle" fill="%236B6B7B" font-size="11"%3E📦%3C/text%3E%3C/svg%3E';
+
+function firstImage(item) {
+  if (!item) return PLACEHOLDER_IMG;
+  if (Array.isArray(item.images) && item.images.length > 0) return item.images[0];
+  return PLACEHOLDER_IMG;
+}
+
 export default function Profile() {
-  const { items, getReviewsForUser, getUserRating, setActiveTab } = useApp();
+  const {
+    items, getReviewsForUser, getUserRating, setActiveTab,
+    deleteItem, boostItem, getUserListings,
+    getUserDrafts, getUserActiveListings, getItemAnalytics,
+    conversations, getSoldItems, getTotalRevenue, sales,
+    saveTemplate, deleteTemplate, getTemplates, templates,
+  } = useApp();
   const { user: authUser, logout, updateProfile } = useAuth();
   const { toggleTheme } = useTheme();
   const { addToast } = useToast();
-  
-  const currentUser = authUser || {
+
+  const normalizeUser = (u) => {
+    if (!u) return null;
+    return {
+      ...u,
+      location: u.location || {
+        lat: u.location_lat || 40.7128,
+        lng: u.location_lng || -74.006,
+        address: u.location_address || 'Not set',
+      },
+      joined: u.joined || u.joinedDate || (u.created_at ? new Date(u.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+      reviewCount: u.reviewCount ?? u.review_count ?? 0,
+    };
+  };
+
+  const normalizedAuth = normalizeUser(authUser);
+
+  const currentUser = normalizedAuth || {
     id: 'guest',
     name: 'Guest User',
     email: '',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest',
     rating: 0,
     verified: false,
-    location: { address: 'Not set' },
+    location: { lat: 40.7128, lng: -74.006, address: 'Not set' },
     bio: '',
     phone: '',
     joined: new Date().toISOString().split('T')[0],
-    listings: 0,
+    reviewCount: 0,
   };
 
-  const userItems = items.filter((item) => item.sellerId === currentUser.id);
-  
-  const [activeTab, setActiveTabState] = useState('reviews');
+  const userItems = useMemo(() => getUserListings(currentUser.id), [getUserListings, currentUser.id, items]);
+  const userDrafts = useMemo(() => getUserDrafts(currentUser.id), [getUserDrafts, currentUser.id, items]);
+  const userActiveItems = useMemo(() => getUserActiveListings(currentUser.id), [getUserActiveListings, currentUser.id, items]);
+
+  const [activeTab, setActiveTabState] = useState('listings');
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState({ name: '', bio: '', phone: '' });
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+  const [showAnalytics, setShowAnalytics] = useState(null);
+  const [editItemId, setEditItemId] = useState(null);
+  const [showBoostModal, setShowBoostModal] = useState(null);
+
   const [settings, setSettings] = useState({
     notifications: true,
     darkMode: true,
@@ -48,8 +96,36 @@ export default function Profile() {
     language: 'English',
   });
 
-  const userReviews = getReviewsForUser(currentUser.id);
-  const userRating = getUserRating(currentUser.id);
+  const userReviews = useMemo(() => getReviewsForUser(currentUser.id), [getReviewsForUser, currentUser.id, reviews]);
+  const userRating = useMemo(() => getUserRating(currentUser.id), [getUserRating, currentUser.id, reviews]);
+
+  const totalItemViews = userActiveItems.reduce((sum, i) => sum + (i.views || 0), 0);
+  const totalItemFavorites = userActiveItems.reduce((sum, i) => sum + (i.favorites || 0), 0);
+  const totalConversations = conversations.filter((c) =>
+    userActiveItems.some((i) => i.id === c.itemId)
+  ).length;
+
+  useEffect(() => {
+    if (showEditModal) {
+      setEditForm({
+        name: currentUser.name || '',
+        bio: currentUser.bio || '',
+        phone: currentUser.phone || '',
+      });
+    }
+  }, [showEditModal, currentUser.name, currentUser.bio, currentUser.phone]);
+
+  const handleDeleteItem = (itemId) => {
+    deleteItem(itemId);
+    setShowDeleteConfirm(null);
+    addToast('Listing deleted', 'success');
+  };
+
+  const handleBoostItem = (itemId, days) => {
+    boostItem(itemId, days);
+    setShowBoostModal(null);
+    addToast(`Listing boosted for ${days} days!`, 'success');
+  };
 
   const handleMenuClick = (action) => {
     switch (action) {
@@ -74,9 +150,13 @@ export default function Profile() {
     }
   };
 
-  const handleEditSave = () => {
+  const handleEditSave = async () => {
     if (authUser) {
-      updateProfile({ name: editForm.name, bio: editForm.bio, phone: editForm.phone });
+      const result = await updateProfile({ name: editForm.name, bio: editForm.bio, phone: editForm.phone });
+      if (result?.success === false) {
+        addToast(result.error || 'Failed to update profile', 'error');
+        return;
+      }
     }
     addToast('Profile updated successfully', 'success');
     setShowEditModal(false);
@@ -84,7 +164,7 @@ export default function Profile() {
 
   const handleSettingToggle = (key) => {
     const newValue = !settings[key];
-    setSettings({ ...settings, [key]: newValue });
+    setSettings((prev) => ({ ...prev, [key]: newValue }));
     if (key === 'darkMode') toggleTheme();
     addToast(`${key} ${newValue ? 'enabled' : 'disabled'}`, 'info');
   };
@@ -95,6 +175,15 @@ export default function Profile() {
     { icon: SettingsIcon, title: 'Settings', subtitle: 'App preferences', action: 'settings' },
     { icon: HelpIcon, title: 'Help & Support', subtitle: 'Get help with TradeHub', action: 'help' },
   ];
+
+  if (editItemId) {
+    return (
+      <AddListing
+        editItemId={editItemId}
+        onEditComplete={() => setEditItemId(null)}
+      />
+    );
+  }
 
   return (
     <div className="page">
@@ -120,10 +209,12 @@ export default function Profile() {
             )}
           </div>
           <h1 className="profile-name">{currentUser.name}</h1>
-          <div className="profile-location">
-            <PinIcon size={16} />
-            <span>{currentUser.location.address}</span>
-          </div>
+          {currentUser.location?.address && (
+            <div className="profile-location">
+              <PinIcon size={16} />
+              <span>{currentUser.location.address}</span>
+            </div>
+          )}
 
           <div className="profile-stats-grid">
             <div className="profile-stat">
@@ -149,27 +240,279 @@ export default function Profile() {
         </div>
 
         {!authUser && (
-        <div className="login-prompt">
-          <p>Sign in to access all features</p>
-          <Button onClick={() => { window.dispatchEvent(new CustomEvent('openAuthModal')); setActiveTab('home'); }}>
-            Sign In
-          </Button>
+          <div className="login-prompt">
+            <p>Sign in to access all features</p>
+            <Button onClick={() => { window.dispatchEvent(new CustomEvent('openAuthModal')); setActiveTab('home'); }}>
+              Sign In
+            </Button>
+          </div>
+        )}
+
+        <div className="profile-tabs">
+          <button className={`profile-tab ${activeTab === 'listings' ? 'active' : ''}`} onClick={() => setActiveTabState('listings')}>
+            Listings
+          </button>
+          <button className={`profile-tab ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTabState('dashboard')}>
+            Dashboard
+          </button>
+          <button className={`profile-tab ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTabState('analytics')}>
+            Analytics
+          </button>
+          <button className={`profile-tab ${activeTab === 'reviews' ? 'active' : ''}`} onClick={() => setActiveTabState('reviews')}>
+            Reviews
+          </button>
+          <button className={`profile-tab ${activeTab === 'menu' ? 'active' : ''}`} onClick={() => setActiveTabState('menu')}>
+            Settings
+          </button>
         </div>
-      )}
-      
-      <div className="profile-tabs">
-        <button className={`profile-tab ${activeTab === 'reviews' ? 'active' : ''}`} onClick={() => setActiveTabState('reviews')}>
-          Reviews
-        </button>
-        <button className={`profile-tab ${activeTab === 'listings' ? 'active' : ''}`} onClick={() => setActiveTabState('listings')}>
-          My Listings
-        </button>
-        <button className={`profile-tab ${activeTab === 'menu' ? 'active' : ''}`} onClick={() => setActiveTabState('menu')}>
-          Settings
-        </button>
-      </div>
 
         <div className="profile-tab-content">
+          {activeTab === 'listings' && (
+            <>
+              {userDrafts.length > 0 && (
+                <div className="listings-section">
+                  <h4 className="listings-section-title">
+                    <ClockIcon size={16} />
+                    Drafts ({userDrafts.length})
+                  </h4>
+                  <div className="listings-list">
+                    {userDrafts.map((item) => (
+                      <div key={item.id} className="listing-card">
+                        <img src={firstImage(item)} alt={item.title} className="listing-card-img" />
+                        <div className="listing-card-body">
+                          <h4 className="listing-card-title">{item.title}</h4>
+                          <span className="listing-card-price">{formatPrice(item.price)}</span>
+                          <span className="listing-card-status draft">Draft</span>
+                        </div>
+                        <div className="listing-card-actions">
+                          <button className="listing-action-btn" onClick={() => setEditItemId(item.id)} title="Edit">
+                            <EditIcon size={16} />
+                          </button>
+                          <button className="listing-action-btn danger" onClick={() => setShowDeleteConfirm(item.id)} title="Delete">
+                            <TrashIcon size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {userActiveItems.length === 0 && userDrafts.length === 0 ? (
+                <div className="empty-state">
+                  <h3 className="empty-title">No listings yet</h3>
+                  <p className="empty-text">Start selling by creating your first listing</p>
+                </div>
+              ) : (
+                <div className="listings-section">
+                  <h4 className="listings-section-title">
+                    Active ({userActiveItems.length})
+                  </h4>
+                  <div className="listings-list">
+                    {userActiveItems.map((item) => (
+                      <div key={item.id} className="listing-card">
+                        <img src={firstImage(item)} alt={item.title} className="listing-card-img" />
+                        <div className="listing-card-body">
+                          <h4 className="listing-card-title">{item.title}</h4>
+                          <span className="listing-card-price">{formatPrice(item.price)}</span>
+                          <div className="listing-card-meta">
+                            <span><EyeIcon size={12} /> {item.views || 0}</span>
+                            <span><HeartIcon size={12} /> {item.favorites || 0}</span>
+                            {item.boosted && <span className="boost-badge">Boosted</span>}
+                          </div>
+                          <span className={`listing-card-status ${item.condition}`}>
+                            {conditionLabels[item.condition] || item.condition}
+                          </span>
+                        </div>
+                        <div className="listing-card-actions">
+                          <button className="listing-action-btn" onClick={() => setShowAnalytics(item.id)} title="Analytics">
+                            <TrendingUpIcon size={16} />
+                          </button>
+                          <button className="listing-action-btn" onClick={() => setShowBoostModal(item.id)} title="Boost">
+                            <ZapIcon size={16} />
+                          </button>
+                          <button className="listing-action-btn" onClick={() => setEditItemId(item.id)} title="Edit">
+                            <EditIcon size={16} />
+                          </button>
+                          <button className="listing-action-btn danger" onClick={() => setShowDeleteConfirm(item.id)} title="Delete">
+                            <TrashIcon size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
+          {activeTab === 'analytics' && (
+            <div className="analytics-dashboard">
+              <div className="analytics-summary">
+                <h4 className="analytics-section-title">Seller Performance</h4>
+                <div className="analytics-grid">
+                  <div className="analytics-card">
+                    <EyeIcon size={20} />
+                    <span className="analytics-value">{totalItemViews}</span>
+                    <span className="analytics-label">Total Views</span>
+                  </div>
+                  <div className="analytics-card">
+                    <HeartIcon size={20} />
+                    <span className="analytics-value">{totalItemFavorites}</span>
+                    <span className="analytics-label">Total Favorites</span>
+                  </div>
+                  <div className="analytics-card">
+                    <MessageIcon size={20} />
+                    <span className="analytics-value">{totalConversations}</span>
+                    <span className="analytics-label">Inquiries</span>
+                  </div>
+                  <div className="analytics-card">
+                    <span className="analytics-value">{userActiveItems.length}</span>
+                    <span className="analytics-label">Active Items</span>
+                  </div>
+                </div>
+              </div>
+
+              {userActiveItems.length > 0 && (
+                <div className="analytics-per-item">
+                  <h4 className="analytics-section-title">Per Listing Breakdown</h4>
+                  {userActiveItems.map((item) => (
+                    <div key={item.id} className="analytics-row">
+                      <div className="analytics-row-info">
+                        <img src={firstImage(item)} alt={item.title} className="analytics-row-img" />
+                        <div>
+                          <div className="analytics-row-title">{item.title}</div>
+                          <div className="analytics-row-price">{formatPrice(item.price)}</div>
+                        </div>
+                      </div>
+                      <div className="analytics-row-stats">
+                        <div className="analytics-stat" title="Views">
+                          <EyeIcon size={14} />
+                          <span>{item.views || 0}</span>
+                        </div>
+                        <div className="analytics-stat" title="Favorites">
+                          <HeartIcon size={14} />
+                          <span>{item.favorites || 0}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {userActiveItems.length === 0 && (
+                <div className="empty-state">
+                  <h3 className="empty-title">No analytics data</h3>
+                  <p className="empty-text">Create listings to see your performance</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'dashboard' && (
+            <div className="seller-dashboard">
+              <div className="dashboard-summary">
+                <h4 className="analytics-section-title">Seller Dashboard</h4>
+                <div className="dashboard-grid">
+                  <div className="dashboard-card dashboard-card--revenue">
+                    <span className="dashboard-card-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
+                        <line x1="12" y1="1" x2="12" y2="23" />
+                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                      </svg>
+                    </span>
+                    <span className="dashboard-card-value">${getTotalRevenue(currentUser.id).toLocaleString()}</span>
+                    <span className="dashboard-card-label">Total Revenue</span>
+                  </div>
+                  <div className="dashboard-card dashboard-card--sales">
+                    <span className="dashboard-card-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </span>
+                    <span className="dashboard-card-value">{getSoldItems(currentUser.id).length}</span>
+                    <span className="dashboard-card-label">Items Sold</span>
+                  </div>
+                  <div className="dashboard-card dashboard-card--active">
+                    <span className="dashboard-card-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                      </svg>
+                    </span>
+                    <span className="dashboard-card-value">{userActiveItems.length}</span>
+                    <span className="dashboard-card-label">Active</span>
+                  </div>
+                  <div className="dashboard-card dashboard-card--drafts">
+                    <span className="dashboard-card-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="24" height="24">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <polyline points="14 2 14 8 20 8" />
+                      </svg>
+                    </span>
+                    <span className="dashboard-card-value">{templates.length}</span>
+                    <span className="dashboard-card-label">Templates</span>
+                  </div>
+                </div>
+              </div>
+
+              {sales.length > 0 && (
+                <div className="dashboard-section">
+                  <h4 className="analytics-section-title">Recent Sales</h4>
+                  <div className="sales-list">
+                    {sales.slice(0, 5).map((sale) => (
+                      <div key={sale.id} className="sale-card">
+                        <img src={sale.itemImage || PLACEHOLDER_IMG} alt={sale.itemTitle} className="sale-card-img" />
+                        <div className="sale-card-body">
+                          <h4 className="sale-card-title">{sale.itemTitle}</h4>
+                          <span className="sale-card-price">${sale.price}</span>
+                          <span className="sale-card-date">
+                            {new Date(sale.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {templates.length > 0 && (
+                <div className="dashboard-section">
+                  <h4 className="analytics-section-title">Saved Templates</h4>
+                  <div className="templates-list">
+                    {templates.map((tmpl) => (
+                      <div key={tmpl.id} className="template-card">
+                        <div className="template-card-header">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18" style={{ color: 'var(--accent)', flexShrink: 0 }}>
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                            <polyline points="14 2 14 8 20 8" />
+                          </svg>
+                          <span className="template-card-name">{tmpl.name}</span>
+                        </div>
+                        <div className="template-card-meta">
+                          <span>{tmpl.category}</span>
+                          <span>${tmpl.price}</span>
+                        </div>
+                        <button className="template-card-delete" onClick={() => deleteTemplate(tmpl.id)}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {sales.length === 0 && templates.length === 0 && (
+                <div className="empty-state" style={{ marginTop: 20 }}>
+                  <h3 className="empty-title">No sales yet</h3>
+                  <p className="empty-text">Your sold items and revenue will appear here</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTab === 'reviews' && (
             <>
               {userReviews.length === 0 ? (
@@ -199,23 +542,6 @@ export default function Profile() {
                     )}
                   </div>
                 ))
-              )}
-            </>
-          )}
-
-          {activeTab === 'listings' && (
-            <>
-              {userItems.length === 0 ? (
-                <div className="empty-state">
-                  <h3 className="empty-title">No listings yet</h3>
-                  <p className="empty-text">Start selling by creating your first listing</p>
-                </div>
-              ) : (
-                <div className="listings-grid-mini">
-                  {userItems.map((item) => (
-                    <img key={item.id} src={item.images[0]} alt={item.title} className="listing-thumb-mini" />
-                  ))}
-                </div>
               )}
             </>
           )}
@@ -327,6 +653,79 @@ export default function Profile() {
           <div className="help-item">Report a Problem</div>
           <div className="help-item">Terms of Service</div>
           <div className="help-item">Privacy Policy</div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={!!showDeleteConfirm} onClose={() => setShowDeleteConfirm(null)} title="Delete Listing">
+        <div className="delete-confirm">
+          <p className="delete-confirm-text">Are you sure you want to delete this listing? This action cannot be undone.</p>
+          <div className="delete-confirm-actions">
+            <Button variant="secondary" block onClick={() => setShowDeleteConfirm(null)}>Cancel</Button>
+            <Button block onClick={() => handleDeleteItem(showDeleteConfirm)} style={{ background: 'var(--error)', color: 'white' }}>Delete</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={!!showAnalytics} onClose={() => setShowAnalytics(null)} title="Listing Analytics">
+        {showAnalytics && (() => {
+          const analytics = getItemAnalytics(showAnalytics);
+          const item = items.find((i) => i.id === showAnalytics);
+          if (!analytics || !item) return <p>No data available</p>;
+          return (
+            <div className="analytics-detail">
+              <div className="analytics-detail-item">
+                <img src={firstImage(item)} alt={item.title} className="analytics-detail-img" />
+                <div>
+                  <h4 className="analytics-detail-title">{item.title}</h4>
+                  <span className="analytics-detail-price">{formatPrice(item.price)}</span>
+                </div>
+              </div>
+              <div className="analytics-detail-grid">
+                <div className="analytics-detail-card">
+                  <EyeIcon size={18} />
+                  <span className="analytics-detail-value">{analytics.views}</span>
+                  <span className="analytics-detail-label">Views</span>
+                </div>
+                <div className="analytics-detail-card">
+                  <HeartIcon size={18} />
+                  <span className="analytics-detail-value">{analytics.favorites}</span>
+                  <span className="analytics-detail-label">Favorites</span>
+                </div>
+                <div className="analytics-detail-card">
+                  <MessageIcon size={18} />
+                  <span className="analytics-detail-value">{analytics.conversations}</span>
+                  <span className="analytics-detail-label">Inquiries</span>
+                </div>
+                <div className="analytics-detail-card">
+                  <ClockIcon size={18} />
+                  <span className="analytics-detail-value">{formatDate(analytics.createdAt)}</span>
+                  <span className="analytics-detail-label">Listed</span>
+                </div>
+              </div>
+              {analytics.boosted && <span className="boost-badge boost-badge--lg">Currently Boosted</span>}
+            </div>
+          );
+        })()}
+      </Modal>
+
+      <Modal isOpen={!!showBoostModal} onClose={() => setShowBoostModal(null)} title="Boost Listing">
+        <div className="boost-modal">
+          <p className="boost-modal-text">Boost your listing to appear at the top of search results and get more visibility.</p>
+          <div className="boost-modal-options">
+            {[3, 7, 14, 30].map((days) => (
+              <button
+                key={days}
+                className="boost-modal-option"
+                onClick={() => handleBoostItem(showBoostModal, days)}
+              >
+                <ZapIcon size={20} />
+                <div>
+                  <strong>{days} Days</strong>
+                  <span>${days === 3 ? '2.99' : days === 7 ? '4.99' : days === 14 ? '8.99' : '14.99'}</span>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </Modal>
     </div>

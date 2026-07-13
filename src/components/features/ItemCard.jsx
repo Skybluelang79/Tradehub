@@ -14,6 +14,10 @@ export default function ItemCard({ item, distance, onClick, variant = 'grid' }) 
   const { isFavorite, toggleFavorite } = useApp();
   const favorited = isFavorite(item.id);
 
+  const hasSale = item.salePrice && item.salePrice > 0 && item.salePrice < item.price;
+  const saleEnded = item.saleEndsAt && new Date(item.saleEndsAt) < new Date();
+  const showSale = hasSale && !saleEnded;
+
   const handleFavorite = (e) => {
     e.stopPropagation();
     toggleFavorite(item.id);
@@ -38,17 +42,37 @@ export default function ItemCard({ item, distance, onClick, variant = 'grid' }) 
           >
             <HeartIcon size={18} />
           </button>
-          {item.condition && (
+          {item.boosted && (
+            <span className="item-boosted-badge">Boosted</span>
+          )}
+          {showSale && (
+            <span className="item-sale-badge">
+              {Math.round((1 - item.salePrice / item.price) * 100)}% OFF
+            </span>
+          )}
+          {item.condition && !showSale && (
             <span className={`item-condition ${item.condition}`}>
               {conditionLabels[item.condition]}
             </span>
+          )}
+          {item.quantity > 1 && (
+            <span className="item-qty-badge">{item.quantity} left</span>
           )}
         </div>
       </div>
       <div className="item-content">
         <h3 className="item-title">{item.title}</h3>
         <div className="item-footer">
-          <span className="item-price">{formatPrice(item.price)}</span>
+          <div className="item-price-row">
+            {showSale ? (
+              <>
+                <span className="item-price item-price--sale">{formatPrice(item.salePrice)}</span>
+                <span className="item-price--original">{formatPrice(item.price)}</span>
+              </>
+            ) : (
+              <span className="item-price">{formatPrice(item.price)}</span>
+            )}
+          </div>
           {distance != null && (
             <span className="item-meta">
               <PinIcon />

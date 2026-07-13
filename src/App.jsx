@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { AppProvider, useApp, LanguageProvider, CookieProvider, ThemeProvider } from './context';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { EncryptionProvider } from './context/EncryptionContext';
 import { ToastProvider, OnboardingGate } from './components/ui';
 import { BottomNav } from './components/layout';
 import { OfflineIndicator } from './components/features';
@@ -115,7 +116,7 @@ function AppContent() {
   };
 
   const handleTabChange = (tab) => {
-    const authRequiredTabs = ['add', 'chat', 'payments', 'profile'];
+    const authRequiredTabs = ['chat', 'payments', 'profile'];
     
     if (authRequiredTabs.includes(tab) && !isAuthenticated) {
       setAuthRedirectTab(tab);
@@ -255,17 +256,19 @@ function App() {
     <ThemeProvider>
       <LanguageProvider>
         <AuthProvider>
-          <AppProvider>
-            <ToastProvider>
-              <CookieProvider>
-                <AdminProvider>
-                  <OnboardingGate>
-                    <AppContent />
-                  </OnboardingGate>
-                </AdminProvider>
-              </CookieProvider>
-            </ToastProvider>
-          </AppProvider>
+          <EncryptionProvider>
+            <AppProvider>
+              <ToastProvider>
+                <CookieProvider>
+                  <AdminProvider>
+                    <OnboardingGate>
+                      <AppContent />
+                    </OnboardingGate>
+                  </AdminProvider>
+                </CookieProvider>
+              </ToastProvider>
+            </AppProvider>
+          </EncryptionProvider>
         </AuthProvider>
       </LanguageProvider>
     </ThemeProvider>

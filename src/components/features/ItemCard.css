@@ -84,6 +84,54 @@
   background: rgba(59, 130, 246, 0.9);
 }
 
+.item-boosted-badge {
+  padding: 4px 8px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  border-radius: var(--radius-sm);
+  font-size: 9px;
+  font-weight: 700;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: auto;
+}
+
+.item-sale-badge {
+  padding: 4px 8px;
+  background: linear-gradient(135deg, var(--warning), #F59E0B);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  color: #1A1A2E;
+  animation: pulse 2s infinite;
+}
+
+.item-qty-badge {
+  padding: 4px 8px;
+  background: rgba(59, 130, 246, 0.9);
+  border-radius: var(--radius-sm);
+  font-size: 9px;
+  font-weight: 600;
+  color: white;
+  margin-left: auto;
+}
+
+.item-price-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.item-price--sale {
+  color: var(--warning);
+}
+
+.item-price--original {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
 .item-content {
   padding: 12px;
 }

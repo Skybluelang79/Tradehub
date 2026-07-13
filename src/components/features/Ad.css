@@ -321,3 +321,175 @@
 .ad-push-btn:hover {
   transform: scale(1.05);
 }
+
+.brand-sponsor {
+  position: relative;
+  margin: 16px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.brand-sponsor-dismiss {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.5);
+  z-index: 10;
+  transition: all 0.2s ease;
+}
+
+.brand-sponsor-dismiss:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+
+.brand-sponsor-dismiss svg {
+  width: 14px;
+  height: 14px;
+}
+
+.brand-sponsor-inner {
+  display: flex;
+  align-items: stretch;
+  min-height: 200px;
+}
+
+.brand-sponsor-left {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+
+.brand-sponsor-badge {
+  display: inline-block;
+  width: fit-content;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.brand-sponsor-logo {
+  margin-bottom: 4px;
+  line-height: 0;
+}
+
+.brand-sponsor-logo svg {
+  width: 28px;
+  height: 28px;
+}
+
+.brand-sponsor-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: white;
+  margin: 0 0 4px;
+  letter-spacing: -0.5px;
+}
+
+.brand-sponsor-tagline {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 8px;
+  line-height: 1.4;
+}
+
+.brand-sponsor-offer {
+  font-size: 12px;
+  font-weight: 700;
+  margin: 0 0 14px;
+}
+
+.brand-sponsor-cta {
+  width: fit-content;
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 9px 20px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  letter-spacing: 0.3px;
+}
+
+.brand-sponsor-cta:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.15);
+}
+
+.brand-sponsor-right {
+  position: relative;
+  width: 45%;
+  min-height: 180px;
+  overflow: hidden;
+}
+
+.brand-sponsor-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s ease;
+}
+
+.brand-sponsor:hover .brand-sponsor-image {
+  transform: scale(1.05);
+}
+
+.brand-sponsor-image-glow {
+  position: absolute;
+  inset: 0;
+  opacity: 0.15;
+  mix-blend-mode: overlay;
+}
+
+.brand-sponsor-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 0 12px;
+  position: relative;
+  z-index: 2;
+}
+
+.brand-sponsor-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
+}
+
+.brand-sponsor-dot.active {
+  width: 20px;
+  border-radius: 4px;
+}
+
+@media (max-width: 480px) {
+  .brand-sponsor-right {
+    display: none;
+  }
+  .brand-sponsor-left {
+    width: 100%;
+  }
+}

@@ -41,11 +41,132 @@
   padding: 20px 16px;
 }
 
+.detail-price-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
 .detail-price {
   font-size: 32px;
   font-weight: 800;
   color: var(--accent);
+}
+
+.detail-price--sale {
+  color: var(--warning);
+}
+
+.detail-price--original {
+  font-size: 18px;
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+  font-weight: 500;
+}
+
+.detail-sale-badge {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, var(--warning), #F59E0B);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  color: #1A1A2E;
+  animation: pulse 2s infinite;
+}
+
+.detail-stock-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.detail-stock-badge {
+  padding: 4px 10px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  color: #3B82F6;
+}
+
+.detail-variants {
+  margin-bottom: 20px;
+  padding: 12px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.detail-variants-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.detail-variant-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
   margin-bottom: 8px;
+}
+
+.detail-variant-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 50px;
+  padding-top: 4px;
+}
+
+.detail-variant-values {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.detail-variant-chip {
+  padding: 4px 10px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.detail-sold-banner {
+  position: fixed;
+  bottom: calc(70px + var(--safe-area-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 32px);
+  max-width: 468px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-tertiary);
+  font-size: 15px;
+  font-weight: 600;
+  z-index: 50;
+}
+
+.detail-action-btn.danger-btn {
+  background: var(--error);
+  color: white;
+  border: none;
+}
+
+.detail-action-btn.danger-btn:hover {
+  opacity: 0.9;
 }
 
 .detail-title {

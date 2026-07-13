@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Header } from '../components/layout';
-import { ItemsGrid, AdBanner, AdCard, AdPush, SearchSuggestions, PullToRefresh } from '../components/features';
+import { ItemsGrid, AdBanner, AdCard, AdPush, BrandSponsor, SafeTrading, ListForFree, PremiumSeller, SearchSuggestions, PullToRefresh } from '../components/features';
 import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon } from '../components/ui/Icons';
 import { useApp } from '../context';
 import { categories, distanceOptions, sortOptions } from '../services/api';
@@ -17,6 +17,7 @@ export default function Home() {
     viewMode,
     setViewMode,
     setSelectedItem,
+    setActiveTab,
     getDistanceFromUser,
   } = useApp();
 
@@ -34,6 +35,18 @@ export default function Home() {
       .sort((a, b) => (b.views || 0) - (a.views || 0))
       .slice(0, 8);
   }, [items]);
+
+  const sortedItems = useMemo(() => {
+    const now = new Date();
+    return [...filteredItems].sort((a, b) => {
+      const aExpires = a.boostExpiresAt ? new Date(a.boostExpiresAt) : null;
+      const bExpires = b.boostExpiresAt ? new Date(b.boostExpiresAt) : null;
+      const aBoosted = a.boosted && aExpires && aExpires > now ? 1 : 0;
+      const bBoosted = b.boosted && bExpires && bExpires > now ? 1 : 0;
+      if (aBoosted !== bBoosted) return bBoosted - aBoosted;
+      return 0;
+    });
+  }, [filteredItems]);
 
   const recentlyViewed = useMemo(() => {
     try {
@@ -189,6 +202,10 @@ export default function Home() {
       </div>
 
       <div className="page-content">
+        <BrandSponsor />
+        <SafeTrading />
+        <ListForFree onList={(opts) => setActiveTab('add')} />
+        <PremiumSeller />
         <AdBanner />
         
         {!filters.search && recentlyViewed.length > 0 && (
@@ -236,7 +253,7 @@ export default function Home() {
         )}
         
         <ItemsGrid
-          items={filteredItems}
+          items={sortedItems}
           onItemClick={setSelectedItem}
           getDistance={getDistanceFromUser}
           viewMode={viewMode}

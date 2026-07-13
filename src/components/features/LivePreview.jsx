@@ -1,5 +1,6 @@
-export default function LivePreview({ title, price, description, images, condition }) {
+export default function LivePreview({ title, price, salePrice, description, images, condition }) {
   const hasContent = title || price || description || images.length > 0;
+  const showSale = salePrice && parseFloat(salePrice) > 0 && parseFloat(price) > 0 && parseFloat(salePrice) < parseFloat(price);
 
   if (!hasContent) return null;
 
@@ -20,7 +21,16 @@ export default function LivePreview({ title, price, description, images, conditi
         )}
         <div className="live-preview-body">
           <h4 className="live-preview-name">{title || 'Item Title'}</h4>
-          {price && <span className="live-preview-price">${parseFloat(price) > 0 ? parseFloat(price).toLocaleString() : '0'}</span>}
+          <div className="live-preview-price-row">
+            {showSale ? (
+              <>
+                <span className="live-preview-price live-preview-price--sale">${parseFloat(salePrice).toLocaleString()}</span>
+                <span className="live-preview-price--original">${parseFloat(price).toLocaleString()}</span>
+              </>
+            ) : (
+              price && <span className="live-preview-price">${parseFloat(price) > 0 ? parseFloat(price).toLocaleString() : '0'}</span>
+            )}
+          </div>
           {condition && <span className="live-preview-condition">{condition}</span>}
         </div>
         {description && (

@@ -1,0 +1,221 @@
+.enc-badge-container {
+  margin: 0 12px 8px;
+}
+
+.enc-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 12px;
+}
+
+.enc-badge.encrypted {
+  background: rgba(74, 222, 128, 0.06);
+  border: 1px solid rgba(74, 222, 128, 0.12);
+  color: #4ADE80;
+}
+
+.enc-badge.unencrypted {
+  background: rgba(251, 191, 36, 0.06);
+  border: 1px solid rgba(251, 191, 36, 0.12);
+  color: #FBBF24;
+}
+
+.enc-badge:hover {
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.enc-badge.expanded {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.enc-badge-icon {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.enc-badge-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.enc-badge-label {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.enc-badge-chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s ease;
+  opacity: 0.5;
+}
+
+.enc-badge-chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.enc-details {
+  background: rgba(74, 222, 128, 0.04);
+  border: 1px solid rgba(74, 222, 128, 0.12);
+  border-top: none;
+  border-bottom-left-radius: var(--radius-md);
+  border-bottom-right-radius: var(--radius-md);
+  padding: 14px;
+  animation: encSlideDown 0.2s ease;
+}
+
+@keyframes encSlideDown {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.enc-details-section {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+.enc-details-icon {
+  width: 32px;
+  height: 32px;
+  background: rgba(74, 222, 128, 0.1);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.enc-details-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.enc-details-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.enc-details-text strong {
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.enc-details-text span {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  line-height: 1.4;
+}
+
+.enc-fingerprint {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.enc-fingerprint-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.enc-fingerprint-value {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: #4ADE80;
+  letter-spacing: 3px;
+  margin-bottom: 4px;
+}
+
+.enc-fingerprint-hint {
+  display: block;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.enc-trust-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  border-radius: var(--radius-sm);
+  color: #4ADE80;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 10px;
+}
+
+.enc-trust-btn:hover {
+  background: rgba(74, 222, 128, 0.15);
+}
+
+.enc-trusted-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px;
+  background: rgba(74, 222, 128, 0.08);
+  border-radius: var(--radius-sm);
+  color: #4ADE80;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+
+.enc-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.enc-info-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+}
+
+.enc-info-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.enc-info-dot.green {
+  background: #4ADE80;
+}
+
+.enc-info-dot.yellow {
+  background: #FBBF24;
+}

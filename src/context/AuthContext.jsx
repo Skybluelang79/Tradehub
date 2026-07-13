@@ -1,59 +1,45 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { storage } from '../services/storage';
-import { generateId } from '../utils/helpers';
+import { api, setToken } from '../services/client';
 
 const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => storage.get('authUser', null));
-  const [isAuthenticated, setIsAuthenticated] = useState(() => !!storage.get('authUser', null));
-  const [isLoading, setIsLoading] = useState(false);
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    storage.set('authUser', user);
-  }, [user]);
+    const initAuth = async () => {
+      const token = localStorage.getItem('tradehub_token');
+      if (token) {
+        setToken(token);
+        try {
+          const data = await api.auth.me();
+          setUser(data.user);
+          setIsAuthenticated(true);
+        } catch {
+          setToken(null);
+          localStorage.removeItem('tradehub_token');
+        }
+      }
+      setIsLoading(false);
+    };
+    initAuth();
+  }, []);
 
   const login = useCallback(async (email, password) => {
     setIsLoading(true);
     setError(null);
-    
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const users = storage.get('users', []);
-      const foundUser = users.find(u => u.email === email && u.password === password);
-      
-      if (foundUser) {
-        const { password: _, ...userWithoutPassword } = foundUser;
-        setUser(userWithoutPassword);
-        setIsAuthenticated(true);
-        return { success: true };
-      }
-      
-      if (email === 'demo@tradehub.com' && password === 'demo123') {
-        const demoUser = {
-          id: 'user_demo',
-          name: 'Demo User',
-          email: 'demo@tradehub.com',
-          avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=demo',
-          rating: 4.8,
-          verified: true,
-          location: { address: 'New York, NY', lat: 40.7128, lng: -74.006 },
-          bio: 'Demo account for testing',
-          phone: '+1 234 567 8900',
-          joined: '2024-01-15',
-          listings: 12,
-        };
-        setUser(demoUser);
-        setIsAuthenticated(true);
-        return { success: true };
-      }
-      
-      setError('Invalid email or password');
-      return { success: false, error: 'Invalid email or password' };
+      const data = await api.auth.login({ email, password });
+      setToken(data.token);
+      localStorage.setItem('tradehub_token', data.token);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      return { success: true };
     } catch (err) {
-      setError('Login failed. Please try again.');
+      setError(err.message || 'Invalid email or password');
       return { success: false, error: err.message };
     } finally {
       setIsLoading(false);
@@ -63,48 +49,15 @@ export function AuthProvider({ children }) {
   const signup = useCallback(async (userData) => {
     setIsLoading(true);
     setError(null);
-    
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const users = storage.get('users', []);
-      
-      if (users.find(u => u.email === userData.email)) {
-        setError('Email already registered');
-        return { success: false, error: 'Email already registered' };
-      }
-      
-      if (users.find(u => u.username === userData.username)) {
-        setError('Username already taken');
-        return { success: false, error: 'Username already taken' };
-      }
-      
-      const newUser = {
-        id: generateId(),
-        name: userData.name,
-        username: userData.username,
-        email: userData.email,
-        password: userData.password,
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.username}`,
-        rating: 0,
-        verified: false,
-        location: { address: 'Not set', lat: 0, lng: 0 },
-        bio: '',
-        phone: '',
-        joined: new Date().toISOString().split('T')[0],
-        listings: 0,
-      };
-      
-      users.push(newUser);
-      storage.set('users', users);
-      
-      const { password: _, ...userWithoutPassword } = newUser;
-      setUser(userWithoutPassword);
+      const data = await api.auth.signup(userData);
+      setToken(data.token);
+      localStorage.setItem('tradehub_token', data.token);
+      setUser(data.user);
       setIsAuthenticated(true);
-      
       return { success: true };
     } catch (err) {
-      setError('Signup failed. Please try again.');
+      setError(err.message || 'Signup failed');
       return { success: false, error: err.message };
     } finally {
       setIsLoading(false);
@@ -112,62 +65,40 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(() => {
+    setToken(null);
+    localStorage.removeItem('tradehub_token');
     setUser(null);
     setIsAuthenticated(false);
-    storage.remove('authUser');
   }, []);
 
-  const updateProfile = useCallback((updates) => {
-    if (!user) return { success: false };
-    
-    const updatedUser = { ...user, ...updates };
-    setUser(updatedUser);
-    
-    const users = storage.get('users', []);
-    const userIndex = users.findIndex(u => u.id === user.id);
-    if (userIndex !== -1) {
-      users[userIndex] = { ...users[userIndex], ...updates };
-      storage.set('users', users);
+  const updateProfile = useCallback(async (updates) => {
+    try {
+      const data = await api.auth.updateProfile(updates);
+      setUser(data.user);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
     }
-    
-    return { success: true };
-  }, [user]);
+  }, []);
 
   const changePassword = useCallback(async (currentPassword, newPassword) => {
-    if (!user) return { success: false };
-    
-    const users = storage.get('users', []);
-    const userIndex = users.findIndex(u => u.id === user.id);
-    
-    if (userIndex === -1 || users[userIndex].password !== currentPassword) {
-      setError('Current password is incorrect');
-      return { success: false, error: 'Current password is incorrect' };
+    try {
+      await api.auth.changePassword({ currentPassword, newPassword });
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Failed to change password');
+      return { success: false, error: err.message };
     }
-    
-    users[userIndex].password = newPassword;
-    storage.set('users', users);
-    
-    return { success: true };
-  }, [user]);
+  }, []);
 
   const forgotPassword = useCallback(async (email) => {
     setIsLoading(true);
     setError(null);
-    
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      const users = storage.get('users', []);
-      const foundUser = users.find(u => u.email === email);
-      
-      if (foundUser) {
-        return { success: true, message: 'Password reset instructions sent to your email' };
-      }
-      
+      await api.auth.forgotPassword({ email });
       return { success: true, message: 'If an account exists with this email, you will receive reset instructions' };
     } catch (err) {
-      setError('Failed to process request');
-      return { success: false, error: err.message };
+      return { success: true, message: 'If an account exists with this email, you will receive reset instructions' };
     } finally {
       setIsLoading(false);
     }

@@ -1,10 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Header } from '../components/layout';
 import { Avatar } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import { ArrowLeftIcon, SendIcon, ShieldIcon } from '../components/ui/Icons';
+import EncryptionBadge from '../components/features/EncryptionBadge';
 import { useApp } from '../context';
+import { useEncryption } from '../context/EncryptionContext';
 import { currentUser } from '../services/api';
+import { sendMessage as socketSendMessage } from '../services/socket';
 import { formatDate, formatTime, formatPrice } from '../utils/helpers';
 import '../styles/globals.css';
 import './Chat.css';
@@ -12,8 +15,19 @@ import './Chat.css';
 export default function Chat() {
   const { conversations, messages, selectedConversation, setSelectedConversation, setActiveTab, sendMessage, markConversationRead, getUser, items, addNotification } = useApp();
   const { addToast } = useToast();
+  const {
+    getOrCreateKeyPair,
+    initConversationEncryption,
+    encrypt,
+    isConversationEncrypted,
+    getFingerprint,
+    trustKey,
+    isKeyTrusted,
+  } = useEncryption();
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
+  const [encInitializing, setEncInitializing] = useState(false);
+  const [encReady, setEncReady] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -28,6 +42,35 @@ export default function Chat() {
       markConversationRead(selectedConversation);
     }
   }, [selectedConversation, markConversationRead]);
+
+  useEffect(() => {
+    if (!selectedConversation) { setEncReady(false); return; }
+    if (isConversationEncrypted(selectedConversation)) { setEncReady(true); return; }
+
+    let cancelled = false;
+    (async () => {
+      setEncInitializing(true);
+      try {
+        const conv = conversations.find((c) => c.id === selectedConversation);
+        if (!conv) return;
+        const otherUserId = conv.participants.find((p) => p !== currentUser.id);
+
+        const myKp = await getOrCreateKeyPair(currentUser.id);
+        const otherKp = await getOrCreateKeyPair(`sim_${otherUserId}`);
+
+        if (!cancelled) {
+          await initConversationEncryption(selectedConversation, currentUser.id, otherUserId, myKp.privateKey, otherKp.publicKey);
+          setEncReady(true);
+        }
+      } catch (err) {
+        console.error('Encryption init failed:', err);
+      } finally {
+        if (!cancelled) setEncInitializing(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [selectedConversation, conversations, currentUser.id, getOrCreateKeyPair, initConversationEncryption, isConversationEncrypted]);
 
   const autoReplies = [
     "Great, thanks for your interest!",
@@ -70,9 +113,24 @@ export default function Chat() {
     const otherUser = getUser(otherUserId);
     const item = items.find((i) => i.id === conv.itemId);
 
-    const handleSend = () => {
+    const handleSend = async () => {
       if (inputText.trim()) {
-        sendMessage(selectedConversation, inputText.trim());
+        const plaintext = inputText.trim();
+        let encMeta = null;
+        if (isConversationEncrypted(selectedConversation)) {
+          try {
+            encMeta = await encrypt(selectedConversation, plaintext);
+          } catch (err) {
+            console.error('Encryption failed, sending plaintext:', err);
+          }
+        }
+        if (encMeta) {
+          sendMessage(selectedConversation, plaintext, encMeta);
+          socketSendMessage(selectedConversation, plaintext, true, encMeta.ciphertext, encMeta.iv);
+        } else {
+          sendMessage(selectedConversation, plaintext);
+          socketSendMessage(selectedConversation, plaintext);
+        }
         setInputText('');
       }
     };
@@ -93,6 +151,23 @@ export default function Chat() {
             {item && <div className="chat-user-item">{item.title}</div>}
           </div>
         </div>
+
+        {encInitializing && (
+          <div className="enc-initializing">
+            <div className="enc-initializing-spinner" />
+            <span>Establishing encrypted connection...</span>
+          </div>
+        )}
+
+        <EncryptionBadge
+          encrypted={encReady}
+          fingerprint={getFingerprint(selectedConversation)}
+          trusted={isKeyTrusted(selectedConversation)}
+          onTrust={() => {
+            trustKey(selectedConversation);
+            addToast({ type: 'success', message: 'Contact verified! Fingerprint marked as trusted.' });
+          }}
+        />
 
         {item && (
           <div className="payment-offer-card" onClick={() => setActiveTab('payments')}>

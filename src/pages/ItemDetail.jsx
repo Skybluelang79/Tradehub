@@ -3,6 +3,7 @@ import { Avatar, Rating, Button } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
 import { ImageLightbox, PriceChart } from '../components/features';
+import { api } from '../services/client';
 import {
   ArrowLeftIcon,
   PinIcon,
@@ -53,6 +54,7 @@ export default function ItemDetail() {
     isFavorite,
     toggleFavorite,
     incrementItemViews,
+    markAsSold,
   } = useApp();
 
   const { addToast } = useToast();
@@ -97,6 +99,10 @@ export default function ItemDetail() {
   const sellerRating = getUserRating(seller.id);
   const isOwnItem = selectedItem.sellerId === currentUser.id;
   const distance = getDistanceFromUser(selectedItem.location.lat, selectedItem.location.lng);
+  const hasSale = selectedItem.salePrice && selectedItem.salePrice > 0 && selectedItem.salePrice < selectedItem.price;
+  const saleEnded = selectedItem.saleEndsAt && new Date(selectedItem.saleEndsAt) < new Date();
+  const showSale = hasSale && !saleEnded;
+  const displayPrice = showSale ? selectedItem.salePrice : selectedItem.price;
 
   const handleMessage = () => {
     const conv = addConversation(selectedItem.id, selectedItem.sellerId);
@@ -155,10 +161,19 @@ export default function ItemDetail() {
     }
   }, [selectedItem, addToast]);
 
-  const handleReport = () => {
+  const handleReport = async () => {
     const reason = reportCategory === 'Other' && reportDetails.trim() ? reportDetails.trim() : reportCategory;
     if (!reason) return;
-    addToast('Report submitted. Our team will review it shortly.', 'success');
+    try {
+      await api.reports.create({ itemId: selectedItem?.id, reason, description: reportDetails });
+      addToast('Report submitted. Our team will review it shortly.', 'success');
+    } catch (err) {
+      if (err.message === 'Failed to fetch') {
+        addToast('Report submitted (offline). Our team will review it shortly.', 'success');
+      } else {
+        addToast(err.message || 'Failed to submit report', 'error');
+      }
+    }
     setReportSubmitted(true);
     setShowReportModal(false);
     setReportCategory('');
@@ -228,7 +243,19 @@ export default function ItemDetail() {
       </div>
 
       <div className="detail-content">
-        <div className="detail-price">{formatPrice(selectedItem.price)}</div>
+        <div className="detail-price-row">
+          {showSale ? (
+            <>
+              <div className="detail-price detail-price--sale">{formatPrice(selectedItem.salePrice)}</div>
+              <div className="detail-price--original">{formatPrice(selectedItem.price)}</div>
+              <span className="detail-sale-badge">
+                {Math.round((1 - selectedItem.salePrice / selectedItem.price) * 100)}% OFF
+              </span>
+            </>
+          ) : (
+            <div className="detail-price">{formatPrice(selectedItem.price)}</div>
+          )}
+        </div>
         <h1 className="detail-title">{selectedItem.title}</h1>
 
         <div className="detail-meta">
@@ -254,8 +281,30 @@ export default function ItemDetail() {
 
         <p className="detail-description">{selectedItem.description}</p>
 
+        {selectedItem.quantity > 1 && (
+          <div className="detail-stock-info">
+            <span className="detail-stock-badge">{selectedItem.quantity} in stock</span>
+          </div>
+        )}
+
+        {selectedItem.variants && selectedItem.variants.length > 0 && (
+          <div className="detail-variants">
+            <h4 className="detail-variants-title">Variants</h4>
+            {selectedItem.variants.map((v, i) => (
+              <div key={i} className="detail-variant-row">
+                <span className="detail-variant-name">{v.name}:</span>
+                <div className="detail-variant-values">
+                  {v.values.map((opt, j) => (
+                    <span key={j} className="detail-variant-chip">{opt.value}</span>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {selectedItem.priceHistory && (
-          <PriceChart priceHistory={selectedItem.priceHistory} currentPrice={selectedItem.price} />
+          <PriceChart priceHistory={selectedItem.priceHistory} currentPrice={displayPrice} />
         )}
 
         <div className="seller-card-detail">
@@ -320,7 +369,24 @@ export default function ItemDetail() {
         </div>
       )}
 
-      {!isOwnItem && (
+      {isOwnItem && selectedItem.status === 'active' && (
+        <div className="detail-actions">
+          <button className="detail-action-btn secondary" onClick={() => setShowReportModal(true)}>
+            <FlagIconSvg size={20} />
+            Report
+          </button>
+          <button className="detail-action-btn primary danger-btn" onClick={() => {
+            markAsSold(selectedItem.id);
+            setSelectedItem(null);
+            setActiveTab('profile');
+          }}>
+            <ShieldIcon size={20} />
+            Mark as Sold
+          </button>
+        </div>
+      )}
+
+      {!isOwnItem && selectedItem.status === 'active' && (
         <div className="detail-actions">
           <button className="detail-action-btn secondary" onClick={() => setShowReviewModal(true)}>
             <StarIcon size={20} />
@@ -342,6 +408,13 @@ export default function ItemDetail() {
             <MessageIcon size={20} />
             Message
           </button>
+        </div>
+      )}
+
+      {selectedItem.status === 'sold' && (
+        <div className="detail-sold-banner">
+          <ShieldIcon size={20} />
+          <span>This item has been sold</span>
         </div>
       )}
 

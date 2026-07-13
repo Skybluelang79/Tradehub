@@ -9,97 +9,352 @@
   border-top: 1px solid var(--border);
   display: flex;
   justify-content: space-around;
-  padding: 8px 0 calc(8px + var(--safe-area-bottom));
+  align-items: flex-end;
+  padding: 6px 4px calc(8px + var(--safe-area-bottom));
   z-index: 100;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
 }
 
 .nav-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 8px 16px;
+  gap: 3px;
+  padding: 6px 12px;
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: var(--text-tertiary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   border-radius: var(--radius-md);
-  min-width: 60px;
+  min-width: 52px;
+  position: relative;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.nav-item:hover {
+  color: var(--text-secondary);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .nav-item:active {
-  transform: scale(0.95);
+  transform: scale(0.92);
 }
 
 .nav-item.active {
   color: var(--accent);
 }
 
-.nav-item.active svg {
-  stroke-width: 2.5;
+.nav-item.active .nav-icon {
+  color: var(--accent);
 }
 
-.nav-item span {
+.nav-item--action {
+  margin-top: -12px;
+}
+
+.nav-label {
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.3px;
+  white-space: nowrap;
+  transition: color 0.2s ease;
+}
+
+.nav-item.active .nav-label {
+  color: var(--accent);
 }
 
 .nav-item-wrapper {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.nav-icon {
+  font-size: 22px;
+  line-height: 1;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  color: var(--text-tertiary);
+}
+
+.nav-icon--active {
+  color: var(--accent);
+  transform: scale(1.1);
 }
 
 .nav-badge {
   position: absolute;
-  top: 0;
-  right: 8px;
+  top: -6px;
+  right: -10px;
   background: var(--accent);
   color: white;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   padding: 2px 5px;
   border-radius: var(--radius-full);
   min-width: 16px;
   text-align: center;
-  animation: pulse 2s infinite;
+  animation: badgePop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 2px 6px rgba(233, 69, 96, 0.4);
+  z-index: 2;
 }
 
-@keyframes pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.1); }
+@keyframes badgePop {
+  0% { transform: scale(0); }
+  60% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
+/* ---- SELL Action Button ---- */
 .nav-add-btn {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
   background: linear-gradient(135deg, var(--accent), #ff6b8a);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 4px 12px rgba(233, 69, 96, 0.4);
-  transform: translateY(-8px);
-  transition: all var(--transition-base);
+  box-shadow: 0 4px 15px rgba(233, 69, 96, 0.45);
+  transform: translateY(-4px);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  cursor: pointer;
+  overflow: visible;
 }
 
-.nav-add-btn:hover {
-  transform: translateY(-10px);
-  box-shadow: 0 6px 16px rgba(233, 69, 96, 0.5);
+.nav-item--action:hover .nav-add-btn {
+  transform: translateY(-6px) scale(1.05);
+  box-shadow: 0 6px 20px rgba(233, 69, 96, 0.55);
 }
 
-.nav-add-btn:active {
-  transform: translateY(-6px) scale(0.95);
+.nav-item--action:active .nav-add-btn {
+  transform: translateY(-2px) scale(0.95);
 }
 
-@media (max-width: 380px) {
-  .nav-item span {
+.nav-item--action.active .nav-add-btn {
+  box-shadow: 0 4px 20px rgba(233, 69, 96, 0.6);
+}
+
+/* Add icon (plus) */
+.nav-add-icon {
+  font-size: 26px;
+  line-height: 1;
+  color: white;
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 2;
+  position: relative;
+}
+
+.nav-add-icon--rotated {
+  transform: rotate(135deg);
+}
+
+/* Glow ring behind the button */
+.nav-add-glow {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #ff6b8a);
+  opacity: 0.3;
+  filter: blur(8px);
+  animation: glowPulse 2s ease-in-out infinite;
+  z-index: 0;
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.25; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.08); }
+}
+
+/* Expanding pulse ring on the sell button */
+.nav-add-pulse {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  opacity: 0;
+  z-index: 0;
+  animation: pulseRing 2.5s ease-out infinite;
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(0.8); opacity: 0.6; }
+  50% { transform: scale(1.1); opacity: 0.2; }
+  100% { transform: scale(1.2); opacity: 0; }
+}
+
+/* Active tab ring around sell button */
+.nav-item--action.active .nav-add-pulse {
+  animation: none;
+  opacity: 0;
+}
+
+/* Ripple effect on click */
+.nav-ripple {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: rgba(233, 69, 96, 0.35);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: rippleAnim 0.6s ease-out forwards;
+  z-index: 3;
+}
+
+@keyframes rippleAnim {
+  0% { transform: scale(0); opacity: 0.6; }
+  100% { transform: scale(8); opacity: 0; }
+}
+
+/* Shimmer sweep across the button */
+.nav-add-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgba(255, 255, 255, 0.35) 45%,
+    rgba(255, 255, 255, 0.15) 50%,
+    transparent 60%
+  );
+  background-size: 300% 100%;
+  animation: shimmer 4s ease-in-out infinite;
+  z-index: 1;
+  pointer-events: none;
+}
+
+@keyframes shimmer {
+  0% { background-position: 300% 0; }
+  50% { background-position: -100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+/* Bounce on click */
+.nav-add-btn--bounce {
+  animation: addBounce 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes addBounce {
+  0% { transform: translateY(-4px) scale(1); }
+  25% { transform: translateY(-4px) scale(0.85); }
+  55% { transform: translateY(-6px) scale(1.15); }
+  100% { transform: translateY(-4px) scale(1); }
+}
+
+/* Particle burst on click */
+.nav-particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 4;
+  animation: particleFly 0.7s ease-out forwards;
+}
+
+@keyframes particleFly {
+  0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  100% { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2); opacity: 0; }
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 400px) {
+  .nav-item {
+    min-width: 44px;
+    padding: 6px 8px;
+  }
+
+  .nav-label {
     font-size: 9px;
   }
-  
-  .nav-item {
-    padding: 8px 12px;
-    min-width: 50px;
+
+  .nav-icon {
+    font-size: 20px;
   }
+
+  .nav-add-btn {
+    width: 50px;
+    height: 50px;
+  }
+
+  .nav-add-icon {
+    font-size: 22px;
+  }
+
+  .nav-add-glow {
+    inset: -3px;
+  }
+
+  .nav-add-pulse {
+    inset: -6px;
+  }
+}
+
+@media (max-width: 340px) {
+  .nav-item {
+    min-width: 38px;
+    padding: 6px 4px;
+  }
+
+  .nav-label {
+    font-size: 8px;
+    letter-spacing: 0;
+  }
+
+  .nav-icon {
+    font-size: 18px;
+  }
+
+  .nav-add-btn {
+    width: 46px;
+    height: 46px;
+  }
+
+  .nav-add-icon {
+    font-size: 20px;
+  }
+}
+
+@media (min-width: 500px) {
+  .nav-item {
+    min-width: 64px;
+    padding: 8px 18px;
+  }
+
+  .nav-add-btn {
+    width: 60px;
+    height: 60px;
+  }
+
+  .nav-add-icon {
+    font-size: 28px;
+  }
+}
+
+@media (min-width: 768px) {
+  .bottom-nav {
+    border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  }
+}
+
+/* Dark mode refinements */
+[data-theme="light"] .bottom-nav {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.08);
+}
+
+[data-theme="light"] .nav-item:hover {
+  background: rgba(0, 0, 0, 0.03);
 }

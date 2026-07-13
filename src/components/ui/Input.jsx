@@ -52,11 +52,15 @@ export function Select({
         {...props}
       >
         {placeholder && <option value="">{placeholder}</option>}
-        {options.map((opt) => (
-          <option key={opt.value || opt} value={opt.value || opt}>
-            {opt.label || opt}
-          </option>
-        ))}
+        {options.map((opt) => {
+          const optValue = opt.value ?? opt.id ?? opt;
+          const optLabel = opt.label ?? opt.name ?? opt;
+          return (
+            <option key={optValue} value={optValue}>
+              {optLabel}
+            </option>
+          );
+        })}
       </select>
       {error && <p className="input-error">{error}</p>}
     </div>

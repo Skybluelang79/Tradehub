@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { api } from '../services/client';
 
 const AdminContext = createContext();
 
@@ -16,31 +17,37 @@ export const useAdmin = () => {
 
 export const AdminProvider = ({ children }) => {
   const [isAdminAuth, setIsAdminAuth] = useState(() => {
-    return localStorage.getItem(ADMIN_STORAGE_KEY) === 'true';
+    return !!localStorage.getItem('tradehub_admin_token');
   });
+  const [adminToken, setAdminToken] = useState(() => localStorage.getItem('tradehub_admin_token') || '');
   const [adminLoginError, setAdminLoginError] = useState('');
 
   useEffect(() => {
-    if (isAdminAuth) {
-      localStorage.setItem(ADMIN_STORAGE_KEY, 'true');
+    if (isAdminAuth && adminToken) {
+      localStorage.setItem('tradehub_admin_token', adminToken);
     } else {
-      localStorage.removeItem(ADMIN_STORAGE_KEY);
+      localStorage.removeItem('tradehub_admin_token');
     }
-  }, [isAdminAuth]);
+  }, [isAdminAuth, adminToken]);
 
-  const adminLogin = useCallback((password) => {
-    if (password === ADMIN_PASSWORD) {
+  const adminLogin = useCallback(async (password) => {
+    try {
+      const result = await api.admin.login({ email: 'admin@tradehub.com', password });
       setIsAdminAuth(true);
+      setAdminToken(result.token);
       setAdminLoginError('');
       return true;
+    } catch (err) {
+      setAdminLoginError('Invalid admin credentials');
+      return false;
     }
-    setAdminLoginError('Invalid admin password');
-    return false;
   }, []);
 
   const adminLogout = useCallback(() => {
     setIsAdminAuth(false);
+    setAdminToken('');
     setAdminLoginError('');
+    localStorage.removeItem('tradehub_admin_token');
   }, []);
 
   const [adminStats, setAdminStats] = useState({
