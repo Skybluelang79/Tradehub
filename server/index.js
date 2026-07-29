@@ -52,6 +52,17 @@ app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(join(__dirname, 'uploads')));
 
+const frontendDist = join(__dirname, '..', 'dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(frontendDist)) {
+  app.use('/Tradehub', express.static(join(frontendDist, 'Tradehub')));
+  app.get('/Tradehub/*', (req, res) => {
+    res.sendFile(join(frontendDist, 'Tradehub', 'index.html'));
+  });
+  app.get('/', (req, res) => {
+    res.redirect('/Tradehub/');
+  });
+}
+
 app.use('/api', apiLimiter);
 
 app.use('/api/auth', authRoutes);
