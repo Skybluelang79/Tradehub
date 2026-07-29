@@ -5,15 +5,42 @@ import { useToast } from '../components/ui/Toast';
 import { ArrowLeftIcon, SendIcon, ShieldIcon } from '../components/ui/Icons';
 import EncryptionBadge from '../components/features/EncryptionBadge';
 import { useApp } from '../context';
+import { useAuth } from '../context/AuthContext';
 import { useEncryption } from '../context/EncryptionContext';
-import { currentUser } from '../services/api';
-import { sendMessage as socketSendMessage } from '../services/socket';
+import { getToken } from '../services/client';
+import {
+  connectSocket,
+  disconnectSocket,
+  getSocket,
+  joinConversation,
+  leaveConversation,
+  sendMessage as socketSendMessage,
+  startTyping,
+  stopTyping,
+  markRead,
+  onNewMessage,
+  onUserTyping,
+  onStopTyping,
+  onOnlineUsers,
+} from '../services/socket';
 import { formatDate, formatTime, formatPrice } from '../utils/helpers';
 import '../styles/globals.css';
 import './Chat.css';
 
 export default function Chat() {
-  const { conversations, messages, selectedConversation, setSelectedConversation, setActiveTab, sendMessage, markConversationRead, getUser, items, addNotification } = useApp();
+  const {
+    conversations,
+    messages,
+    selectedConversation,
+    setSelectedConversation,
+    setActiveTab,
+    sendMessage,
+    markConversationRead,
+    getUser,
+    items,
+    addNotification,
+  } = useApp();
+  const { user, isAuthenticated } = useAuth();
   const { addToast } = useToast();
   const {
     getOrCreateKeyPair,
@@ -24,10 +51,124 @@ export default function Chat() {
     trustKey,
     isKeyTrusted,
   } = useEncryption();
+
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
   const [encInitializing, setEncInitializing] = useState(false);
   const [encReady, setEncReady] = useState(false);
+  const [typingUsers, setTypingUsers] = useState({});
+  const [onlineUserIds, setOnlineUserIds] = useState([]);
+  const typingTimeoutRef = useRef(null);
+  const isTypingRef = useRef(false);
+  const prevConvRef = useRef(null);
+
+  const currentUserId = user?.id;
+
+  if (!isAuthenticated) {
+    return (
+      <div className="page">
+        <Header title="Messages" />
+        <div className="auth-gate">
+          <div className="auth-gate-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <h3 className="auth-gate-title">Sign in to chat</h3>
+          <p className="auth-gate-text">Message sellers, negotiate prices, and close deals securely.</p>
+          <button
+            className="auth-gate-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }))}
+          >
+            Sign In
+          </button>
+          <button
+            className="auth-gate-link"
+            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'signup' }))}
+          >
+            Create an account
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Connect socket on mount
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    const token = getToken();
+    if (!token) return;
+
+    connectSocket(token);
+    const socket = getSocket();
+
+    const cleanupNewMsg = onNewMessage((message) => {
+      // Dispatch a custom event so AppContext can handle it
+      window.dispatchEvent(new CustomEvent('socket_new_message', { detail: message }));
+    });
+
+    const cleanupTyping = onUserTyping(({ userId, name }) => {
+      setTypingUsers((prev) => ({ ...prev, [userId]: { name, time: Date.now() } }));
+    });
+
+    const cleanupStopTyping = onStopTyping(({ userId }) => {
+      setTypingUsers((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+    });
+
+    const cleanupOnline = onOnlineUsers((ids) => {
+      setOnlineUserIds(ids);
+    });
+
+    return () => {
+      cleanupNewMsg();
+      cleanupTyping();
+      cleanupStopTyping();
+      cleanupOnline();
+      disconnectSocket();
+    };
+  }, [isAuthenticated, user]);
+
+  // Listen for socket messages and add to AppContext
+  useEffect(() => {
+    const handler = (e) => {
+      const message = e.detail;
+      // Add message to AppContext messages state
+      window.dispatchEvent(new CustomEvent('app_add_message', {
+        detail: {
+          conversationId: message.conversation_id,
+          message: {
+            id: message.id,
+            senderId: message.sender_id,
+            text: message.text,
+            time: message.created_at || message.time,
+            read: !!message.read,
+            encrypted: !!message.encrypted,
+            ciphertext: message.ciphertext,
+            iv: message.iv,
+          },
+        },
+      }));
+    };
+    window.addEventListener('socket_new_message', handler);
+    return () => window.removeEventListener('socket_new_message', handler);
+  }, []);
+
+  // Join/leave conversation rooms
+  useEffect(() => {
+    if (prevConvRef.current && prevConvRef.current !== selectedConversation) {
+      leaveConversation(prevConvRef.current);
+    }
+    if (selectedConversation) {
+      joinConversation(selectedConversation);
+      prevConvRef.current = selectedConversation;
+    } else {
+      prevConvRef.current = null;
+    }
+  }, [selectedConversation]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -40,12 +181,20 @@ export default function Chat() {
   useEffect(() => {
     if (selectedConversation) {
       markConversationRead(selectedConversation);
+      markRead(selectedConversation);
     }
   }, [selectedConversation, markConversationRead]);
 
+  // Encryption init
   useEffect(() => {
-    if (!selectedConversation) { setEncReady(false); return; }
-    if (isConversationEncrypted(selectedConversation)) { setEncReady(true); return; }
+    if (!selectedConversation || !currentUserId) {
+      setEncReady(false);
+      return;
+    }
+    if (isConversationEncrypted(selectedConversation)) {
+      setEncReady(true);
+      return;
+    }
 
     let cancelled = false;
     (async () => {
@@ -53,13 +202,13 @@ export default function Chat() {
       try {
         const conv = conversations.find((c) => c.id === selectedConversation);
         if (!conv) return;
-        const otherUserId = conv.participants.find((p) => p !== currentUser.id);
+        const otherUserId = conv.participants.find((p) => p !== currentUserId);
 
-        const myKp = await getOrCreateKeyPair(currentUser.id);
+        const myKp = await getOrCreateKeyPair(currentUserId);
         const otherKp = await getOrCreateKeyPair(`sim_${otherUserId}`);
 
         if (!cancelled) {
-          await initConversationEncryption(selectedConversation, currentUser.id, otherUserId, myKp.privateKey, otherKp.publicKey);
+          await initConversationEncryption(selectedConversation, currentUserId, otherUserId, myKp.privateKey, otherKp.publicKey);
           setEncReady(true);
         }
       } catch (err) {
@@ -70,48 +219,34 @@ export default function Chat() {
     })();
 
     return () => { cancelled = true; };
-  }, [selectedConversation, conversations, currentUser.id, getOrCreateKeyPair, initConversationEncryption, isConversationEncrypted]);
+  }, [selectedConversation, conversations, currentUserId, getOrCreateKeyPair, initConversationEncryption, isConversationEncrypted]);
 
-  const autoReplies = [
-    "Great, thanks for your interest!",
-    "Yes, it's still available!",
-    "I can do that price. When would you like to meet?",
-    "Sure, let me know when works for you.",
-    "I'm available this weekend if you want to check it out.",
-  ];
-
-  useEffect(() => {
+  // Typing indicator logic
+  const handleTypingStart = useCallback(() => {
     if (!selectedConversation) return;
-    const convMessages = messages[selectedConversation] || [];
-    if (convMessages.length === 0) return;
-    const lastMsg = convMessages[convMessages.length - 1];
-    if (lastMsg && lastMsg.senderId === currentUser.id) {
-      const timer = setTimeout(() => {
-        const reply = autoReplies[Math.floor(Math.random() * autoReplies.length)];
-        sendMessage(selectedConversation, reply);
-        const conv = conversations.find((c) => c.id === selectedConversation);
-        const otherUserId = conv?.participants.find((p) => p !== currentUser.id);
-        const otherUser = getUser(otherUserId);
-        if (otherUser && conv) {
-          const item = items.find((i) => i.id === conv.itemId);
-          addNotification({
-            type: 'message',
-            title: otherUser.name,
-            body: reply,
-            relatedId: selectedConversation,
-          });
-        }
-      }, 1500 + Math.random() * 2000);
-      return () => clearTimeout(timer);
+    if (!isTypingRef.current) {
+      isTypingRef.current = true;
+      startTyping(selectedConversation);
     }
-  }, [messages, selectedConversation, sendMessage, addNotification, conversations, getUser, currentUser.id, items]);
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      isTypingRef.current = false;
+      stopTyping(selectedConversation);
+    }, 2000);
+  }, [selectedConversation]);
 
   if (selectedConversation) {
     const conv = conversations.find((c) => c.id === selectedConversation);
+    if (!conv) {
+      setSelectedConversation(null);
+      return null;
+    }
     const convMessages = messages[selectedConversation] || [];
-    const otherUserId = conv.participants.find((p) => p !== currentUser.id);
+    const otherUserId = conv.participants.find((p) => p !== currentUserId);
     const otherUser = getUser(otherUserId);
     const item = items.find((i) => i.id === conv.itemId);
+    const isOtherOnline = onlineUserIds.includes(otherUserId);
+    const otherTyping = typingUsers[otherUserId];
 
     const handleSend = async () => {
       if (inputText.trim()) {
@@ -132,6 +267,12 @@ export default function Chat() {
           socketSendMessage(selectedConversation, plaintext);
         }
         setInputText('');
+
+        if (isTypingRef.current) {
+          isTypingRef.current = false;
+          stopTyping(selectedConversation);
+          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        }
       }
     };
 
@@ -145,10 +286,14 @@ export default function Chat() {
           <button className="back-btn" onClick={() => setSelectedConversation(null)}>
             <ArrowLeftIcon size={20} />
           </button>
-          <Avatar src={otherUser.avatar} alt={otherUser.name} size="md" verified={otherUser.verified} />
+          <div className="chat-header-avatar">
+            <Avatar src={otherUser?.avatar} alt={otherUser?.name} size="md" verified={otherUser?.verified} />
+            <span className={`online-dot ${isOtherOnline ? 'online' : ''}`} />
+          </div>
           <div className="chat-user-info">
-            <div className="chat-user-name">{otherUser.name}</div>
+            <div className="chat-user-name">{otherUser?.name}</div>
             {item && <div className="chat-user-item">{item.title}</div>}
+            {isOtherOnline && <span className="online-text">Online</span>}
           </div>
         </div>
 
@@ -198,17 +343,45 @@ export default function Chat() {
         )}
 
         <div className="chat-messages">
-          {convMessages.map((msg) => (
-            <div key={msg.id} className={`message-bubble ${msg.senderId === currentUser.id ? 'sent' : 'received'}`}>
+          {convMessages.map((msg, i) => (
+            <div
+              key={msg.id}
+              className={`message-bubble ${msg.senderId === currentUserId ? 'sent' : 'received'} msg-appear`}
+              style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}
+            >
               <p className="message-text">{msg.text}</p>
-              <span className="message-time">{formatTime(msg.time)}</span>
+              <span className="message-time">
+                {formatTime(msg.time)}
+                {msg.senderId === currentUserId && (
+                  <span className={`read-receipt ${msg.read ? 'read' : ''}`}>
+                    {msg.read ? '✓✓' : '✓'}
+                  </span>
+                )}
+              </span>
             </div>
           ))}
+          {otherTyping && (
+            <div className="typing-indicator">
+              <div className="typing-dots">
+                <span /><span /><span />
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
 
         <div className="message-input-bar">
-          <input type="text" className="message-input" placeholder="Type a message..." value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSend()} />
+          <input
+            type="text"
+            className="message-input"
+            placeholder="Type a message..."
+            value={inputText}
+            onChange={(e) => {
+              setInputText(e.target.value);
+              handleTypingStart();
+            }}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+          />
           <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>
             <SendIcon size={20} />
           </button>
@@ -230,19 +403,26 @@ export default function Chat() {
             <p className="empty-text">Start chatting by contacting sellers on items you're interested in</p>
           </div>
         ) : (
-          conversations.map((conv) => {
-            const otherUserId = conv.participants.find((p) => p !== currentUser.id);
+          conversations.map((conv, i) => {
+            const otherUserId = conv.participants.find((p) => p !== currentUserId);
             const otherUser = getUser(otherUserId);
-            const item = items.find((i) => i.id === conv.itemId);
+            const item = items.find((item) => item.id === conv.itemId);
+            const isOtherOnline = onlineUserIds.includes(otherUserId);
 
             return (
-              <div key={conv.id} className="conv-item" onClick={() => { setSelectedConversation(conv.id); }}>
+              <div
+                key={conv.id}
+                className="conv-item conv-item-appear"
+                style={{ animationDelay: `${i * 50}ms` }}
+                onClick={() => setSelectedConversation(conv.id)}
+              >
                 <div className="conv-avatar">
-                  <Avatar src={otherUser.avatar} alt={otherUser.name} size="md" verified={otherUser.verified} />
+                  <Avatar src={otherUser?.avatar} alt={otherUser?.name} size="md" verified={otherUser?.verified} />
+                  <span className={`online-dot ${isOtherOnline ? 'online' : ''}`} />
                 </div>
                 <div className="conv-content">
                   <div className="conv-header">
-                    <span className="conv-name">{otherUser.name}</span>
+                    <span className="conv-name">{otherUser?.name}</span>
                     <span className="conv-time">{formatDate(conv.lastMessageTime)}</span>
                   </div>
                   <div className="conv-preview">

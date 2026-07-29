@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
+import validate, { createItemSchema, updateItemSchema } from '../src/validation.js';
+import logger from '../src/logger.js';
 
 const router = Router();
 
@@ -17,23 +19,51 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
 
 router.get('/', optionalAuth, (req, res) => {
   try {
-    const { category, sort = 'newest', search, max_distance, page = 1, limit = 20 } = req.query;
+    const {
+      category, sort = 'newest', search, max_distance,
+      min_price, max_price, condition: itemCondition,
+      page = 1, limit = 20, seller_id,
+    } = req.query;
+
     let query = `
-      SELECT i.*, u.name as seller_name, u.avatar as seller_avatar, u.rating as seller_rating, u.verified as seller_verified
+      SELECT i.*, u.name as seller_name, u.avatar as seller_avatar,
+             u.rating as seller_rating, u.verified as seller_verified,
+             COALESCE(s.plan, 'free') as seller_plan
       FROM items i
       JOIN users u ON i.seller_id = u.id
+      LEFT JOIN subscriptions s ON s.user_id = u.id
       WHERE i.status = 'active'
     `;
     const params = [];
+
+    if (search) {
+      query += ' AND (i.title LIKE ? OR i.description LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`);
+    }
 
     if (category && category !== 'all') {
       query += ' AND LOWER(i.category) = LOWER(?)';
       params.push(category);
     }
 
-    if (search) {
-      query += ' AND (i.title LIKE ? OR i.description LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+    if (seller_id) {
+      query += ' AND i.seller_id = ?';
+      params.push(seller_id);
+    }
+
+    if (min_price) {
+      query += ' AND i.price >= ?';
+      params.push(parseFloat(min_price));
+    }
+
+    if (max_price) {
+      query += ' AND i.price <= ?';
+      params.push(parseFloat(max_price));
+    }
+
+    if (itemCondition) {
+      query += ' AND LOWER(i.condition) = LOWER(?)';
+      params.push(itemCondition);
     }
 
     switch (sort) {
@@ -41,11 +71,27 @@ router.get('/', optionalAuth, (req, res) => {
       case 'oldest': query += ' ORDER BY i.created_at ASC'; break;
       case 'price_low': query += ' ORDER BY i.price ASC'; break;
       case 'price_high': query += ' ORDER BY i.price DESC'; break;
+      case 'popular': query += ' ORDER BY i.views DESC, i.favorites DESC'; break;
+      case 'nearest':
+        if (req.user && req.user.location_lat && req.user.location_lng) {
+          query = query.replace('SELECT i.*', `SELECT i.*, (
+            6371 * 2 * ASIN(SQRT(
+              POWER(SIN((? - i.location_lat) * PI() / 360), 2) +
+              COS(? * PI() / 180) * COS(i.location_lat * PI() / 180) *
+              POWER(SIN((? - i.location_lng) * PI() / 360), 2)
+            ))
+          ) as distance`);
+          params.push(req.user.location_lat, req.user.location_lat, req.user.location_lng);
+          query += ' ORDER BY distance ASC';
+        } else {
+          query += ' ORDER BY i.created_at DESC';
+        }
+        break;
       default: query += ' ORDER BY i.boosted DESC, i.created_at DESC';
     }
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    query += ` LIMIT ? OFFSET ?`;
+    query += ' LIMIT ? OFFSET ?';
     params.push(parseInt(limit), offset);
 
     const items = db.prepare(query).all(...params);
@@ -55,24 +101,46 @@ router.get('/', optionalAuth, (req, res) => {
       item.images = images.map(i => i.url);
 
       if (req.user && item.location_lat && item.location_lng) {
-        item.distance = calculateDistance(req.user.location_lat, req.user.location_lng, item.location_lat, item.location_lng);
+        item.distance = calculateDistance(
+          req.user.location_lat, req.user.location_lng,
+          item.location_lat, item.location_lng
+        );
       }
 
-      const isFav = req.user ? db.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND item_id = ?').get(req.user.id, item.id) : false;
+      const isFav = req.user
+        ? db.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND item_id = ?').get(req.user.id, item.id)
+        : false;
       item.is_favorite = !!isFav;
+      item.sale_active = item.sale_price && (!item.sale_ends_at || new Date(item.sale_ends_at) > new Date());
 
       return item;
     });
 
     if (max_distance && req.user) {
       const filtered = enriched.filter(i => i.distance && i.distance <= parseFloat(max_distance));
-      res.json({ items: filtered, total: filtered.length });
-    } else {
-      const total = db.prepare('SELECT COUNT(*) as count FROM items WHERE status = ?').get('active');
-      res.json({ items: enriched, total: total.count });
+      const pageNum = parseInt(page);
+      const limitNum = parseInt(limit);
+      return res.json({
+        items: filtered.slice(offset, offset + limitNum),
+        total: filtered.length,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(filtered.length / limitNum),
+      });
     }
+
+    const total = db.prepare('SELECT COUNT(*) as count FROM items WHERE status = ?').get('active');
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    res.json({
+      items: enriched,
+      total: total.count,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total.count / limitNum),
+    });
   } catch (err) {
-    console.error('Get items error:', err);
+    logger.error('Get items error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -87,7 +155,7 @@ router.get('/user/:userId/drafts', authenticateToken, (req, res) => {
     });
     res.json({ items });
   } catch (err) {
-    console.error('Get drafts error:', err);
+    logger.error('Get drafts error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -106,7 +174,21 @@ router.get('/user/:userId', (req, res) => {
     });
     res.json({ items });
   } catch (err) {
-    console.error('Get user items error:', err);
+    logger.error('Get user items error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/categories/overview', (req, res) => {
+  try {
+    const categories = db.prepare(`
+      SELECT category, COUNT(*) as count, AVG(price) as avg_price
+      FROM items WHERE status = 'active'
+      GROUP BY category ORDER BY count DESC
+    `).all();
+    res.json({ categories });
+  } catch (err) {
+    logger.error('Get categories error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -139,21 +221,30 @@ router.get('/:id', optionalAuth, (req, res) => {
 
     const isFav = req.user ? db.prepare('SELECT 1 FROM favorites WHERE user_id = ? AND item_id = ?').get(req.user.id, item.id) : false;
     item.is_favorite = !!isFav;
+    item.sale_active = item.sale_price && (!item.sale_ends_at || new Date(item.sale_ends_at) > new Date());
+
+    const similar = db.prepare(`
+      SELECT i.id, i.title, i.price, i.sale_price,
+        (SELECT url FROM item_images WHERE item_id = i.id ORDER BY sort_order LIMIT 1) as image
+      FROM items i WHERE i.category = ? AND i.id != ? AND i.status = 'active'
+      ORDER BY i.created_at DESC LIMIT 6
+    `).all(item.category, item.id);
+    item.similar_items = similar;
 
     res.json({ item });
   } catch (err) {
-    console.error('Get item error:', err);
+    logger.error('Get item error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
   try {
-    const { title, description, price, sale_price, sale_ends_at, category, condition, images, location, quantity, variants, boosted, boost_expires_at } = req.body;
-
-    if (!title || !price || !category) {
-      return res.status(400).json({ error: 'Title, price, and category are required' });
-    }
+    const {
+      title, description, price, sale_price, sale_ends_at,
+      category, condition, images, location, quantity,
+      variants, boosted, boost_expires_at,
+    } = req.validatedBody;
 
     const id = uuidv4();
 
@@ -161,10 +252,9 @@ router.post('/', authenticateToken, (req, res) => {
       INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, boosted, boost_expires_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      id, title, description || '', parseFloat(price),
-      sale_price ? parseFloat(sale_price) : null,
-      sale_ends_at || null,
-      category, condition || 'good', req.user.id,
+      id, title, description, price,
+      sale_price || null, sale_ends_at || null,
+      category, condition, req.user.id,
       location?.lat || null, location?.lng || null,
       location?.address || '', quantity || 1,
       boosted ? 1 : 0, boost_expires_at || null
@@ -189,20 +279,25 @@ router.post('/', authenticateToken, (req, res) => {
       VALUES (?, ?, 'system', 'Listing Created', ?)
     `).run(uuidv4(), req.user.id, `"${title}" is now live!`);
 
+    db.prepare(`
+      INSERT INTO audit_logs (id, admin_id, action, entity_type, entity_id, details)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), null, 'item_created', 'item', id, JSON.stringify({ title }));
+
     res.status(201).json({ item });
   } catch (err) {
-    console.error('Create item error:', err);
+    logger.error('Create item error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => {
   try {
     const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
     if (item.seller_id !== req.user.id) return res.status(403).json({ error: 'Not authorized' });
 
-    const { title, description, price, sale_price, sale_ends_at, category, condition, images, location, quantity, variants, status, boosted, boost_expires_at } = req.body;
+    const data = req.validatedBody;
 
     db.prepare(`
       UPDATE items SET title = ?, description = ?, price = ?, sale_price = ?, sale_ends_at = ?,
@@ -210,29 +305,29 @@ router.put('/:id', authenticateToken, (req, res) => {
         quantity = ?, status = ?, boosted = ?, boost_expires_at = ?, updated_at = datetime('now')
       WHERE id = ?
     `).run(
-      title ?? item.title, description ?? item.description,
-      price ? parseFloat(price) : item.price,
-      sale_price !== undefined ? (sale_price ? parseFloat(sale_price) : null) : item.sale_price,
-      sale_ends_at !== undefined ? sale_ends_at : item.sale_ends_at,
-      category ?? item.category, condition ?? item.condition,
-      location?.lat ?? item.location_lat, location?.lng ?? item.location_lng,
-      location?.address ?? item.location_address,
-      quantity ?? item.quantity, status ?? item.status,
-      boosted !== undefined ? (boosted ? 1 : 0) : item.boosted,
-      boost_expires_at ?? item.boost_expires_at,
+      data.title ?? item.title, data.description ?? item.description,
+      data.price ?? item.price,
+      data.sale_price !== undefined ? (data.sale_price || null) : item.sale_price,
+      data.sale_ends_at !== undefined ? data.sale_ends_at : item.sale_ends_at,
+      data.category ?? item.category, data.condition ?? item.condition,
+      data.location?.lat ?? item.location_lat, data.location?.lng ?? item.location_lng,
+      data.location?.address ?? item.location_address,
+      data.quantity ?? item.quantity, data.status ?? item.status,
+      data.boosted !== undefined ? (data.boosted ? 1 : 0) : item.boosted,
+      data.boost_expires_at ?? item.boost_expires_at,
       req.params.id
     );
 
-    if (images) {
+    if (data.images) {
       db.prepare('DELETE FROM item_images WHERE item_id = ?').run(req.params.id);
       const insertImg = db.prepare('INSERT INTO item_images (id, item_id, url, sort_order) VALUES (?, ?, ?, ?)');
-      images.forEach((url, i) => insertImg.run(uuidv4(), req.params.id, url, i));
+      data.images.forEach((url, i) => insertImg.run(uuidv4(), req.params.id, url, i));
     }
 
-    if (variants) {
+    if (data.variants) {
       db.prepare('DELETE FROM item_variants WHERE item_id = ?').run(req.params.id);
       const insertVar = db.prepare('INSERT INTO item_variants (id, item_id, name, variant_values) VALUES (?, ?, ?, ?)');
-      variants.forEach(v => insertVar.run(uuidv4(), req.params.id, v.name, JSON.stringify(v.values)));
+      data.variants.forEach(v => insertVar.run(uuidv4(), req.params.id, v.name, JSON.stringify(v.values)));
     }
 
     const updated = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
@@ -241,7 +336,7 @@ router.put('/:id', authenticateToken, (req, res) => {
 
     res.json({ item: updated });
   } catch (err) {
-    console.error('Update item error:', err);
+    logger.error('Update item error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -261,7 +356,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
 
     res.json({ success: true });
   } catch (err) {
-    console.error('Delete item error:', err);
+    logger.error('Delete item error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -272,13 +367,96 @@ router.post('/:id/favorite', authenticateToken, (req, res) => {
 
     if (existing) {
       db.prepare('DELETE FROM favorites WHERE user_id = ? AND item_id = ?').run(req.user.id, req.params.id);
+      db.prepare('UPDATE items SET favorites = MAX(0, favorites - 1) WHERE id = ?').run(req.params.id);
       res.json({ favorited: false });
     } else {
       db.prepare('INSERT INTO favorites (user_id, item_id) VALUES (?, ?)').run(req.user.id, req.params.id);
+      db.prepare('UPDATE items SET favorites = favorites + 1 WHERE id = ?').run(req.params.id);
       res.json({ favorited: true });
     }
   } catch (err) {
-    console.error('Favorite error:', err);
+    logger.error('Favorite error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/:id/related', (req, res) => {
+  try {
+    const item = db.prepare('SELECT category, id FROM items WHERE id = ?').get(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+
+    const related = db.prepare(`
+      SELECT i.id, i.title, i.price, i.sale_price, i.created_at,
+        (SELECT url FROM item_images WHERE item_id = i.id ORDER BY sort_order LIMIT 1) as image
+      FROM items i WHERE i.category = ? AND i.id != ? AND i.status = 'active'
+      ORDER BY i.created_at DESC LIMIT 8
+    `).all(item.category, item.id);
+
+    res.json({ items: related });
+  } catch (err) {
+    logger.error('Related items error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/:id/mark-sold', authenticateToken, (req, res) => {
+  try {
+    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (item.seller_id !== req.user.id) return res.status(403).json({ error: 'Not authorized' });
+
+    db.prepare("UPDATE items SET status = 'sold', updated_at = datetime('now') WHERE id = ?").run(req.params.id);
+    res.json({ success: true, status: 'sold' });
+  } catch (err) {
+    logger.error('Mark item sold error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/:id/relist', authenticateToken, (req, res) => {
+  try {
+    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (item.seller_id !== req.user.id) return res.status(403).json({ error: 'Not authorized' });
+    if (item.status !== 'sold') return res.status(400).json({ error: 'Only sold items can be relisted' });
+
+    db.prepare("UPDATE items SET status = 'active', updated_at = datetime('now') WHERE id = ?").run(req.params.id);
+    res.json({ success: true, status: 'active' });
+  } catch (err) {
+    logger.error('Relist item error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/premium/sellers', (req, res) => {
+  try {
+    const sellers = db.prepare(`
+      SELECT u.id, u.name, u.avatar, u.rating, u.review_count, u.verified,
+             s.plan, s.status
+      FROM users u
+      JOIN subscriptions s ON s.user_id = u.id
+      WHERE s.plan IN ('premium', 'pro') AND s.status = 'active'
+      ORDER BY u.rating DESC LIMIT 10
+    `).all();
+
+    const enriched = sellers.map(seller => {
+      const items = db.prepare(`
+        SELECT i.id, i.title, i.price, i.sale_price,
+          (SELECT url FROM item_images WHERE item_id = i.id ORDER BY sort_order LIMIT 1) as image
+        FROM items i WHERE i.seller_id = ? AND i.status = 'active'
+        ORDER BY i.created_at DESC LIMIT 3
+      `).all(seller.id);
+
+      return {
+        ...seller,
+        badge: seller.plan === 'pro' ? 'Pro Seller' : 'Premium Seller',
+        items,
+      };
+    });
+
+    res.json({ sellers: enriched });
+  } catch (err) {
+    logger.error('Premium sellers error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join, extname } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticateToken } from '../middleware/auth.js';
+import { uploadLimiter } from '../src/rateLimiter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -33,7 +34,7 @@ const upload = multer({
 
 const router = Router();
 
-router.post('/', authenticateToken, upload.array('images', 6), (req, res) => {
+router.post('/', authenticateToken, uploadLimiter, upload.array('images', 6), (req, res) => {
   try {
     const files = req.files.map(f => ({
       url: `/uploads/${f.filename}`,

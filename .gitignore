@@ -17,6 +17,8 @@ dist-ssr
 .env.*.local
 server/node_modules
 server/*.db
+server/*.db-shm
+server/*.db-wal
 server/uploads/*
 !server/uploads/.gitkeep
 

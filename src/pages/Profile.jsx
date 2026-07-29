@@ -33,7 +33,7 @@ function firstImage(item) {
 
 export default function Profile() {
   const {
-    items, getReviewsForUser, getUserRating, setActiveTab,
+    items, reviews, getReviewsForUser, getUserRating, setActiveTab,
     deleteItem, boostItem, getUserListings,
     getUserDrafts, getUserActiveListings, getItemAnalytics,
     conversations, getSoldItems, getTotalRevenue, sales,
@@ -185,6 +185,67 @@ export default function Profile() {
     );
   }
 
+  const isLoggedIn = !!authUser;
+
+  if (!isLoggedIn) {
+    return (
+      <div className="page">
+        <Header title="Profile" />
+        <div className="profile-page">
+          <div className="profile-guest-hero">
+            <div className="guest-hero-bg" />
+            <div className="guest-hero-content">
+              <div className="guest-avatar">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="48" height="48">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              </div>
+              <h2 className="guest-title">Welcome to TradeHub</h2>
+              <p className="guest-subtitle">Sign in to buy, sell, and manage your listings</p>
+
+              <div className="guest-features">
+                <div className="guest-feature">
+                  <div className="guest-feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                    </svg>
+                  </div>
+                  <span>Secure Transactions</span>
+                </div>
+                <div className="guest-feature">
+                  <div className="guest-feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </div>
+                  <span>In-App Chat</span>
+                </div>
+                <div className="guest-feature">
+                  <div className="guest-feature-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+                      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+                    </svg>
+                  </div>
+                  <span>Fast Listings</span>
+                </div>
+              </div>
+
+              <div className="guest-actions">
+                <button className="guest-btn guest-btn--primary" onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal'))}>
+                  Sign In
+                </button>
+                <button className="guest-btn guest-btn--secondary" onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'signup' }))}>
+                  Create Account
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page">
       <Header
@@ -209,7 +270,7 @@ export default function Profile() {
             )}
           </div>
           <h1 className="profile-name">{currentUser.name}</h1>
-          {currentUser.location?.address && (
+          {currentUser.location?.address && currentUser.location.address !== 'Not set' && (
             <div className="profile-location">
               <PinIcon size={16} />
               <span>{currentUser.location.address}</span>
@@ -238,15 +299,6 @@ export default function Profile() {
             </div>
           )}
         </div>
-
-        {!authUser && (
-          <div className="login-prompt">
-            <p>Sign in to access all features</p>
-            <Button onClick={() => { window.dispatchEvent(new CustomEvent('openAuthModal')); setActiveTab('home'); }}>
-              Sign In
-            </Button>
-          </div>
-        )}
 
         <div className="profile-tabs">
           <button className={`profile-tab ${activeTab === 'listings' ? 'active' : ''}`} onClick={() => setActiveTabState('listings')}>

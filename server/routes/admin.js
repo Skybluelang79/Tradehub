@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
+import logger from '../src/logger.js';
 
 const router = Router();
 const ADMIN_EMAIL = 'admin@tradehub.com';
@@ -14,9 +16,21 @@ function adminAuth(req, res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tradehub-secret-key-change-in-production-2026');
     if (!decoded.isAdmin) return res.status(403).json({ error: 'Admin access required' });
     req.adminId = decoded.userId;
+    req.user = { ...req.user, isAdmin: true };
     next();
   } catch {
     res.status(403).json({ error: 'Invalid token' });
+  }
+}
+
+function logAudit(adminId, action, entityType, entityId, details = {}) {
+  try {
+    db.prepare(`
+      INSERT INTO audit_logs (id, admin_id, action, entity_type, entity_id, details)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(uuidv4(), adminId, action, entityType, entityId, JSON.stringify(details));
+  } catch (err) {
+    logger.error('Audit log error:', err);
   }
 }
 
@@ -32,7 +46,11 @@ router.post('/login', (req, res) => {
     db.prepare("INSERT INTO users (id, name, email, password, avatar, verified) VALUES (?, 'Admin', ?, ?, 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 1)").run(id, ADMIN_EMAIL, hashed);
     admin = { id };
   }
-  const token = jwt.sign({ userId: admin.id, isAdmin: true }, process.env.JWT_SECRET || 'tradehub-secret-key-change-in-production-2026', { expiresIn: '24h' });
+  const token = jwt.sign(
+    { userId: admin.id, isAdmin: true },
+    process.env.JWT_SECRET || 'tradehub-secret-key-change-in-production-2026',
+    { expiresIn: '24h' }
+  );
   res.json({ token });
 });
 
@@ -44,16 +62,29 @@ router.get('/dashboard', adminAuth, (req, res) => {
     const totalTransactions = db.prepare('SELECT COUNT(*) as count FROM transactions').get().count;
     const totalRevenue = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE status = 'completed'").get().total;
     const pendingReports = db.prepare("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'").get().count;
+    const openDisputes = db.prepare("SELECT COUNT(*) as count FROM disputes WHERE status = 'open'").get().count;
+    const pendingVerifications = db.prepare('SELECT COUNT(*) as count FROM email_verifications WHERE used = 0 AND expires_at > datetime("now")').get().count;
+
     const recentUsers = db.prepare('SELECT id, name, email, avatar, created_at FROM users ORDER BY created_at DESC LIMIT 5').all();
     const recentItems = db.prepare('SELECT id, title, price, status, created_at FROM items ORDER BY created_at DESC LIMIT 5').all();
 
+    const revenueByDay = db.prepare(`
+      SELECT DATE(completed_at) as date, SUM(amount) as revenue, COUNT(*) as sales
+      FROM transactions WHERE status = 'completed' AND completed_at > datetime('now', '-30 days')
+      GROUP BY DATE(completed_at) ORDER BY date
+    `).all();
+
+    const topCategories = db.prepare(`
+      SELECT category, COUNT(*) as count FROM items WHERE status = 'active'
+      GROUP BY category ORDER BY count DESC LIMIT 5
+    `).all();
+
     res.json({
-      stats: { totalUsers, totalItems, activeItems, totalTransactions, totalRevenue, pendingReports },
-      recentUsers,
-      recentItems,
+      stats: { totalUsers, totalItems, activeItems, totalTransactions, totalRevenue, pendingReports, openDisputes, pendingVerifications },
+      recentUsers, recentItems, revenueByDay, topCategories,
     });
   } catch (err) {
-    console.error('Dashboard error:', err);
+    logger.error('Dashboard error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -70,6 +101,7 @@ router.get('/users', adminAuth, (req, res) => {
 router.put('/users/:id/verify', adminAuth, (req, res) => {
   try {
     db.prepare('UPDATE users SET verified = 1 WHERE id = ?').run(req.params.id);
+    logAudit(req.adminId, 'user_verified', 'user', req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -79,6 +111,7 @@ router.put('/users/:id/verify', adminAuth, (req, res) => {
 router.delete('/users/:id', adminAuth, (req, res) => {
   try {
     db.prepare("UPDATE items SET status = 'removed' WHERE seller_id = ?").run(req.params.id);
+    logAudit(req.adminId, 'user_suspended', 'user', req.params.id);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -106,6 +139,7 @@ router.put('/listings/:id/status', adminAuth, (req, res) => {
   try {
     const { status } = req.body;
     db.prepare('UPDATE items SET status = ? WHERE id = ?').run(status, req.params.id);
+    logAudit(req.adminId, 'listing_status_change', 'item', req.params.id, { status });
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
@@ -116,6 +150,19 @@ router.get('/transactions', adminAuth, (req, res) => {
   try {
     const transactions = db.prepare('SELECT * FROM transactions ORDER BY created_at DESC').all();
     res.json({ transactions });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/audit-logs', adminAuth, (req, res) => {
+  try {
+    const { page = 1, limit = 50 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const logs = db.prepare(`
+      SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?
+    `).all(parseInt(limit), offset);
+    res.json({ logs });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }

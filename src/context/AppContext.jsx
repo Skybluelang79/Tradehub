@@ -3,10 +3,14 @@ import { mockItems, mockUsers, mockConversations, mockMessages, mockTransactions
 import { storage, geolocation } from '../services/storage';
 import { generateId } from '../utils/helpers';
 import { api } from '../services/client';
+import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
 
 export function AppProvider({ children }) {
+  const { user: authUser } = useAuth();
+  const currentUserId = authUser?.id || currentUser.id;
+
   const [activeTab, setActiveTab] = useState('home');
   const [items, setItems] = useState(() => storage.get('items', mockItems));
   const [conversations, setConversations] = useState(() => storage.get('conversations', mockConversations));
@@ -123,6 +127,26 @@ export function AppProvider({ children }) {
     fetchItems();
   }, []);
 
+  // Listen for socket incoming messages from Chat.jsx
+  useEffect(() => {
+    const handler = (e) => {
+      const { conversationId, message } = e.detail;
+      setMessages((prev) => ({
+        ...prev,
+        [conversationId]: [...(prev[conversationId] || []), message],
+      }));
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === conversationId
+            ? { ...conv, lastMessage: message.text, lastMessageTime: message.time, unreadCount: conv.unreadCount + 1 }
+            : conv
+        )
+      );
+    };
+    window.addEventListener('app_add_message', handler);
+    return () => window.removeEventListener('app_add_message', handler);
+  }, []);
+
   const getDistanceFromUser = useCallback((lat, lng) => {
     if (!userLocation) return null;
     return geolocation.calculateDistance(userLocation.lat, userLocation.lng, lat, lng);
@@ -196,7 +220,7 @@ export function AppProvider({ children }) {
     const newItem = {
       ...item,
       id: generateId(),
-      sellerId: currentUser.id,
+      sellerId: currentUserId,
       createdAt: new Date().toISOString(),
       status,
       views: 0,
@@ -296,7 +320,7 @@ export function AppProvider({ children }) {
       itemImage: item.images[0],
       price: item.salePrice || item.price,
       buyerId: buyerId || 'unknown',
-      sellerId: currentUser.id,
+      sellerId: currentUserId,
       soldAt: new Date().toISOString(),
     };
     setSales((prev) => [saleRecord, ...prev]);
@@ -305,7 +329,7 @@ export function AppProvider({ children }) {
       title: 'Item Sold!',
       body: `"${item.title}" has been marked as sold.`,
     });
-  }, [items, currentUser.id, addNotification]);
+  }, [items, currentUserId, addNotification]);
 
   const getSoldItems = useCallback((userId) => {
     return sales.filter((s) => s.sellerId === userId);
@@ -346,7 +370,7 @@ export function AppProvider({ children }) {
   const sendMessage = useCallback((conversationId, text, encryptionMeta = null) => {
     const newMessage = {
       id: generateId(),
-      senderId: currentUser.id,
+      senderId: currentUserId,
       text: encryptionMeta ? '(encrypted)' : text,
       time: new Date().toISOString(),
       read: false,
@@ -365,7 +389,7 @@ export function AppProvider({ children }) {
           : conv
       )
     );
-  }, [currentUser.id]);
+  }, [currentUserId]);
 
   const markConversationRead = useCallback((conversationId) => {
     setConversations((prev) =>
@@ -375,7 +399,7 @@ export function AppProvider({ children }) {
 
   const addConversation = useCallback((itemId, sellerId) => {
     const existingConv = conversations.find(
-      (c) => c.itemId === itemId && c.participants.includes(currentUser.id)
+      (c) => c.itemId === itemId && c.participants.includes(currentUserId)
     );
 
     if (existingConv) return existingConv;
@@ -383,7 +407,7 @@ export function AppProvider({ children }) {
     const newConv = {
       id: generateId(),
       itemId,
-      participants: [currentUser.id, sellerId],
+      participants: [currentUserId, sellerId],
       lastMessage: '',
       lastMessageTime: new Date().toISOString(),
       unreadCount: 0,
@@ -485,7 +509,7 @@ export function AppProvider({ children }) {
     const newReview = {
       ...review,
       id: generateId(),
-      reviewerId: currentUser.id,
+      reviewerId: currentUserId,
       createdAt: new Date().toISOString(),
       verified: true,
     };
@@ -501,7 +525,7 @@ export function AppProvider({ children }) {
     const userReviews = getReviewsForUser(userId);
     if (userReviews.length === 0) return 0;
     const sum = userReviews.reduce((acc, r) => acc + r.rating, 0);
-    return (sum / userReviews.length).toFixed(1);
+    return parseFloat((sum / userReviews.length).toFixed(1));
   }, [getReviewsForUser]);
 
   const markNotificationRead = useCallback((notificationId) => {
@@ -519,6 +543,7 @@ export function AppProvider({ children }) {
 
   const value = {
     currentUser,
+    currentUserId,
     activeTab,
     setActiveTab,
     items,

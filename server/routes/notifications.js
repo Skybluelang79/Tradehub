@@ -49,4 +49,24 @@ router.put('/read-all', authenticateToken, (req, res) => {
   }
 });
 
+router.delete('/:id', authenticateToken, (req, res) => {
+  try {
+    db.prepare('DELETE FROM notifications WHERE id = ? AND user_id = ?').run(req.params.id, req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delete notification error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/', authenticateToken, (req, res) => {
+  try {
+    db.prepare('DELETE FROM notifications WHERE user_id = ? AND read = 1').run(req.user.id);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Clear notifications error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;

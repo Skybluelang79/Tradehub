@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Header } from '../components/layout';
 import { useApp } from '../context';
+import { useAuth } from '../context/AuthContext';
 import './Notifications.css';
 
 export default function Notifications({ onClose }) {
@@ -10,9 +11,52 @@ export default function Notifications({ onClose }) {
     markAllNotificationsRead,
     unreadNotificationsCount 
   } = useApp();
+  const { isAuthenticated } = useAuth();
   const [filter, setFilter] = useState('all');
   const [swipedId, setSwipedId] = useState(null);
   const touchStartX = useRef(null);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="notifications-page">
+        <Header
+          title="Notifications"
+          leftComponent={
+            onClose && (
+              <button className="header-btn" onClick={onClose}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="19" y1="12" x2="5" y2="12" />
+                  <polyline points="12 19 5 12 12 5" />
+                </svg>
+              </button>
+            )
+          }
+        />
+        <div className="auth-gate">
+          <div className="auth-gate-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+          </div>
+          <h3 className="auth-gate-title">Sign in for notifications</h3>
+          <p className="auth-gate-text">Get notified about messages, offers, sales, and more.</p>
+          <button
+            className="auth-gate-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }))}
+          >
+            Sign In
+          </button>
+          <button
+            className="auth-gate-link"
+            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'signup' }))}
+          >
+            Create an account
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const filteredNotifications = notifications.filter(n => {
     if (filter === 'all') return true;

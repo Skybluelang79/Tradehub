@@ -213,6 +213,7 @@
   align-items: baseline;
   gap: 8px;
   margin-bottom: 12px;
+  animation: slideUp 0.3s ease;
 }
 
 .section-title {
@@ -220,6 +221,17 @@
   font-weight: 700;
   color: var(--text-primary);
   margin: 0;
+  position: relative;
+}
+
+.section-title::after {
+  content: '';
+  display: block;
+  width: 24px;
+  height: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  margin-top: 4px;
 }
 
 .section-subtitle {
@@ -234,6 +246,7 @@
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 4px;
+  scroll-snap-type: x mandatory;
 }
 
 .horizontal-scroll::-webkit-scrollbar {
@@ -244,31 +257,43 @@
   flex-shrink: 0;
   width: 150px;
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  scroll-snap-align: start;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+  border: 1px solid transparent;
 }
 
 .mini-item-card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(233, 69, 96, 0.12);
 }
 
 .mini-item-card:active {
   transform: scale(0.97);
+  transition-duration: 0.1s;
 }
 
 .mini-item-image {
   position: relative;
-  width: 150px;
-  height: 150px;
-  border-radius: var(--radius-md);
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 0;
   overflow: hidden;
-  background: var(--surface);
-  margin-bottom: 8px;
+  background: var(--background-secondary);
 }
 
 .mini-item-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.mini-item-card:hover .mini-item-image img {
+  transform: scale(1.08);
 }
 
 .mini-item-views {
@@ -276,17 +301,21 @@
   bottom: 6px;
   left: 6px;
   background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: white;
   font-size: 10px;
   font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
 .mini-item-info {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  padding: 10px 10px 12px;
 }
 
 .mini-item-title {
@@ -304,4 +333,19 @@
   font-size: 14px;
   font-weight: 700;
   color: var(--accent);
+}
+
+.mini-item-price--sale {
+  color: var(--warning);
+}
+
+.mini-item-price-original {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }

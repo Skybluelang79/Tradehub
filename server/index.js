@@ -7,7 +7,12 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
 import db from './db.js';
+import logger from './src/logger.js';
+import { errorHandler, notFound } from './src/errorHandler.js';
+import { apiLimiter } from './src/rateLimiter.js';
+import { startScheduler } from './src/scheduler.js';
 
 import authRoutes from './routes/auth.js';
 import itemRoutes from './routes/items.js';
@@ -19,6 +24,12 @@ import notificationRoutes from './routes/notifications.js';
 import templateRoutes from './routes/templates.js';
 import reportRoutes from './routes/reports.js';
 import adminRoutes from './routes/admin.js';
+import disputeRoutes from './routes/disputes.js';
+import blockRoutes from './routes/blocking.js';
+import promotionRoutes from './routes/promotions.js';
+import webhookRoutes from './routes/webhooks.js';
+import subscriptionRoutes from './routes/subscriptions.js';
+import settingsRoutes from './routes/settings.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,9 +43,16 @@ const io = new Server(server, {
   },
 });
 
+['uploads', 'logs'].forEach(dir => {
+  const p = join(__dirname, dir);
+  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
+});
+
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 app.use('/uploads', express.static(join(__dirname, 'uploads')));
+
+app.use('/api', apiLimiter);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);
@@ -46,10 +64,19 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/disputes', disputeRoutes);
+app.use('/api/blocking', blockRoutes);
+app.use('/api/promotions', promotionRoutes);
+app.use('/api/webhooks', webhookRoutes);
+app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/settings', settingsRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+app.use(notFound);
+app.use(errorHandler);
 
 const onlineUsers = new Map();
 
@@ -69,7 +96,7 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.user.name}`);
+  logger.info(`User connected: ${socket.user.name}`);
   onlineUsers.set(socket.user.id, socket.id);
   io.emit('online_users', Array.from(onlineUsers.keys()));
 
@@ -138,12 +165,14 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     onlineUsers.delete(socket.user.id);
     io.emit('online_users', Array.from(onlineUsers.keys()));
-    console.log(`User disconnected: ${socket.user.name}`);
+    logger.info(`User disconnected: ${socket.user.name}`);
   });
 });
 
+startScheduler();
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`TradeHub API running on http://localhost:${PORT}`);
-  console.log(`WebSocket ready on port ${PORT}`);
+  logger.info(`TradeHub API running on http://localhost:${PORT}`);
+  logger.info(`WebSocket ready on port ${PORT}`);
 });

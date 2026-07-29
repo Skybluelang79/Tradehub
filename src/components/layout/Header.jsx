@@ -1,5 +1,6 @@
 import { SearchIcon, BellIcon, HeartIcon, ArrowLeftIcon, MoonIcon } from '../ui/Icons';
 import { useApp } from '../../context';
+import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
 import './Header.css';
 
@@ -15,6 +16,7 @@ export default function Header({
 }) {
   const variantClass = transparent ? 'header--transparent' : '';
   const { unreadNotificationsCount } = useApp();
+  const { isAuthenticated } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
   return (
@@ -35,9 +37,11 @@ export default function Header({
           <button className="theme-toggle-btn" onClick={toggleTheme} title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
             <MoonIcon size={16} />
           </button>
-          <button className="header-btn" onClick={() => window.dispatchEvent(new CustomEvent('openNotifications'))}>
-            <BellIcon size={20} count={unreadNotificationsCount} />
-          </button>
+          {isAuthenticated && (
+            <button className="header-btn" onClick={() => window.dispatchEvent(new CustomEvent('openNotifications'))}>
+              <BellIcon size={20} count={unreadNotificationsCount} />
+            </button>
+          )}
           <button className="header-btn" onClick={() => window.dispatchEvent(new CustomEvent('openFavorites'))}>
             <HeartIcon size={20} />
           </button>

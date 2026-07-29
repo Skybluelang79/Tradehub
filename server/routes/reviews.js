@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import validate, { createReviewSchema } from '../src/validation.js';
+import logger from '../src/logger.js';
 
 const router = Router();
 
@@ -16,14 +18,14 @@ router.get('/user/:userId', (req, res) => {
 
     res.json({ reviews });
   } catch (err) {
-    console.error('Get reviews error:', err);
+    logger.error('Get reviews error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, validate(createReviewSchema), (req, res) => {
   try {
-    const { revieweeId, itemId, rating, text } = req.body;
+    const { revieweeId, itemId, rating, text } = req.validatedBody;
 
     if (!revieweeId || !rating) {
       return res.status(400).json({ error: 'revieweeId and rating are required' });

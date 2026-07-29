@@ -1,35 +1,78 @@
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes heartPop {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.3); }
+  60% { transform: scale(0.9); }
+  100% { transform: scale(1); }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .item-card {
   background: var(--surface);
   border-radius: var(--radius-lg);
   overflow: hidden;
   cursor: pointer;
   transition: all var(--transition-base);
+  animation: cardFadeIn 0.4s ease backwards;
+  border: 1px solid transparent;
+  position: relative;
+}
+
+.item-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  opacity: 0;
+  transition: opacity var(--transition-base);
+  background: linear-gradient(135deg, rgba(233,69,96,0.03), rgba(233,69,96,0));
+  pointer-events: none;
+}
+
+.item-card:hover::after {
+  opacity: 1;
 }
 
 .item-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-lg);
+  transform: translateY(-6px) scale(1.01);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(233, 69, 96, 0.12);
+  border-color: rgba(233, 69, 96, 0.15);
 }
 
 .item-card:active {
-  transform: scale(0.98);
+  transform: scale(0.97);
+  transition-duration: 0.1s;
 }
 
 .item-image-wrapper {
   position: relative;
   aspect-ratio: 1;
   overflow: hidden;
+  background: var(--background-secondary);
 }
 
 .item-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform var(--transition-slow);
+  transition: transform 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .item-card:hover .item-image {
-  transform: scale(1.05);
+  transform: scale(1.08);
 }
 
 .item-badges {
@@ -43,22 +86,30 @@
 }
 
 .item-favorite {
-  width: 32px;
-  height: 32px;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  width: 34px;
+  height: 34px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
   transition: all var(--transition-fast);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 .item-favorite:hover,
 .item-favorite.active {
   color: var(--accent);
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.95);
+  border-color: transparent;
+  box-shadow: 0 2px 12px rgba(233, 69, 96, 0.3);
+}
+
+.item-favorite.active {
+  animation: heartPop 0.35s ease;
 }
 
 .item-favorite.active svg {
@@ -67,26 +118,29 @@
 
 .item-condition {
   padding: 4px 8px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border-radius: var(--radius-sm);
   font-size: 10px;
   font-weight: 600;
   color: white;
   text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border: 1px solid rgba(255,255,255,0.08);
 }
 
 .item-condition.new {
-  background: rgba(74, 222, 128, 0.9);
+  background: rgba(74, 222, 128, 0.85);
 }
 
 .item-condition.like_new {
-  background: rgba(59, 130, 246, 0.9);
+  background: rgba(59, 130, 246, 0.85);
 }
 
 .item-boosted-badge {
-  padding: 4px 8px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  padding: 4px 10px;
+  background: linear-gradient(135deg, var(--accent), #FF8A65);
   border-radius: var(--radius-sm);
   font-size: 9px;
   font-weight: 700;
@@ -94,42 +148,29 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-left: auto;
+  box-shadow: 0 2px 8px rgba(233, 69, 96, 0.3);
 }
 
 .item-sale-badge {
-  padding: 4px 8px;
-  background: linear-gradient(135deg, var(--warning), #F59E0B);
+  padding: 4px 10px;
+  background: linear-gradient(135deg, var(--warning), #F97316);
   border-radius: var(--radius-sm);
   font-size: 10px;
   font-weight: 700;
   color: #1A1A2E;
   animation: pulse 2s infinite;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
 }
 
 .item-qty-badge {
   padding: 4px 8px;
-  background: rgba(59, 130, 246, 0.9);
+  background: rgba(59, 130, 246, 0.85);
+  backdrop-filter: blur(8px);
   border-radius: var(--radius-sm);
   font-size: 9px;
   font-weight: 600;
   color: white;
   margin-left: auto;
-}
-
-.item-price-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.item-price--sale {
-  color: var(--warning);
-}
-
-.item-price--original {
-  font-size: 13px;
-  color: var(--text-tertiary);
-  text-decoration: line-through;
 }
 
 .item-content {
@@ -151,26 +192,56 @@
 .item-footer {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-end;
+}
+
+.item-price-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
 }
 
 .item-price {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.item-price--sale {
+  color: var(--warning);
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.item-price--original {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .item-meta {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .item-meta svg {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
 }
 
 .items-grid {
@@ -179,6 +250,15 @@
   gap: 12px;
   padding: 12px;
 }
+
+.items-grid .item-card:nth-child(1) { animation-delay: 0ms; }
+.items-grid .item-card:nth-child(2) { animation-delay: 50ms; }
+.items-grid .item-card:nth-child(3) { animation-delay: 100ms; }
+.items-grid .item-card:nth-child(4) { animation-delay: 150ms; }
+.items-grid .item-card:nth-child(5) { animation-delay: 200ms; }
+.items-grid .item-card:nth-child(6) { animation-delay: 250ms; }
+.items-grid .item-card:nth-child(7) { animation-delay: 300ms; }
+.items-grid .item-card:nth-child(8) { animation-delay: 350ms; }
 
 .items-grid--list {
   grid-template-columns: 1fr;
@@ -235,6 +315,6 @@
   }
   
   .item-price {
-    font-size: 16px;
+    font-size: 15px;
   }
 }

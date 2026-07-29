@@ -5,6 +5,7 @@ import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon } from '../compo
 import { useApp } from '../context';
 import { categories, distanceOptions, sortOptions } from '../services/api';
 import { useDebounce } from '../hooks';
+import { formatPrice } from '../utils/helpers';
 import '../styles/globals.css';
 import './Home.css';
 
@@ -214,17 +215,27 @@ export default function Home() {
               <h3 className="section-title">Recently Viewed</h3>
             </div>
             <div className="horizontal-scroll">
-              {recentlyViewed.map(item => (
-                <div key={item.id} className="mini-item-card" onClick={() => setSelectedItem(item)}>
-                  <div className="mini-item-image">
-                    <img src={item.images?.[0]} alt={item.title} />
+              {recentlyViewed.map(item => {
+                const hasSale = item.salePrice && item.salePrice > 0 && item.salePrice < item.price;
+                return (
+                  <div key={item.id} className="mini-item-card" onClick={() => setSelectedItem(item)}>
+                    <div className="mini-item-image">
+                      <img src={item.images?.[0]} alt={item.title} />
+                    </div>
+                    <div className="mini-item-info">
+                      <span className="mini-item-title">{item.title}</span>
+                      {hasSale ? (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice)}</span>
+                          <span className="mini-item-price-original">{formatPrice(item.price)}</span>
+                        </div>
+                      ) : (
+                        <span className="mini-item-price">{formatPrice(item.price)}</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="mini-item-info">
-                    <span className="mini-item-title">{item.title}</span>
-                    <span className="mini-item-price">${item.price}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -236,18 +247,28 @@ export default function Home() {
               <span className="section-subtitle">Most viewed items</span>
             </div>
             <div className="horizontal-scroll">
-              {trendingItems.map(item => (
-                <div key={item.id} className="mini-item-card" onClick={() => setSelectedItem(item)}>
-                  <div className="mini-item-image">
-                    <img src={item.images?.[0]} alt={item.title} />
-                    <span className="mini-item-views">{item.views} views</span>
+              {trendingItems.map(item => {
+                const hasSale = item.salePrice && item.salePrice > 0 && item.salePrice < item.price;
+                return (
+                  <div key={item.id} className="mini-item-card" onClick={() => setSelectedItem(item)}>
+                    <div className="mini-item-image">
+                      <img src={item.images?.[0]} alt={item.title} />
+                      <span className="mini-item-views">{item.views} views</span>
+                    </div>
+                    <div className="mini-item-info">
+                      <span className="mini-item-title">{item.title}</span>
+                      {hasSale ? (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice)}</span>
+                          <span className="mini-item-price-original">{formatPrice(item.price)}</span>
+                        </div>
+                      ) : (
+                        <span className="mini-item-price">{formatPrice(item.price)}</span>
+                      )}
+                    </div>
                   </div>
-                  <div className="mini-item-info">
-                    <span className="mini-item-title">{item.title}</span>
-                    <span className="mini-item-price">${item.price}</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}

@@ -24,6 +24,7 @@ export function Avatar({ src, alt, size = 'md', online = false, verified = false
 }
 
 export function Rating({ value, max = 5, showValue = true, size = 'sm' }) {
+  const numValue = typeof value === 'number' ? value : parseFloat(value) || 0;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       <div style={{ display: 'flex', gap: '2px' }}>
@@ -33,8 +34,8 @@ export function Rating({ value, max = 5, showValue = true, size = 'sm' }) {
             width={size === 'sm' ? 14 : 18}
             height={size === 'sm' ? 14 : 18}
             viewBox="0 0 24 24"
-            fill={i < Math.round(value) ? '#FBBF24' : 'none'}
-            stroke={i < Math.round(value) ? '#FBBF24' : 'var(--border)'}
+            fill={i < Math.round(numValue) ? '#FBBF24' : 'none'}
+            stroke={i < Math.round(numValue) ? '#FBBF24' : 'var(--border)'}
             strokeWidth="2"
           >
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -43,7 +44,7 @@ export function Rating({ value, max = 5, showValue = true, size = 'sm' }) {
       </div>
       {showValue && (
         <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 500 }}>
-          {value > 0 ? value.toFixed(1) : 'New'}
+          {numValue > 0 ? numValue.toFixed(1) : 'New'}
         </span>
       )}
     </div>
