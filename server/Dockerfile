@@ -7,8 +7,10 @@ RUN npm ci --only=production
 
 COPY . .
 
+RUN mkdir -p uploads logs
+
 EXPOSE 3001
 
-RUN mkdir -p uploads logs
+VOLUME ["/app/uploads", "/app/logs"]
 
 CMD ["node", "index.js"]
