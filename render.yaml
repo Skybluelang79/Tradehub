@@ -1,0 +1,51 @@
+services:
+  - type: web
+    name: tradehub-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: cd trade-app/server && npm install
+    startCommand: cd trade-app/server && node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_SECRET
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: APP_URL
+        fromService:
+          type: web
+          name: tradehub-frontend
+          property: url
+      - key: FRONTEND_URL
+        fromService:
+          type: web
+          name: tradehub-frontend
+          property: url
+    disk:
+      name: tradehub-data
+      mountPath: /opt/render/project/src/trade-app/server
+      sizeGB: 1
+
+  - type: web
+    name: tradehub-frontend
+    env: static
+    region: oregon
+    plan: free
+    buildCommand: cd trade-app && npm install && npm run build
+    staticPublishPath: trade-app/dist
+    routes:
+      - type: rewrite
+        source: /Tradehub/*
+        destination: /Tradehub/index.html
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          type: web
+          name: tradehub-api
+          property: url
