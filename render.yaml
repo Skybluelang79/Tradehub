@@ -4,8 +4,8 @@ services:
     env: node
     region: oregon
     plan: free
-    buildCommand: cd trade-app/server && npm install
-    startCommand: cd trade-app/server && node index.js
+    buildCommand: cd server && npm install
+    startCommand: cd server && node index.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -29,7 +29,7 @@ services:
           property: url
     disk:
       name: tradehub-data
-      mountPath: /opt/render/project/src/trade-app/server
+      mountPath: /opt/render/project/src/server
       sizeGB: 1
 
   - type: web
@@ -37,8 +37,8 @@ services:
     env: static
     region: oregon
     plan: free
-    buildCommand: cd trade-app && npm install && npm run build
-    staticPublishPath: trade-app/dist
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
     routes:
       - type: rewrite
         source: /Tradehub/*
