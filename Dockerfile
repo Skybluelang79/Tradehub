@@ -8,11 +8,16 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM nginx:1.27-alpine
+FROM node:22-alpine AS runner
 
-COPY --from=build /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+WORKDIR /app
+ENV NODE_ENV=production
 
-EXPOSE 80
+COPY --from=build /app/dist ./dist
+COPY server/package*.json ./server/
+RUN cd server && npm ci --omit=dev
+COPY server ./server
 
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 3001
+
+CMD ["node", "server/index.js"]
