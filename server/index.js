@@ -36,6 +36,7 @@ const __dirname = dirname(__filename);
 
 const app = express();
 const server = createServer(app);
+const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, 'uploads');
 const io = new Server(server, {
   cors: {
     origin: true,
@@ -44,13 +45,13 @@ const io = new Server(server, {
 });
 
 ['uploads', 'logs'].forEach(dir => {
-  const p = join(__dirname, dir);
+  const p = dir === 'uploads' ? UPLOADS_DIR : join(__dirname, dir);
   if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
 });
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
-app.use('/uploads', express.static(join(__dirname, 'uploads')));
+app.use('/uploads', express.static(UPLOADS_DIR));
 
 const frontendDist = join(__dirname, '..', 'dist');
 if (process.env.NODE_ENV === 'production' && fs.existsSync(frontendDist)) {
