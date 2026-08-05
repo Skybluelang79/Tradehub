@@ -6,4 +6,5 @@ export { default as AdminPayouts } from './AdminPayouts.jsx';
 export { default as AdminGiftCards } from './AdminGiftCards.jsx';
 export { default as AdminDisputes } from './AdminDisputes.jsx';
 export { default as AdminReports } from './AdminReports.jsx';
+export { default as AdminAuditLogs } from './AdminAuditLogs.jsx';
 export { default as AdminSettings } from './AdminSettings.jsx';

@@ -20,6 +20,7 @@ import {
   AdminGiftCards,
   AdminDisputes,
   AdminReports,
+  AdminAuditLogs,
   AdminSettings
 } from './pages/admin';
 import './styles/globals.css';
@@ -121,10 +122,12 @@ function AppContent() {
         return <AdminDisputes />;
       case '/admin/reports':
         return <AdminReports />;
+      case '/admin/audit-logs':
+        return <AdminAuditLogs />;
       case '/admin/settings':
         return <AdminSettings />;
       default:
-        return <AdminDashboard />;
+        return <AdminDashboard onNavigate={handleAdminNavigate} />;
     }
   };
 

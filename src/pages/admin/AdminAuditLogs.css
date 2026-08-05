@@ -1,0 +1,148 @@
+.admin-audit-logs {
+  max-width: 1400px;
+}
+
+.audit-table-container {
+  background: var(--surface);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.audit-table th {
+  text-align: left;
+  padding: 16px 20px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: var(--surface-hover);
+  border-bottom: 1px solid var(--border);
+}
+
+.audit-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.audit-table tr:last-child td {
+  border-bottom: none;
+}
+
+.audit-table tr:hover {
+  background: var(--surface-hover);
+}
+
+.log-action {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.log-action-default {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94A3B8;
+}
+
+.log-action-info {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3B82F6;
+}
+
+.log-action-success {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ADE80;
+}
+
+.log-action-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+}
+
+.log-target {
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.log-details {
+  color: var(--text-secondary);
+  font-size: 12px;
+  max-width: 280px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-empty {
+  text-align: center;
+  padding: 40px 20px !important;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-weight: 500;
+}
+
+@media (max-width: 1024px) {
+  .audit-table-container {
+    overflow-x: auto;
+  }
+
+  .audit-table {
+    min-width: 800px;
+  }
+}

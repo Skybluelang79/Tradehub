@@ -35,6 +35,22 @@ function adminRequest(path, options = {}) {
   return request(path, { ...options, asAdmin: true });
 }
 
+async function adminDownload(path, filename) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { Authorization: `Bearer ${localStorage.getItem('tradehub_admin_token') || ''}` },
+  });
+  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 export { setToken, getToken };
 
 export const api = {
@@ -158,12 +174,23 @@ export const api = {
   admin: {
     login: (data) => request('/admin/login', { method: 'POST', body: JSON.stringify(data) }),
     dashboard: () => adminRequest('/admin/dashboard'),
-    users: () => adminRequest('/admin/users'),
+    users: (params = {}) => adminRequest(`/admin/users?${new URLSearchParams(params).toString()}`),
+    userDetail: (id) => adminRequest(`/admin/users/${id}`),
     verifyUser: (id) => adminRequest(`/admin/users/${id}/verify`, { method: 'PUT' }),
+    updateUserStatus: (id, status, reason = '') => adminRequest(`/admin/users/${id}/status`, { method: 'PUT', body: JSON.stringify({ status, reason }) }),
+    toggleAdmin: (id) => adminRequest(`/admin/users/${id}/promote`, { method: 'PUT' }),
+    resetPassword: (id) => adminRequest(`/admin/users/${id}/reset-password`, { method: 'POST' }),
     deleteUser: (id) => adminRequest(`/admin/users/${id}`, { method: 'DELETE' }),
-    listings: () => adminRequest('/admin/listings'),
+    listings: (params = {}) => adminRequest(`/admin/listings?${new URLSearchParams(params).toString()}`),
     updateListingStatus: (id, status) => adminRequest(`/admin/listings/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
-    transactions: () => adminRequest('/admin/transactions'),
+    transactions: (params = {}) => adminRequest(`/admin/transactions?${new URLSearchParams(params).toString()}`),
+    reports: (params = {}) => adminRequest(`/admin/reports?${new URLSearchParams(params).toString()}`),
+    resolveReport: (id, action) => adminRequest(`/admin/reports/${id}/resolve`, { method: 'PUT', body: JSON.stringify({ action }) }),
+    auditLogs: (params = {}) => adminRequest(`/admin/audit-logs?${new URLSearchParams(params).toString()}`),
+    exportCsv: (kind) => adminDownload(`/admin/export/${kind}`, `${kind}-${Date.now()}.csv`),
+    broadcast: (data) => adminRequest('/admin/broadcast', { method: 'POST', body: JSON.stringify(data) }),
+    backup: () => adminDownload('/admin/backup', `tradehub-backup-${Date.now()}.db`),
+    restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   upload: {

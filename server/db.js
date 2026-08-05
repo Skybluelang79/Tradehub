@@ -553,6 +553,8 @@ function migrate() {
   ensureColumn('gift_cards', 'purchase_cents', 'INTEGER');
   ensureColumn('gift_cards', 'voided_at', 'TEXT');
   ensureColumn('gift_cards', 'voided_by', 'TEXT');
+  ensureColumn('users', 'status', "TEXT DEFAULT 'active'");
+  ensureColumn('users', 'banned_reason', "TEXT DEFAULT ''");
 }
 
 async function seedDemoIfNeeded() {
@@ -641,6 +643,20 @@ export async function flushDB() {
       dirty = true;
     }
   }
+}
+
+export async function exportDatabase() {
+  await ensureLoaded();
+  return Buffer.from(rawDb.export());
+}
+
+export async function replaceDatabase(buffer) {
+  await ensureLoaded();
+  rawDb.close();
+  rawDb = new SQL.Database(new Uint8Array(buffer));
+  applySchema();
+  initialized = true;
+  queueFlush();
 }
 
 export default db;

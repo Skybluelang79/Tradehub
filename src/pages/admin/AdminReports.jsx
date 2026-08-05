@@ -1,40 +1,70 @@
-import { useState } from 'react';
-import { useAdmin } from '../../context/AdminContext.jsx';
+import { useCallback, useEffect, useState } from 'react';
+import { api } from '../../services/client.js';
+import { useToast } from '../../components/ui/Toast.jsx';
 import { SearchIcon, CheckIcon, XIcon, FlagIcon, AlertIcon } from './Icons.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import './AdminReports.css';
 
+const formatDate = (value) => {
+  if (!value) return '—';
+  return new Date(value).toLocaleString();
+};
+
 const AdminReports = () => {
-  const { reports, updateReportStatus } = useAdmin();
+  const { addToast } = useToast();
+  const [reports, setReports] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [loading, setLoading] = useState(false);
+
   const [selectedReport, setSelectedReport] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
-  const filteredReports = reports.filter(report => {
-    const matchesSearch = report.reportedItem.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          report.reason.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesType = filterType === 'all' || report.type === filterType;
-    const matchesStatus = filterStatus === 'all' || report.status === filterStatus;
-    return matchesSearch && matchesType && matchesStatus;
-  });
+  const loadReports = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.admin.reports({
+        page,
+        limit: 20,
+        q: searchQuery,
+        type: filterType,
+        status: filterStatus,
+      });
+      setReports(data.reports || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to load reports', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, searchQuery, filterType, filterStatus, addToast]);
 
-  const handleResolve = (reportId) => {
-    updateReportStatus(reportId, 'resolved');
-  };
+  useEffect(() => {
+    const timer = setTimeout(loadReports, 300);
+    return () => clearTimeout(timer);
+  }, [loadReports]);
 
-  const handleDismiss = (reportId) => {
-    updateReportStatus(reportId, 'dismissed');
+  const handleResolve = async (report, action) => {
+    try {
+      await api.admin.resolveReport(report.id, action);
+      addToast(`Report ${action === 'dismiss' ? 'dismissed' : 'resolved'}`, 'success');
+      loadReports();
+    } catch (err) {
+      addToast(err.message || 'Failed to update report', 'error');
+    }
   };
 
   const getTypeBadge = (type) => {
     const types = {
-      user: { class: 'type-user', icon: '👤' },
-      listing: { class: 'type-listing', icon: '📦' },
-      transaction: { class: 'type-transaction', icon: '💳' }
+      user: 'type-user',
+      item: 'type-listing'
     };
-    return types[type] || types.user;
+    return types[type] || 'type-user';
   };
 
   const getStatusBadge = (status) => {
@@ -46,6 +76,8 @@ const AdminReports = () => {
     return statuses[status] || '';
   };
 
+  const pendingCount = reports.filter(r => r.status === 'pending').length;
+
   return (
     <div className="admin-reports">
       <div className="admin-page-header">
@@ -55,12 +87,12 @@ const AdminReports = () => {
         </div>
         <div className="header-stats">
           <div className="stat-item danger">
-            <span className="stat-count">{reports.filter(r => r.status === 'pending').length}</span>
-            <span className="stat-text">Pending</span>
+            <span className="stat-count">{total}</span>
+            <span className="stat-text">Total</span>
           </div>
           <div className="stat-item success">
-            <span className="stat-count">{reports.filter(r => r.status === 'resolved').length}</span>
-            <span className="stat-text">Resolved</span>
+            <span className="stat-count">{pendingCount}</span>
+            <span className="stat-text">Pending (page)</span>
           </div>
         </div>
       </div>
@@ -68,125 +100,106 @@ const AdminReports = () => {
       <div className="filters-bar">
         <div className="search-box">
           <SearchIcon size={18} />
-          <input 
-            type="text" 
-            placeholder="Search reports..." 
+          <input
+            type="text"
+            placeholder="Search reports..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
           />
         </div>
         <div className="filter-group">
-          <button 
-            className={`filter-btn ${filterType === 'all' ? 'active' : ''}`}
-            onClick={() => setFilterType('all')}
-          >
-            All Types
-          </button>
-          <button 
-            className={`filter-btn ${filterType === 'user' ? 'active' : ''}`}
-            onClick={() => setFilterType('user')}
-          >
-            Users
-          </button>
-          <button 
-            className={`filter-btn ${filterType === 'listing' ? 'active' : ''}`}
-            onClick={() => setFilterType('listing')}
-          >
-            Listings
-          </button>
-          <button 
-            className={`filter-btn ${filterType === 'transaction' ? 'active' : ''}`}
-            onClick={() => setFilterType('transaction')}
-          >
-            Transactions
-          </button>
+          {['all', 'item', 'user'].map((type) => (
+            <button
+              key={type}
+              className={`filter-btn ${filterType === type ? 'active' : ''}`}
+              onClick={() => { setFilterType(type); setPage(1); }}
+            >
+              {type[0].toUpperCase() + type.slice(1)}
+            </button>
+          ))}
         </div>
         <div className="filter-group">
-          <button 
-            className={`filter-btn ${filterStatus === 'all' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('all')}
-          >
-            All Status
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === 'pending' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('pending')}
-          >
-            Pending
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === 'resolved' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('resolved')}
-          >
-            Resolved
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === 'dismissed' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('dismissed')}
-          >
-            Dismissed
-          </button>
+          {['all', 'pending', 'resolved', 'dismissed'].map((status) => (
+            <button
+              key={status}
+              className={`filter-btn ${filterStatus === status ? 'active' : ''}`}
+              onClick={() => { setFilterStatus(status); setPage(1); }}
+            >
+              {status[0].toUpperCase() + status.slice(1)}
+            </button>
+          ))}
         </div>
       </div>
 
+      {loading && reports.length === 0 && (
+        <div className="empty-state">Loading reports...</div>
+      )}
+
       <div className="reports-list">
-        {filteredReports.map(report => {
-          const typeInfo = getTypeBadge(report.type);
-          return (
-            <div key={report.id} className="report-card">
-              <div className="report-header">
-                <div className="report-type-badge">
-                  <span className={`type-indicator ${typeInfo.class}`}></span>
-                  <span>{report.type}</span>
-                </div>
-                <span className={`status-badge ${getStatusBadge(report.status)}`}>
-                  {report.status}
-                </span>
+        {reports.map(report => (
+          <div key={`${report.type}-${report.id}`} className="report-card">
+            <div className="report-header">
+              <div className="report-type-badge">
+                <span className={`type-indicator ${getTypeBadge(report.type)}`}></span>
+                <span>{report.type} report</span>
               </div>
-              <div className="report-body">
-                <h3 className="report-item">{report.reportedItem}</h3>
-                <p className="report-reason">{report.reason}</p>
-                <div className="report-meta">
-                  <span>Reported by: {report.reporter}</span>
-                  <span>{report.date}</span>
-                </div>
-              </div>
-              <div className="report-actions">
-                {report.status === 'pending' && (
-                  <>
-                    <button 
-                      className="action-btn resolve"
-                      onClick={() => handleResolve(report.id)}
-                    >
-                      <CheckIcon size={16} />
-                      Resolve
-                    </button>
-                    <button 
-                      className="action-btn dismiss"
-                      onClick={() => handleDismiss(report.id)}
-                    >
-                      <XIcon size={16} />
-                      Dismiss
-                    </button>
-                  </>
-                )}
-                <button 
-                  className="action-btn view"
-                  onClick={() => {
-                    setSelectedReport(report);
-                    setShowDetailModal(true);
-                  }}
-                >
-                  <AlertIcon size={16} />
-                  View Details
-                </button>
+              <span className={`status-badge ${getStatusBadge(report.status)}`}>
+                {report.status}
+              </span>
+            </div>
+            <div className="report-body">
+              <h3 className="report-item">{report.target}</h3>
+              <p className="report-reason">{report.reason}</p>
+              {report.item_status && report.item_status !== 'active' && (
+                <span className="target-status">Listing status: {report.item_status}</span>
+              )}
+              <div className="report-meta">
+                <span>Reported by: {report.reporter_name}</span>
+                <span>{formatDate(report.created_at)}</span>
               </div>
             </div>
-          );
-        })}
+            <div className="report-actions">
+              {report.status === 'pending' && (
+                <>
+                  <button
+                    className="action-btn resolve"
+                    onClick={() => handleResolve(report, report.type === 'user' ? 'suspend' : 'remove')}
+                  >
+                    <CheckIcon size={16} />
+                    {report.type === 'user' ? 'Suspend User' : 'Remove Listing'}
+                  </button>
+                  <button
+                    className="action-btn warn"
+                    onClick={() => handleResolve(report, 'warn')}
+                  >
+                    <FlagIcon size={16} />
+                    Warn / Clear
+                  </button>
+                  <button
+                    className="action-btn dismiss"
+                    onClick={() => handleResolve(report, 'dismiss')}
+                  >
+                    <XIcon size={16} />
+                    Dismiss
+                  </button>
+                </>
+              )}
+              <button
+                className="action-btn view"
+                onClick={() => {
+                  setSelectedReport(report);
+                  setShowDetailModal(true);
+                }}
+              >
+                <AlertIcon size={16} />
+                View Details
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      {filteredReports.length === 0 && (
+      {!loading && reports.length === 0 && (
         <div className="empty-state">
           <AlertIcon size={48} />
           <h3>No reports found</h3>
@@ -194,8 +207,31 @@ const AdminReports = () => {
         </div>
       )}
 
-      <Modal 
-        isOpen={showDetailModal} 
+      <div className="pagination">
+        <span>
+          Showing {reports.length} of {total} reports
+        </span>
+        <div className="pagination-controls">
+          <button
+            className="page-btn"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(p - 1, 1))}
+          >
+            Prev
+          </button>
+          <span className="page-info">Page {page} of {totalPages || 1}</span>
+          <button
+            className="page-btn"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      <Modal
+        isOpen={showDetailModal}
         onClose={() => setShowDetailModal(false)}
         title="Report Details"
       >
@@ -203,7 +239,7 @@ const AdminReports = () => {
           <div className="report-detail-modal">
             <div className="detail-header">
               <div className="report-type-badge large">
-                <span className={`type-indicator ${getTypeBadge(selectedReport.type).class}`}></span>
+                <span className={`type-indicator ${getTypeBadge(selectedReport.type)}`}></span>
                 <span>{selectedReport.type} Report</span>
               </div>
               <span className={`status-badge ${getStatusBadge(selectedReport.status)}`}>
@@ -213,37 +249,53 @@ const AdminReports = () => {
             <div className="detail-content">
               <div className="detail-row">
                 <span className="label">Reported Item</span>
-                <span className="value">{selectedReport.reportedItem}</span>
+                <span className="value">{selectedReport.target}</span>
               </div>
               <div className="detail-row">
                 <span className="label">Reason</span>
                 <span className="value">{selectedReport.reason}</span>
               </div>
+              {selectedReport.description && (
+                <div className="detail-row">
+                  <span className="label">Description</span>
+                  <span className="value">{selectedReport.description}</span>
+                </div>
+              )}
               <div className="detail-row">
                 <span className="label">Reported By</span>
-                <span className="value">{selectedReport.reporter}</span>
+                <span className="value">{selectedReport.reporter_name}</span>
               </div>
               <div className="detail-row">
                 <span className="label">Date</span>
-                <span className="value">{selectedReport.date}</span>
+                <span className="value">{formatDate(selectedReport.created_at)}</span>
               </div>
             </div>
             {selectedReport.status === 'pending' && (
               <div className="detail-actions">
-                <button 
+                <button
                   className="btn-success"
                   onClick={() => {
-                    handleResolve(selectedReport.id);
+                    handleResolve(selectedReport, selectedReport.type === 'user' ? 'suspend' : 'remove');
                     setShowDetailModal(false);
                   }}
                 >
                   <CheckIcon size={16} />
-                  Mark as Resolved
+                  {selectedReport.type === 'user' ? 'Suspend User' : 'Remove Listing'}
                 </button>
-                <button 
+                <button
                   className="btn-secondary"
                   onClick={() => {
-                    handleDismiss(selectedReport.id);
+                    handleResolve(selectedReport, 'warn');
+                    setShowDetailModal(false);
+                  }}
+                >
+                  <FlagIcon size={16} />
+                  Warn / Clear
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => {
+                    handleResolve(selectedReport, 'dismiss');
                     setShowDetailModal(false);
                   }}
                 >

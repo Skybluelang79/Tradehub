@@ -25,6 +25,13 @@ export const authLimiter = rateLimit({
 
 export const apiLimiter = rateLimit({ ...base, max: 100 });
 
+export const adminLimiter = rateLimit({
+  ...base,
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Too many login attempts. Try again in 15 minutes.' },
+});
+
 export const uploadLimiter = rateLimit({
   ...base,
   windowMs: 60 * 60 * 1000,

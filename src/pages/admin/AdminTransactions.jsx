@@ -1,24 +1,57 @@
-import { useState } from 'react';
-import { useAdmin } from '../../context/AdminContext.jsx';
-import { SearchIcon, DownloadIcon, FilterIcon, DollarIcon } from './Icons.jsx';
+import { useCallback, useEffect, useState } from 'react';
+import { api } from '../../services/client.js';
+import { useToast } from '../../components/ui/Toast.jsx';
+import { SearchIcon, DownloadIcon, DollarIcon } from './Icons.jsx';
 import './AdminTransactions.css';
 
+const TX_FILTERS = ['all', 'completed', 'pending', 'refunded', 'failed'];
+
+const formatDate = (value) => {
+  if (!value) return '—';
+  return new Date(value).toLocaleString();
+};
+
 const AdminTransactions = () => {
-  const { transactions } = useAdmin();
+  const { addToast } = useToast();
+  const [transactions, setTransactions] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState('date');
+  const [loading, setLoading] = useState(false);
 
-  const filteredTransactions = transactions.filter(tx => {
-    const matchesSearch = tx.item.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          tx.buyer.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          tx.seller.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || tx.status === filterStatus;
-    return matchesSearch && matchesStatus;
-  });
+  const loadTransactions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api.admin.transactions({
+        page,
+        limit: 20,
+        q: searchQuery,
+        status: filterStatus,
+      });
+      setTransactions(data.transactions || []);
+      setTotal(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+    } catch (err) {
+      addToast(err.message || 'Failed to load transactions', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, searchQuery, filterStatus, addToast]);
 
-  const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
-  const totalFees = transactions.reduce((sum, tx) => sum + tx.fee, 0);
+  useEffect(() => {
+    const timer = setTimeout(loadTransactions, 300);
+    return () => clearTimeout(timer);
+  }, [loadTransactions]);
+
+  const handleExport = () => {
+    api.admin.exportCsv('transactions');
+    addToast('Export started', 'info');
+  };
+
+  const totalAmount = transactions.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
+  const totalFees = transactions.reduce((sum, tx) => sum + (Number(tx.fee_amount) || 0), 0);
   const completedTx = transactions.filter(tx => tx.status === 'completed').length;
   const pendingTx = transactions.filter(tx => tx.status === 'pending').length;
 
@@ -26,7 +59,10 @@ const AdminTransactions = () => {
     const classes = {
       completed: 'status-completed',
       pending: 'status-pending',
-      refunded: 'status-refunded'
+      refunded: 'status-refunded',
+      failed: 'status-failed',
+      cancelled: 'status-cancelled',
+      awaiting_payment: 'status-awaiting-payment'
     };
     return classes[status] || '';
   };
@@ -38,9 +74,9 @@ const AdminTransactions = () => {
           <h1>Transaction Management</h1>
           <p>Monitor all platform transactions</p>
         </div>
-        <button className="btn-secondary">
+        <button className="btn-secondary" onClick={handleExport}>
           <DownloadIcon size={16} />
-          Export
+          Export CSV
         </button>
       </div>
 
@@ -51,7 +87,7 @@ const AdminTransactions = () => {
           </div>
           <div className="tx-stat-info">
             <span className="tx-stat-value">${totalAmount.toLocaleString()}</span>
-            <span className="tx-stat-label">Total Volume</span>
+            <span className="tx-stat-label">Page Volume</span>
           </div>
         </div>
         <div className="tx-stat-card">
@@ -62,7 +98,7 @@ const AdminTransactions = () => {
           </div>
           <div className="tx-stat-info">
             <span className="tx-stat-value">${totalFees.toLocaleString()}</span>
-            <span className="tx-stat-label">Platform Fees</span>
+            <span className="tx-stat-label">Page Fees</span>
           </div>
         </div>
         <div className="tx-stat-card">
@@ -93,48 +129,24 @@ const AdminTransactions = () => {
       <div className="filters-bar">
         <div className="search-box">
           <SearchIcon size={18} />
-          <input 
-            type="text" 
-            placeholder="Search transactions..." 
+          <input
+            type="text"
+            placeholder="Search transactions..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
           />
         </div>
         <div className="filter-group">
-          <button 
-            className={`filter-btn ${filterStatus === 'all' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('all')}
-          >
-            All
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === 'completed' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('completed')}
-          >
-            Completed
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === 'pending' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('pending')}
-          >
-            Pending
-          </button>
-          <button 
-            className={`filter-btn ${filterStatus === 'refunded' ? 'active' : ''}`}
-            onClick={() => setFilterStatus('refunded')}
-          >
-            Refunded
-          </button>
+          {TX_FILTERS.map((status) => (
+            <button
+              key={status}
+              className={`filter-btn ${filterStatus === status ? 'active' : ''}`}
+              onClick={() => { setFilterStatus(status); setPage(1); }}
+            >
+              {status[0].toUpperCase() + status.slice(1)}
+            </button>
+          ))}
         </div>
-        <select 
-          className="sort-select"
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-        >
-          <option value="date">Sort by Date</option>
-          <option value="amount">Sort by Amount</option>
-          <option value="status">Sort by Status</option>
-        </select>
       </div>
 
       <div className="transactions-table-container">
@@ -152,41 +164,62 @@ const AdminTransactions = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredTransactions.map(tx => (
+            {loading && transactions.length === 0 && (
+              <tr><td colSpan="8" className="table-empty">Loading transactions...</td></tr>
+            )}
+            {!loading && transactions.length === 0 && (
+              <tr><td colSpan="8" className="table-empty">No transactions found</td></tr>
+            )}
+            {transactions.map(tx => (
               <tr key={tx.id}>
                 <td>
-                  <span className="tx-id">#{tx.id.toString().padStart(4, '0')}</span>
+                  <span className="tx-id">#{tx.id.toString().slice(0, 8)}</span>
                 </td>
                 <td>
-                  <span className="tx-item">{tx.item}</span>
+                  <span className="tx-item">{tx.item_title}</span>
                 </td>
-                <td>{tx.buyer}</td>
-                <td>{tx.seller}</td>
+                <td>{tx.buyer_name || '—'}</td>
+                <td>{tx.seller_name || '—'}</td>
                 <td>
-                  <span className="tx-amount">${tx.amount.toLocaleString()}</span>
+                  <span className="tx-amount">${Number(tx.amount).toLocaleString()}</span>
                 </td>
                 <td>
-                  <span className="tx-fee">${tx.fee.toFixed(2)}</span>
+                  <span className="tx-fee">${Number(tx.fee_amount).toFixed(2)}</span>
                 </td>
                 <td>
                   <span className={`status-badge ${getStatusBadge(tx.status)}`}>
-                    {tx.status}
+                    {tx.status.replace(/_/g, ' ')}
                   </span>
                 </td>
-                <td>{tx.date}</td>
+                <td>{formatDate(tx.created_at)}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {filteredTransactions.length === 0 && (
-        <div className="empty-state">
-          <DollarIcon size={48} />
-          <h3>No transactions found</h3>
-          <p>Try adjusting your search or filter criteria</p>
+      <div className="pagination">
+        <span>
+          Showing {transactions.length} of {total} transactions
+        </span>
+        <div className="pagination-controls">
+          <button
+            className="page-btn"
+            disabled={page <= 1}
+            onClick={() => setPage((p) => Math.max(p - 1, 1))}
+          >
+            Prev
+          </button>
+          <span className="page-info">Page {page} of {totalPages || 1}</span>
+          <button
+            className="page-btn"
+            disabled={page >= totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Next
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 };

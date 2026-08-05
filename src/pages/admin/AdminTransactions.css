@@ -145,6 +145,70 @@
   color: #EF4444;
 }
 
+.status-failed {
+  background: rgba(239, 68, 68, 0.15);
+  color: #EF4444;
+}
+
+.status-cancelled {
+  background: rgba(148, 163, 184, 0.2);
+  color: #94A3B8;
+}
+
+.status-awaiting-payment {
+  background: rgba(168, 85, 247, 0.15);
+  color: #A855F7;
+}
+
+.table-empty {
+  text-align: center;
+  padding: 40px 20px !important;
+  color: var(--text-tertiary);
+  font-size: 14px;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.page-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-weight: 500;
+}
+
 @media (max-width: 1200px) {
   .tx-stats-grid {
     grid-template-columns: repeat(2, 1fr);

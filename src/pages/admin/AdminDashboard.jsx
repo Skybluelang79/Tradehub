@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAdmin } from '../../context/AdminContext.jsx';
+import { useToast } from '../../components/ui/Toast.jsx';
 import { api } from '../../services/client';
 import './AdminDashboard.css';
 
@@ -12,20 +13,33 @@ const fmtMoney = (v) => {
 
 const fmtCentsMoney = (v) => fmtMoney((v || 0) / 100);
 
-const AdminDashboard = () => {
+const AdminDashboard = ({ onNavigate }) => {
   const { adminToken } = useAdmin();
+  const { addToast } = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     if (!adminToken) return;
     let cancelled = false;
     api.admin.dashboard()
       .then((r) => { if (!cancelled) setData(r); })
-      .catch((err) => console.error('Failed to load dashboard:', err))
+      .catch((err) => { if (!cancelled) addToast(err.message || 'Failed to load dashboard', 'error'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [adminToken]);
+  }, [adminToken, addToast]);
+
+  useEffect(load, [load]);
+
+  const moderationAction = async (fn, message) => {
+    try {
+      await fn();
+      addToast(message, 'success');
+      load();
+    } catch (err) {
+      addToast(err.message || 'Action failed', 'error');
+    }
+  };
 
   const stats = useMemo(() => {
     const s = data?.stats || {};
@@ -230,6 +244,73 @@ const AdminDashboard = () => {
               <span>Gift cards issued</span>
               <strong>{data?.stats?.giftCardsIssued || 0} ({data?.stats?.giftCardsRedeemed || 0} redeemed)</strong>
             </div>
+          </div>
+        </div>
+
+        <div className="dashboard-card moderation-card">
+          <div className="card-header">
+            <h3>Moderation Queue</h3>
+            <span className="card-badge">
+              {(data?.stats?.pendingReports || 0) + (data?.stats?.openDisputes || 0) + (data?.stats?.flaggedListings || 0)} items
+            </span>
+          </div>
+          <div className="moderation-list">
+            {(data?.recentPendingReports?.length || data?.recentFlagged?.length || data?.recentDisputes?.length) === 0 && (
+              <div className="empty-state">Queue is clear</div>
+            )}
+
+            {data?.recentFlagged?.map((item) => (
+              <div key={`flag-${item.id}`} className="moderation-item">
+                <div className="moderation-info">
+                  <span className="moderation-title">{item.title}</span>
+                  <span className="moderation-meta">Flagged · {fmtMoney(item.price)}</span>
+                </div>
+                <div className="moderation-actions">
+                  <button
+                    className="moderation-btn approve"
+                    onClick={() => moderationAction(() => api.admin.updateListingStatus(item.id, 'active'), 'Listing approved')}
+                  >
+                    Approve
+                  </button>
+                  <button
+                    className="moderation-btn remove"
+                    onClick={() => moderationAction(() => api.admin.updateListingStatus(item.id, 'removed'), 'Listing removed')}
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {data?.recentPendingReports?.map((report) => (
+              <div key={`report-${report.type}-${report.id}`} className="moderation-item">
+                <div className="moderation-info">
+                  <span className="moderation-title">{report.target}</span>
+                  <span className="moderation-meta">{report.type} report · {report.reason}</span>
+                </div>
+                <button
+                  className="moderation-btn clear"
+                  onClick={() => moderationAction(() => api.admin.resolveReport(report.id, 'dismiss'), 'Report dismissed')}
+                >
+                  Clear
+                </button>
+              </div>
+            ))}
+
+            {data?.recentDisputes?.map((dispute) => (
+              <div key={`dispute-${dispute.id}`} className="moderation-item">
+                <div className="moderation-info">
+                  <span className="moderation-title">{dispute.item_title || 'Dispute'}</span>
+                  <span className="moderation-meta">Dispute · {dispute.reason}</span>
+                </div>
+                <span className="moderation-open">Open</span>
+              </div>
+            ))}
+          </div>
+          <div className="moderation-footer">
+            <button className="moderation-link" onClick={() => onNavigate && onNavigate('/admin/reports')}>View reports</button>
+            <button className="moderation-link" onClick={() => onNavigate && onNavigate('/admin/listings')}>View listings</button>
+            <button className="moderation-link" onClick={() => onNavigate && onNavigate('/admin/disputes')}>View disputes</button>
           </div>
         </div>
 

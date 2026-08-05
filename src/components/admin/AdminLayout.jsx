@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useAdmin } from '../../context/AdminContext';
-import { 
-  DashboardIcon, 
-  UsersIcon, 
-  PackageIcon, 
-  DollarIcon, 
-  ChartIcon, 
-  SettingsIcon, 
+import {
+  DashboardIcon,
+  UsersIcon,
+  PackageIcon,
+  DollarIcon,
+  ChartIcon,
+  SettingsIcon,
   ShieldIcon,
   MenuIcon,
   XIcon,
-  LogOutIcon
+  LogOutIcon,
+  EyeIcon
 } from '../../pages/admin/Icons.jsx';
 import './AdminLayout.css';
 
@@ -23,6 +24,7 @@ const navItems = [
   { path: '/admin/gift-cards', label: 'Gift Cards', icon: ChartIcon },
   { path: '/admin/disputes', label: 'Disputes', icon: ShieldIcon },
   { path: '/admin/reports', label: 'Reports', icon: ChartIcon },
+  { path: '/admin/audit-logs', label: 'Audit Logs', icon: EyeIcon },
   { path: '/admin/settings', label: 'Settings', icon: SettingsIcon },
 ];
 
