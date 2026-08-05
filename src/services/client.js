@@ -17,7 +17,10 @@ function getToken() {
 
 async function request(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+  const token = options.asAdmin
+    ? (localStorage.getItem('tradehub_admin_token') || null)
+    : authToken;
+  if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   const data = await res.json();
@@ -28,14 +31,8 @@ async function request(path, options = {}) {
   return data;
 }
 
-function uploadFile(file) {
-  const formData = new FormData();
-  formData.append('images', file);
-  return fetch(`${API_BASE}/upload`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${authToken}` },
-    body: formData,
-  }).then(r => r.json());
+function adminRequest(path, options = {}) {
+  return request(path, { ...options, asAdmin: true });
 }
 
 export { setToken, getToken };
@@ -48,6 +45,13 @@ export const api = {
     updateProfile: (data) => request('/auth/me', { method: 'PUT', body: JSON.stringify(data) }),
     changePassword: (data) => request('/auth/change-password', { method: 'PUT', body: JSON.stringify(data) }),
     forgotPassword: (data) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }),
+    resendVerification: () => request('/auth/resend-verification', { method: 'POST' }),
+    deleteAccount: (data) => request('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
+  },
+
+  settings: {
+    get: () => request('/settings'),
+    update: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),
   },
 
   items: {
@@ -77,10 +81,54 @@ export const api = {
     addMethod: (data) => request('/payments/methods', { method: 'POST', body: JSON.stringify(data) }),
     setDefault: (id) => request(`/payments/methods/${id}/default`, { method: 'PUT' }),
     removeMethod: (id) => request(`/payments/methods/${id}`, { method: 'DELETE' }),
+    wallet: () => request('/payments/wallet'),
+    options: () => request('/payments/options'),
+    issueGiftCards: (data) => adminRequest('/payments/gift-cards/issue', { method: 'POST', body: JSON.stringify(data) }),
+    redeemGiftCard: (code) => request('/payments/gift-cards/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
+    giftCardBrands: () => request('/payments/gift-cards/brands'),
+    giftCardMall: () => request('/payments/gift-cards/mall'),
+    submitGiftCardDesign: (data) => request('/payments/gift-cards/designs', { method: 'POST', body: JSON.stringify(data) }),
+    giftCardDesigns: (params) => adminRequest(`/payments/gift-cards/designs?status=${params?.status || 'all'}`),
+    updateGiftCardDesign: (id, status) => adminRequest(`/payments/gift-cards/designs/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+    allGiftCardBrands: () => adminRequest('/payments/gift-cards/brands/all'),
+    createGiftCardBrand: (data) => adminRequest('/payments/gift-cards/brands', { method: 'POST', body: JSON.stringify(data) }),
+    updateGiftCardBrand: (id, data) => adminRequest(`/payments/gift-cards/brands/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deleteGiftCardBrand: (id) => adminRequest(`/payments/gift-cards/brands/${id}`, { method: 'DELETE' }),
+    giftCardAnalytics: () => adminRequest('/payments/gift-cards/analytics'),
+    giftCardList: (params) => adminRequest(`/payments/gift-cards/list?status=${params?.status || 'all'}&limit=${params?.limit || 50}`),
+    voidGiftCard: (id) => adminRequest(`/payments/gift-cards/${id}/void`, { method: 'POST' }),
+    resetGiftCard: (id) => adminRequest(`/payments/gift-cards/${id}/reset`, { method: 'POST' }),
+    confirmFunds: (txnId) => adminRequest(`/payments/admin/fund-confirmed/${txnId}`, { method: 'POST' }),
     createIntent: (data) => request('/payments/create-intent', { method: 'POST', body: JSON.stringify(data) }),
     confirm: (txnId) => request(`/payments/confirm/${txnId}`, { method: 'POST' }),
     transactions: (filter) => request(`/payments/transactions?filter=${filter || 'all'}`),
+    sellerAnalytics: () => request('/payments/analytics/seller'),
     refund: (txnId) => request(`/payments/refund/${txnId}`, { method: 'POST' }),
+  },
+
+  disputes: {
+    open: (data) => request('/disputes', { method: 'POST', body: JSON.stringify(data) }),
+    list: () => request('/disputes'),
+    get: (id) => request(`/disputes/${id}`),
+    all: () => adminRequest('/disputes'),
+    resolve: (id, data) => adminRequest(`/disputes/${id}/resolve`, { method: 'PUT', body: JSON.stringify(data) }),
+  },
+
+  subscription: {
+    current: () => request('/subscription/current'),
+    plans: () => request('/subscription/plans'),
+    benefits: () => request('/subscription/benefits'),
+    upgrade: (plan) => request('/subscription/upgrade', { method: 'POST', body: JSON.stringify({ plan }) }),
+    cancel: () => request('/subscription/cancel', { method: 'POST' }),
+  },
+
+  payouts: {
+    balance: () => request('/payouts/balance'),
+    list: () => request('/payouts'),
+    request: (data) => request('/payouts', { method: 'POST', body: JSON.stringify(data) }),
+    cancel: (id) => request(`/payouts/${id}/cancel`, { method: 'POST' }),
+    all: () => adminRequest('/payouts/all'),
+    updateStatus: (id, data) => adminRequest(`/payouts/${id}/status`, { method: 'PUT', body: JSON.stringify(data) }),
   },
 
   reviews: {
@@ -109,13 +157,13 @@ export const api = {
 
   admin: {
     login: (data) => request('/admin/login', { method: 'POST', body: JSON.stringify(data) }),
-    dashboard: () => request('/admin/dashboard'),
-    users: () => request('/admin/users'),
-    verifyUser: (id) => request(`/admin/users/${id}/verify`, { method: 'PUT' }),
-    deleteUser: (id) => request(`/admin/users/${id}`, { method: 'DELETE' }),
-    listings: () => request('/admin/listings'),
-    updateListingStatus: (id, status) => request(`/admin/listings/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
-    transactions: () => request('/admin/transactions'),
+    dashboard: () => adminRequest('/admin/dashboard'),
+    users: () => adminRequest('/admin/users'),
+    verifyUser: (id) => adminRequest(`/admin/users/${id}/verify`, { method: 'PUT' }),
+    deleteUser: (id) => adminRequest(`/admin/users/${id}`, { method: 'DELETE' }),
+    listings: () => adminRequest('/admin/listings'),
+    updateListingStatus: (id, status) => adminRequest(`/admin/listings/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+    transactions: () => adminRequest('/admin/transactions'),
   },
 
   upload: {

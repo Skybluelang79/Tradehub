@@ -24,9 +24,7 @@ export function CookieProvider({ children }) {
     return null;
   });
 
-  const [showBanner, setShowBanner] = useState(() => {
-    return !localStorage.getItem(STORAGE_KEY);
-  });
+  const showBanner = consent === null;
 
   const [showCustomize, setShowCustomize] = useState(false);
 
@@ -35,7 +33,6 @@ export function CookieProvider({ children }) {
   useEffect(() => {
     if (consent) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(consent));
-      setShowBanner(false);
     }
   }, [consent]);
 

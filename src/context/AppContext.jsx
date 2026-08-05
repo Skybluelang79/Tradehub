@@ -6,6 +6,7 @@ import { api } from '../services/client';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
+const DEFAULT_LOCATION = { lat: 40.7128, lng: -74.006 };
 
 export function AppProvider({ children }) {
   const { user: authUser } = useAuth();
@@ -23,8 +24,8 @@ export function AppProvider({ children }) {
   const [users, setUsers] = useState(() => storage.get('users', []));
   const [templates, setTemplates] = useState(() => storage.get('templates', []));
   const [sales, setSales] = useState(() => storage.get('sales', []));
-  const [userLocation, setUserLocation] = useState(null);
-  const [locationLoading, setLocationLoading] = useState(true);
+  const [userLocation, setUserLocation] = useState(DEFAULT_LOCATION);
+  const [locationLoading, setLocationLoading] = useState(() => !!navigator.geolocation);
   
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedConversation, setSelectedConversation] = useState(null);
@@ -35,6 +36,9 @@ export function AppProvider({ children }) {
     category: 'all',
     sort: 'newest',
     search: '',
+    minPrice: '',
+    maxPrice: '',
+    condition: 'all',
   });
 
   useEffect(() => {
@@ -79,24 +83,20 @@ export function AppProvider({ children }) {
   }, [sales]);
 
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          setUserLocation({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-          setLocationLoading(false);
-        },
-        () => {
-          setUserLocation({ lat: 40.7128, lng: -74.006 });
-          setLocationLoading(false);
-        }
-      );
-    } else {
-      setUserLocation({ lat: 40.7128, lng: -74.006 });
-      setLocationLoading(false);
-    }
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        });
+        setLocationLoading(false);
+      },
+      () => {
+        setUserLocation(DEFAULT_LOCATION);
+        setLocationLoading(false);
+      }
+    );
   }, []);
 
   useEffect(() => {
@@ -160,6 +160,12 @@ export function AppProvider({ children }) {
 
     if (filters.category !== 'all' && item.category.toLowerCase() !== filters.category) return false;
 
+    if (filters.condition && filters.condition !== 'all' && item.condition !== filters.condition) return false;
+
+    if (filters.minPrice && Number(item.price) < Number(filters.minPrice)) return false;
+
+    if (filters.maxPrice && Number(item.price) > Number(filters.maxPrice)) return false;
+
     if (filters.search) {
       const search = filters.search.toLowerCase();
       if (!item.title.toLowerCase().includes(search) && !item.description.toLowerCase().includes(search)) {
@@ -178,10 +184,13 @@ export function AppProvider({ children }) {
         return a.price - b.price;
       case 'price_high':
         return b.price - a.price;
-      case 'nearest':
+      case 'popular':
+        return (b.views || 0) - (a.views || 0) || (b.favorites || 0) - (a.favorites || 0);
+      case 'nearest': {
         const distA = getDistanceFromUser(a.location.lat, a.location.lng) || Infinity;
         const distB = getDistanceFromUser(b.location.lat, b.location.lng) || Infinity;
         return distA - distB;
+      }
       default:
         return 0;
     }
@@ -241,7 +250,7 @@ export function AppProvider({ children }) {
       });
     }
     return newItem;
-  }, [addNotification]);
+  }, [addNotification, currentUserId]);
 
   const updateItem = useCallback((itemId, updates) => {
     setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, ...updates } : item));
@@ -416,7 +425,7 @@ export function AppProvider({ children }) {
     setConversations((prev) => [newConv, ...prev]);
     setMessages((prev) => ({ ...prev, [newConv.id]: [] }));
     return newConv;
-  }, [conversations]);
+  }, [conversations, currentUserId]);
 
   const incrementItemViews = useCallback((itemId) => {
     setItems((prev) => prev.map((item) =>
@@ -515,7 +524,7 @@ export function AppProvider({ children }) {
     };
     setReviews((prev) => [...prev, newReview]);
     return newReview;
-  }, []);
+  }, [currentUserId]);
 
   const getReviewsForUser = useCallback((userId) => {
     return reviews.filter((r) => r.revieweeId === userId);

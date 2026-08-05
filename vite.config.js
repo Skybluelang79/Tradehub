@@ -1,11 +1,14 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+const base = process.env.VITE_BASE || '/Tradehub/'
+const outDir = base === '/' ? 'dist' : 'dist/Tradehub'
+
 export default defineConfig({
   plugins: [react()],
-  base: '/Tradehub/',
+  base,
   build: {
-    outDir: 'dist/Tradehub',
+    outDir,
   },
   server: {
     host: '0.0.0.0',

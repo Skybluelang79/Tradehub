@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Header } from '../components/layout';
 import { ItemsGrid, AdBanner, AdCard, AdPush, BrandSponsor, SafeTrading, ListForFree, PremiumSeller, SearchSuggestions, PullToRefresh } from '../components/features';
-import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon } from '../components/ui/Icons';
+import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon, FilterIcon } from '../components/ui/Icons';
 import { useApp } from '../context';
-import { categories, distanceOptions, sortOptions } from '../services/api';
+import { categories, distanceOptions, sortOptions, conditionOptions } from '../services/api';
 import { useDebounce } from '../hooks';
 import { formatPrice } from '../utils/helpers';
 import '../styles/globals.css';
@@ -74,10 +74,8 @@ export default function Home() {
   }, [filters, setFilters]);
 
   useEffect(() => {
-    if (debouncedSearch !== filters.search) {
-      setFilters({ ...filters, search: debouncedSearch });
-    }
-  }, [debouncedSearch]);
+    setFilters((prev) => prev.search === debouncedSearch ? prev : { ...prev, search: debouncedSearch });
+  }, [debouncedSearch, setFilters]);
 
   useEffect(() => {
     return () => clearTimeout(loadingTimerRef.current);
@@ -91,6 +89,9 @@ export default function Home() {
   };
 
   const currentSort = sortOptions.find((s) => s.value === filters.sort);
+
+  const activeExtraFilterCount =
+    (filters.minPrice ? 1 : 0) + (filters.maxPrice ? 1 : 0) + (filters.condition && filters.condition !== 'all' ? 1 : 0);
 
   return (
       <div className="page">
@@ -156,6 +157,66 @@ export default function Home() {
         ))}
       </div>
 
+      <div className="extra-filters">
+        <button className={`filter-chip ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
+          <FilterIcon size={15} /> Price & Condition
+          {activeExtraFilterCount > 0 && <span className="filter-count">{activeExtraFilterCount}</span>}
+        </button>
+
+        {showFilters && (
+          <div className="filter-panel">
+            <div className="filter-panel-group">
+              <span className="filter-panel-label">Price range</span>
+              <div className="filter-price-row">
+                <input
+                  type="number"
+                  className="filter-price-input"
+                  placeholder="Min $"
+                  min="0"
+                  value={filters.minPrice}
+                  onChange={(e) => handleFilterClick('minPrice', e.target.value)}
+                />
+                <span className="filter-price-sep">–</span>
+                <input
+                  type="number"
+                  className="filter-price-input"
+                  placeholder="Max $"
+                  min="0"
+                  value={filters.maxPrice}
+                  onChange={(e) => handleFilterClick('maxPrice', e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="filter-panel-group">
+              <span className="filter-panel-label">Condition</span>
+              <div className="filter-condition-row">
+                {[{ value: 'all', label: 'Any' }, ...conditionOptions].map((c) => (
+                  <button
+                    key={c.value}
+                    className={`filter-chip ${(filters.condition || 'all') === c.value ? 'active' : ''}`}
+                    onClick={() => handleFilterClick('condition', c.value)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {activeExtraFilterCount > 0 && (
+              <button
+                className="filter-clear"
+                onClick={() => {
+                  handleFilterClick('minPrice', '');
+                  handleFilterClick('maxPrice', '');
+                  handleFilterClick('condition', 'all');
+                }}
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="view-controls">
         <span className="results-count">
           {loading ? 'Searching...' : `${filteredItems.length} items found`}
@@ -205,9 +266,18 @@ export default function Home() {
       <div className="page-content">
         <BrandSponsor />
         <SafeTrading />
-        <ListForFree onList={(opts) => setActiveTab('add')} />
+        <ListForFree onList={() => setActiveTab('add')} />
         <PremiumSeller />
         <AdBanner />
+
+        <button className="gift-mall-banner" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
+          <span className="gift-mall-banner-icon">🎁</span>
+          <span className="gift-mall-banner-text">
+            <strong>Gift Mall</strong>
+            <small>Browse gift card brands &amp; share your own card design</small>
+          </span>
+          <span className="gift-mall-banner-arrow">→</span>
+        </button>
         
         {!filters.search && recentlyViewed.length > 0 && (
           <div className="section-block">

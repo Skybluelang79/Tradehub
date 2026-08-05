@@ -1,0 +1,198 @@
+.admin-payouts {
+  max-width: 1400px;
+}
+
+.btn-sm {
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.btn-success {
+  background: #10B981;
+}
+
+.btn-success:hover {
+  background: #059669;
+}
+
+.payout-section {
+  margin-bottom: 36px;
+}
+
+.payout-section-header {
+  margin-bottom: 16px;
+}
+
+.payout-section-header h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.payout-section-header p {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.payout-section-header--row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.payout-details-cell {
+  max-width: 220px;
+  color: var(--text-secondary) !important;
+  font-size: 13px !important;
+  word-break: break-word;
+}
+
+.payout-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-approved {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3B82F6;
+}
+
+.status-cancelled {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94A3B8;
+}
+
+.gift-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.gift-modal {
+  background: var(--surface);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.gift-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.gift-modal-header h3 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.gift-modal-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.gift-modal-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gift-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.gift-input {
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.gift-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.gift-issue-btn {
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.gift-note {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.gift-codes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gift-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.gift-code {
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.5px;
+  word-break: break-all;
+}
+
+@media (max-width: 640px) {
+  .payout-section-header--row {
+    flex-direction: column;
+  }
+
+  .payout-actions {
+    flex-direction: column;
+  }
+}

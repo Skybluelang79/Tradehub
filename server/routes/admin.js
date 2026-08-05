@@ -61,12 +61,30 @@ router.get('/dashboard', adminAuth, (req, res) => {
     const activeItems = db.prepare("SELECT COUNT(*) as count FROM items WHERE status = 'active'").get().count;
     const totalTransactions = db.prepare('SELECT COUNT(*) as count FROM transactions').get().count;
     const totalRevenue = db.prepare("SELECT COALESCE(SUM(amount), 0) as total FROM transactions WHERE status = 'completed'").get().total;
+    const totalFees = db.prepare("SELECT COALESCE(SUM(fee_amount), 0) as total FROM transactions WHERE status = 'completed'").get().total;
     const pendingReports = db.prepare("SELECT COUNT(*) as count FROM reports WHERE status = 'pending'").get().count;
     const openDisputes = db.prepare("SELECT COUNT(*) as count FROM disputes WHERE status = 'open'").get().count;
     const pendingVerifications = db.prepare('SELECT COUNT(*) as count FROM email_verifications WHERE used = 0 AND expires_at > datetime("now")').get().count;
+    const totalViews = db.prepare('SELECT COALESCE(SUM(views), 0) as total FROM items').get().total;
+    const pendingPayouts = db.prepare("SELECT COALESCE(SUM(amount_cents), 0) as total FROM payouts WHERE status IN ('pending','approved')").get().total;
+    const paidOut = db.prepare("SELECT COALESCE(SUM(amount_cents), 0) as total FROM payouts WHERE status = 'completed'").get().total;
+    const activeWallets = db.prepare('SELECT COUNT(*) as count FROM wallets WHERE available_cents > 0').get().count;
+    const giftCardsIssued = db.prepare('SELECT COUNT(*) as count FROM gift_cards').get().count;
+    const giftCardsRedeemed = db.prepare("SELECT COUNT(*) as count FROM gift_cards WHERE status = 'redeemed'").get().count;
 
     const recentUsers = db.prepare('SELECT id, name, email, avatar, created_at FROM users ORDER BY created_at DESC LIMIT 5').all();
-    const recentItems = db.prepare('SELECT id, title, price, status, created_at FROM items ORDER BY created_at DESC LIMIT 5').all();
+    const recentItems = db.prepare('SELECT id, title, price, status, views, created_at FROM items ORDER BY created_at DESC LIMIT 5').all();
+
+    const topViewedItems = db.prepare('SELECT id, title, price, views, status FROM items ORDER BY views DESC LIMIT 5').all();
+
+    const recentTransactions = db.prepare(`
+      SELECT t.id, t.item_title, t.amount, t.fee_amount, t.status, t.created_at,
+        buyer.name as buyer_name, seller.name as seller_name
+      FROM transactions t
+      LEFT JOIN users buyer ON buyer.id = t.buyer_id
+      LEFT JOIN users seller ON seller.id = t.seller_id
+      ORDER BY t.created_at DESC LIMIT 5
+    `).all();
 
     const revenueByDay = db.prepare(`
       SELECT DATE(completed_at) as date, SUM(amount) as revenue, COUNT(*) as sales
@@ -79,9 +97,15 @@ router.get('/dashboard', adminAuth, (req, res) => {
       GROUP BY category ORDER BY count DESC LIMIT 5
     `).all();
 
+    const userSignupsByDay = db.prepare(`
+      SELECT DATE(created_at) as date, COUNT(*) as count
+      FROM users WHERE created_at > datetime('now', '-30 days')
+      GROUP BY DATE(created_at) ORDER BY date
+    `).all();
+
     res.json({
-      stats: { totalUsers, totalItems, activeItems, totalTransactions, totalRevenue, pendingReports, openDisputes, pendingVerifications },
-      recentUsers, recentItems, revenueByDay, topCategories,
+      stats: { totalUsers, totalItems, activeItems, totalTransactions, totalRevenue, totalFees, pendingReports, openDisputes, pendingVerifications, totalViews, pendingPayouts, paidOut, activeWallets, giftCardsIssued, giftCardsRedeemed },
+      recentUsers, recentItems, topViewedItems, recentTransactions, revenueByDay, topCategories, userSignupsByDay,
     });
   } catch (err) {
     logger.error('Dashboard error:', err);

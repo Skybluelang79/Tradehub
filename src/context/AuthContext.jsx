@@ -91,6 +91,28 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const deleteAccount = useCallback(async (password) => {
+    try {
+      await api.auth.deleteAccount({ password });
+      setToken(null);
+      localStorage.removeItem('tradehub_token');
+      setUser(null);
+      setIsAuthenticated(false);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }, []);
+
+  const resendVerification = useCallback(async () => {
+    try {
+      await api.auth.resendVerification();
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  }, []);
+
   const forgotPassword = useCallback(async (email) => {
     setIsLoading(true);
     setError(null);
@@ -114,6 +136,8 @@ export function AuthProvider({ children }) {
     logout,
     updateProfile,
     changePassword,
+    deleteAccount,
+    resendVerification,
     forgotPassword,
     clearError: () => setError(null),
   };

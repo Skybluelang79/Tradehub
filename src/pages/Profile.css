@@ -1440,3 +1440,109 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ── Settings groups & controls ── */
+.settings-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+  margin: 12px 4px 4px;
+}
+
+.segmented {
+  display: flex;
+  background: var(--background);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.segmented-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: calc(var(--radius-md) - 3px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.segmented-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.setting-select {
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 13px;
+  padding: 8px 10px;
+  cursor: pointer;
+  flex-shrink: 0;
+  max-width: 120px;
+}
+
+.danger-setting-item .setting-icon {
+  color: var(--error);
+}
+
+.danger-setting-item .setting-title {
+  color: var(--error);
+}
+
+.verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--success, #22c55e);
+  flex-shrink: 0;
+}
+
+/* ── Verify email banner ── */
+.verify-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.verify-banner svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.verify-banner span {
+  flex: 1;
+}
+
+.verify-banner-btn {
+  border: none;
+  background: var(--accent);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.verify-banner-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

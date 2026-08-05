@@ -4,6 +4,7 @@ import { useToast } from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
 import { ImageLightbox, PriceChart } from '../components/features';
 import { api } from '../services/client';
+import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeftIcon,
   PinIcon,
@@ -14,6 +15,10 @@ import {
   MessageIcon,
   ShieldIcon,
   MapPinIcon,
+  CardIcon,
+  CopyIcon,
+  ClockIcon,
+  CheckIcon,
 } from '../components/ui/Icons';
 import { AdBanner } from '../components/features';
 import { useApp } from '../context';
@@ -50,7 +55,6 @@ export default function ItemDetail() {
     getUserRating,
     addReview,
     getDistanceFromUser,
-    userLocation,
     isFavorite,
     toggleFavorite,
     incrementItemViews,
@@ -58,6 +62,7 @@ export default function ItemDetail() {
   } = useApp();
 
   const { addToast } = useToast();
+  const { isAuthenticated } = useAuth();
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -67,9 +72,93 @@ export default function ItemDetail() {
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportCategory, setReportCategory] = useState('');
   const [reportDetails, setReportDetails] = useState('');
-  const [reportSubmitted, setReportSubmitted] = useState(false);
   const [showLightbox, setShowLightbox] = useState(false);
   const [showAllReviews, setShowAllReviews] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [checkoutMethod, setCheckoutMethod] = useState('card');
+  const [giftCode, setGiftCode] = useState('');
+  const [cryptoNetworks, setCryptoNetworks] = useState([]);
+  const [cryptoNetwork, setCryptoNetwork] = useState('');
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutResult, setCheckoutResult] = useState(null);
+  const [checkoutError, setCheckoutError] = useState('');
+
+  const resetCheckout = () => {
+    setShowCheckout(false);
+    setCheckoutMethod('card');
+    setGiftCode('');
+    setCryptoNetworks([]);
+    setCryptoNetwork('');
+    setCheckoutBusy(false);
+    setCheckoutResult(null);
+    setCheckoutError('');
+  };
+
+  const handleBuyClick = () => {
+    if (!isAuthenticated) {
+      window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }));
+      return;
+    }
+    setCheckoutResult(null);
+    setCheckoutError('');
+    setCheckoutMethod('card');
+    setCryptoNetwork('');
+    api.payments.options().then((r) => {
+      const crypto = r.methods?.find((m) => m.id === 'crypto');
+      if (crypto?.details?.networks?.length) {
+        setCryptoNetworks(crypto.details.networks);
+        setCryptoNetwork(crypto.details.networks[0].id);
+      }
+    }).catch(() => {});
+    setShowCheckout(true);
+  };
+
+  const handleCheckout = async () => {
+    if (!selectedItem) return;
+    setCheckoutBusy(true);
+    setCheckoutError('');
+    try {
+      const payload = { itemId: selectedItem.id, method: checkoutMethod };
+      if (checkoutMethod === 'gift_card') {
+        payload.giftCardCode = giftCode.trim();
+      }
+      if (checkoutMethod === 'crypto') {
+        payload.network = cryptoNetwork;
+      }
+      const res = await api.payments.createIntent(payload);
+
+      if (checkoutMethod === 'bank' || checkoutMethod === 'crypto') {
+        setCheckoutResult(res);
+        setCheckoutBusy(false);
+        return;
+      }
+
+      if (checkoutMethod === 'card' && res.demo) {
+        await api.payments.confirm(res.transactionId);
+      }
+
+      if ((checkoutMethod === 'card' && res.demo) || (checkoutMethod === 'gift_card' && res.paid)) {
+        if (checkoutMethod === 'gift_card') {
+          await api.payments.confirm(res.transactionId);
+        }
+        markAsSold(selectedItem.id);
+        addToast('Purchase complete! Payment is in escrow.', 'success');
+        resetCheckout();
+      }
+    } catch (err) {
+      setCheckoutError(err.message || 'Payment failed');
+    } finally {
+      setCheckoutBusy(false);
+    }
+  };
+
+  const copyToClipboard = (text, label) => {
+    navigator.clipboard.writeText(text).then(() => {
+      addToast(`${label} copied`, 'success');
+    }).catch(() => {
+      addToast(`Could not copy ${label}`, 'error');
+    });
+  };
 
   const handleTouchStart = (e) => {
     setTouchStart(e.touches[0].clientX);
@@ -89,23 +178,8 @@ export default function ItemDetail() {
     setTouchStart(null);
   };
 
-  if (!selectedItem) {
-    setActiveTab('home');
-    return null;
-  }
-
-  const seller = getUser(selectedItem.sellerId);
-  const sellerReviews = getReviewsForUser(seller.id);
-  const sellerRating = getUserRating(seller.id);
-  const isOwnItem = selectedItem.sellerId === currentUser.id;
-  const distance = getDistanceFromUser(selectedItem.location.lat, selectedItem.location.lng);
-  const hasSale = selectedItem.salePrice && selectedItem.salePrice > 0 && selectedItem.salePrice < selectedItem.price;
-  const saleEnded = selectedItem.saleEndsAt && new Date(selectedItem.saleEndsAt) < new Date();
-  const showSale = hasSale && !saleEnded;
-  const displayPrice = showSale ? selectedItem.salePrice : selectedItem.price;
-
   const handleMessage = () => {
-    const conv = addConversation(selectedItem.id, selectedItem.sellerId);
+    addConversation(selectedItem.id, selectedItem.sellerId);
     setSelectedItem(null);
     setActiveTab('chat');
   };
@@ -145,7 +219,7 @@ export default function ItemDetail() {
       const stored = JSON.parse(localStorage.getItem('tradehub_recently_viewed') || '[]');
       const updated = [selectedItem.id, ...stored.filter(id => id !== selectedItem.id)].slice(0, 20);
       localStorage.setItem('tradehub_recently_viewed', JSON.stringify(updated));
-    } catch {}
+    } catch { /* malformed storage is ignored */ }
   }, [selectedItem, incrementItemViews]);
 
   const handleShare = useCallback(() => {
@@ -161,6 +235,21 @@ export default function ItemDetail() {
     }
   }, [selectedItem, addToast]);
 
+  if (!selectedItem) {
+    setActiveTab('home');
+    return null;
+  }
+
+  const seller = getUser(selectedItem.sellerId);
+  const sellerReviews = getReviewsForUser(seller.id);
+  const sellerRating = getUserRating(seller.id);
+  const isOwnItem = selectedItem.sellerId === currentUser.id;
+  const distance = getDistanceFromUser(selectedItem.location.lat, selectedItem.location.lng);
+  const hasSale = selectedItem.salePrice && selectedItem.salePrice > 0 && selectedItem.salePrice < selectedItem.price;
+  const saleEnded = selectedItem.saleEndsAt && new Date(selectedItem.saleEndsAt) < new Date();
+  const showSale = hasSale && !saleEnded;
+  const displayPrice = showSale ? selectedItem.salePrice : selectedItem.price;
+
   const handleReport = async () => {
     const reason = reportCategory === 'Other' && reportDetails.trim() ? reportDetails.trim() : reportCategory;
     if (!reason) return;
@@ -174,7 +263,6 @@ export default function ItemDetail() {
         addToast(err.message || 'Failed to submit report', 'error');
       }
     }
-    setReportSubmitted(true);
     setShowReportModal(false);
     setReportCategory('');
     setReportDetails('');
@@ -388,6 +476,10 @@ export default function ItemDetail() {
 
       {!isOwnItem && selectedItem.status === 'active' && (
         <div className="detail-actions">
+          <button className="detail-action-btn primary buy-now-btn" onClick={handleBuyClick}>
+            <CardIcon size={20} />
+            Buy Now
+          </button>
           <button className="detail-action-btn secondary" onClick={() => setShowReviewModal(true)}>
             <StarIcon size={20} />
             Review
@@ -404,7 +496,7 @@ export default function ItemDetail() {
             <FlagIconSvg size={20} />
             Report
           </button>
-          <button className="detail-action-btn primary" onClick={handleMessage}>
+          <button className="detail-action-btn secondary" onClick={handleMessage}>
             <MessageIcon size={20} />
             Message
           </button>
@@ -497,6 +589,178 @@ export default function ItemDetail() {
           onClose={() => setShowLightbox(false)}
         />
       )}
+
+      <Modal
+        isOpen={showCheckout}
+        onClose={resetCheckout}
+        title={checkoutResult ? 'Payment Instructions' : 'Checkout'}
+        footer={
+          checkoutResult ? (
+            <Button block onClick={resetCheckout}>Done</Button>
+          ) : (
+            <Button block onClick={handleCheckout} disabled={checkoutBusy}>
+              {checkoutBusy ? 'Processing...' : `Pay ${formatPrice(displayPrice)}`}
+            </Button>
+          )
+        }
+      >
+        {checkoutResult && checkoutResult.payment ? (
+          <div>
+            <div className="checkout-confirm-note">
+              <ClockIcon size={16} />
+              <span>
+                {checkoutResult.method === 'bank'
+                  ? 'Transfer the exact amount using the details below. Reference must be included. Funds are verified and held in escrow.'
+                  : 'Send the exact amount to the address below. Funds are verified and held in escrow.'}
+              </span>
+            </div>
+
+            {checkoutResult.payment.bank && (
+              <div className="pay-info-list">
+                <div className="pay-info-row">
+                  <span className="pay-info-label">Amount</span>
+                  <strong>{formatPrice(checkoutResult.payment.amount)}</strong>
+                </div>
+                <div className="pay-info-row">
+                  <span className="pay-info-label">Reference</span>
+                  <span className="pay-info-value mono">{checkoutResult.payment.reference}</span>
+                  <button className="copy-btn" onClick={() => copyToClipboard(checkoutResult.payment.reference, 'Reference')}><CopyIcon size={14} /></button>
+                </div>
+                <div className="pay-info-row">
+                  <span className="pay-info-label">Recipient</span>
+                  <span className="pay-info-value">{checkoutResult.payment.bank.name}</span>
+                </div>
+                <div className="pay-info-row">
+                  <span className="pay-info-label">Bank</span>
+                  <span className="pay-info-value">{checkoutResult.payment.bank.bank}</span>
+                </div>
+                <div className="pay-info-row">
+                  <span className="pay-info-label">Account #</span>
+                  <span className="pay-info-value mono">{checkoutResult.payment.bank.accountNumber}</span>
+                  <button className="copy-btn" onClick={() => copyToClipboard(checkoutResult.payment.bank.accountNumber, 'Account number')}><CopyIcon size={14} /></button>
+                </div>
+                {checkoutResult.payment.bank.routing && (
+                  <div className="pay-info-row">
+                    <span className="pay-info-label">Routing</span>
+                    <span className="pay-info-value mono">{checkoutResult.payment.bank.routing}</span>
+                  </div>
+                )}
+                {checkoutResult.payment.bank.swift && (
+                  <div className="pay-info-row">
+                    <span className="pay-info-label">SWIFT</span>
+                    <span className="pay-info-value mono">{checkoutResult.payment.bank.swift}</span>
+                  </div>
+                )}
+                {checkoutResult.payment.bank.iban && (
+                  <div className="pay-info-row">
+                    <span className="pay-info-label">IBAN</span>
+                    <span className="pay-info-value mono">{checkoutResult.payment.bank.iban}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {checkoutResult.payment.address && (
+              <div className="pay-info-list">
+                <div className="pay-info-row">
+                  <span className="pay-info-label">Amount</span>
+                  <strong>{formatPrice(checkoutResult.payment.amount)}</strong>
+                </div>
+                <div className="pay-info-row">
+                  <span className="pay-info-label">Reference</span>
+                  <span className="pay-info-value mono">{checkoutResult.payment.reference}</span>
+                  <button className="copy-btn" onClick={() => copyToClipboard(checkoutResult.payment.reference, 'Reference')}><CopyIcon size={14} /></button>
+                </div>
+                {checkoutResult.payment.network && (
+                  <div className="pay-info-row">
+                    <span className="pay-info-label">Network</span>
+                    <span className="pay-info-value">{checkoutResult.payment.network.label} ({checkoutResult.payment.network.symbol})</span>
+                  </div>
+                )}
+                <div className="pay-info-row">
+                  <span className="pay-info-label">Networks</span>
+                  <span className="pay-info-value">{(checkoutResult.payment.networks || []).map((n) => n.symbol || n).join(' · ')}</span>
+                </div>
+                <div className="pay-info-row pay-info-row--column">
+                  <span className="pay-info-label">Address</span>
+                  <span className="pay-info-value mono break">{checkoutResult.payment.address}</span>
+                  <button className="copy-btn" onClick={() => copyToClipboard(checkoutResult.payment.address, 'Address')}><CopyIcon size={14} /></button>
+                </div>
+                {checkoutResult.payment.qr && (
+                  <div className="crypto-qr-wrap">
+                    <img
+                      className="crypto-qr"
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(checkoutResult.payment.qr)}`}
+                      alt="Payment QR code"
+                    />
+                    <span className="crypto-qr-caption">Scan to send payment</span>
+                  </div>
+                )}
+                {checkoutResult.payment.placeholder && (
+                  <p className="pay-info-hint">Demo address shown. Set <code>CRYPTO_ADDRESSES</code> or <code>CRYPTO_ADDRESS_&lt;SYMBOL&gt;</code> in production.</p>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div>
+            <p className="checkout-price-line">Total <strong>{formatPrice(displayPrice)}</strong></p>
+            <p className="checkout-sub">Payments are held in escrow until you confirm receipt.</p>
+
+            <div className="checkout-methods">
+              {[
+                { id: 'card', name: 'Card / Stripe', desc: 'Credit, debit, Apple Pay' },
+                { id: 'bank', name: 'Bank Transfer', desc: 'Direct transfer, verified by platform' },
+                { id: 'crypto', name: 'Crypto', desc: 'BTC · ETH · USDT' },
+                { id: 'gift_card', name: 'Gift Card / Store Credit', desc: 'Use credit or a gift card code' },
+              ].map((m) => (
+                <button
+                  key={m.id}
+                  className={`checkout-method ${checkoutMethod === m.id ? 'active' : ''}`}
+                  onClick={() => setCheckoutMethod(m.id)}
+                >
+                  <span className="checkout-method-name">{m.name}</span>
+                  <span className="checkout-method-desc">{m.desc}</span>
+                </button>
+              ))}
+            </div>
+
+            {checkoutMethod === 'crypto' && cryptoNetworks.length > 0 && (
+              <div className="input-group" style={{ marginTop: 12 }}>
+                <label className="input-label">Select Network</label>
+                <div className="crypto-network-grid">
+                  {cryptoNetworks.map((n) => (
+                    <button
+                      key={n.id}
+                      type="button"
+                      className={`crypto-network-chip ${cryptoNetwork === n.id ? 'active' : ''}`}
+                      onClick={() => setCryptoNetwork(n.id)}
+                    >
+                      <span className="crypto-network-symbol">{n.symbol}</span>
+                      <span className="crypto-network-label">{n.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {checkoutMethod === 'gift_card' && (
+              <div className="input-group" style={{ marginTop: 12 }}>
+                <label className="input-label">Gift Card Code (optional if using store credit)</label>
+                <input
+                  type="text"
+                  className="input"
+                  placeholder="TRADE-XXXX-XXXX-XXXX"
+                  value={giftCode}
+                  onChange={(e) => setGiftCode(e.target.value.toUpperCase())}
+                />
+              </div>
+            )}
+
+            {checkoutError && <p className="checkout-error">{checkoutError}</p>}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

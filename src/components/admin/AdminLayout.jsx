@@ -19,6 +19,9 @@ const navItems = [
   { path: '/admin/users', label: 'Users', icon: UsersIcon },
   { path: '/admin/listings', label: 'Listings', icon: PackageIcon },
   { path: '/admin/transactions', label: 'Transactions', icon: DollarIcon },
+  { path: '/admin/payouts', label: 'Payouts', icon: ChartIcon },
+  { path: '/admin/gift-cards', label: 'Gift Cards', icon: ChartIcon },
+  { path: '/admin/disputes', label: 'Disputes', icon: ShieldIcon },
   { path: '/admin/reports', label: 'Reports', icon: ChartIcon },
   { path: '/admin/settings', label: 'Settings', icon: SettingsIcon },
 ];

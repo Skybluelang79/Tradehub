@@ -238,7 +238,15 @@ export const sortOptions = [
   { value: 'oldest', label: 'Oldest First' },
   { value: 'price_low', label: 'Price: Low to High' },
   { value: 'price_high', label: 'Price: High to Low' },
+  { value: 'popular', label: 'Most Popular' },
   { value: 'nearest', label: 'Nearest' },
+];
+
+export const conditionOptions = [
+  { value: 'new', label: 'New' },
+  { value: 'like_new', label: 'Like New' },
+  { value: 'good', label: 'Good' },
+  { value: 'fair', label: 'Fair' },
 ];
 
 export const mockConversations = [

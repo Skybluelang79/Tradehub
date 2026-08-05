@@ -1,12 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Header } from '../components/layout';
 import { Avatar, Rating, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
+import { api } from '../services/client';
 import {
   PinIcon, SettingsIcon, LogOutIcon, EditIcon, ShieldIcon, HelpIcon,
   BellIcon, MoonIcon, GlobeIcon, MapPinIcon, EyeIcon, HeartIcon,
   TrashIcon, ZapIcon, TrendingUpIcon, MessageIcon, ClockIcon,
+  CheckIcon, CameraIcon,
 } from '../components/ui/Icons';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
@@ -33,14 +35,14 @@ function firstImage(item) {
 
 export default function Profile() {
   const {
-    items, reviews, getReviewsForUser, getUserRating, setActiveTab,
+    items, getReviewsForUser, getUserRating, setActiveTab,
     deleteItem, boostItem, getUserListings,
     getUserDrafts, getUserActiveListings, getItemAnalytics,
-    conversations, getSoldItems, getTotalRevenue, sales,
-    saveTemplate, deleteTemplate, getTemplates, templates,
+    conversations, getSoldItems, getTotalRevenue,
+    deleteTemplate, templates,
   } = useApp();
-  const { user: authUser, logout, updateProfile } = useAuth();
-  const { toggleTheme } = useTheme();
+  const { user: authUser, logout, updateProfile, changePassword, deleteAccount, resendVerification } = useAuth();
+  const { toggleTheme, setTheme } = useTheme();
   const { addToast } = useToast();
 
   const normalizeUser = (u) => {
@@ -73,13 +75,13 @@ export default function Profile() {
     reviewCount: 0,
   };
 
-  const userItems = useMemo(() => getUserListings(currentUser.id), [getUserListings, currentUser.id, items]);
-  const userDrafts = useMemo(() => getUserDrafts(currentUser.id), [getUserDrafts, currentUser.id, items]);
-  const userActiveItems = useMemo(() => getUserActiveListings(currentUser.id), [getUserActiveListings, currentUser.id, items]);
+  const userItems = useMemo(() => getUserListings(currentUser.id), [getUserListings, currentUser.id]);
+  const userDrafts = useMemo(() => getUserDrafts(currentUser.id), [getUserDrafts, currentUser.id]);
+  const userActiveItems = useMemo(() => getUserActiveListings(currentUser.id), [getUserActiveListings, currentUser.id]);
 
   const [activeTab, setActiveTabState] = useState('listings');
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', bio: '', phone: '' });
+  const [editForm, setEditForm] = useState({ name: '', bio: '', phone: '', locationAddress: '' });
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -87,6 +89,13 @@ export default function Profile() {
   const [showAnalytics, setShowAnalytics] = useState(null);
   const [editItemId, setEditItemId] = useState(null);
   const [showBoostModal, setShowBoostModal] = useState(null);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deleteAccountPassword, setDeleteAccountPassword] = useState('');
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [verificationSending, setVerificationSending] = useState(false);
+  const avatarInputRef = useRef(null);
 
   const [settings, setSettings] = useState({
     notifications: true,
@@ -94,10 +103,56 @@ export default function Profile() {
     locationEnabled: true,
     distanceUnit: 'km',
     language: 'English',
+    profileVisibility: 'public',
   });
 
-  const userReviews = useMemo(() => getReviewsForUser(currentUser.id), [getReviewsForUser, currentUser.id, reviews]);
-  const userRating = useMemo(() => getUserRating(currentUser.id), [getUserRating, currentUser.id, reviews]);
+  const [notifPrefs, setNotifPrefs] = useState({
+    messages: true,
+    priceDrops: true,
+    followers: true,
+    boosts: true,
+  });
+
+  const SETTING_KEY_MAP = {
+    notifications: 'notifications',
+    darkMode: 'dark_mode',
+    locationEnabled: 'location_enabled',
+    distanceUnit: 'distance_unit',
+    language: 'language',
+    profileVisibility: 'profile_visibility',
+  };
+
+  const NOTIF_KEY_MAP = {
+    messages: 'notif_messages',
+    priceDrops: 'notif_price_drops',
+    followers: 'notif_followers',
+    boosts: 'notif_boosts',
+  };
+
+  useEffect(() => {
+    if (!authUser) return;
+    api.settings.get().then(({ settings: s }) => {
+      if (!s) return;
+      setSettings({
+        notifications: !!s.notifications,
+        darkMode: !!s.dark_mode,
+        locationEnabled: !!s.location_enabled,
+        distanceUnit: s.distance_unit || 'km',
+        language: s.language || 'English',
+        profileVisibility: s.profile_visibility || 'public',
+      });
+      setNotifPrefs({
+        messages: !!s.notif_messages,
+        priceDrops: !!s.notif_price_drops,
+        followers: !!s.notif_followers,
+        boosts: !!s.notif_boosts,
+      });
+      if (s.dark_mode === 1) setTheme(true);
+    }).catch(() => {});
+  }, [authUser, setTheme]);
+
+  const userReviews = useMemo(() => getReviewsForUser(currentUser.id), [getReviewsForUser, currentUser.id]);
+  const userRating = useMemo(() => getUserRating(currentUser.id), [getUserRating, currentUser.id]);
 
   const totalItemViews = userActiveItems.reduce((sum, i) => sum + (i.views || 0), 0);
   const totalItemFavorites = userActiveItems.reduce((sum, i) => sum + (i.favorites || 0), 0);
@@ -105,15 +160,27 @@ export default function Profile() {
     userActiveItems.some((i) => i.id === c.itemId)
   ).length;
 
+  const [sellerStats, setSellerStats] = useState(null);
+
+  useEffect(() => {
+    if (!authUser || (activeTab !== 'analytics' && activeTab !== 'dashboard')) return;
+    let cancelled = false;
+    api.payments.sellerAnalytics()
+      .then((r) => { if (!cancelled) setSellerStats(r); })
+      .catch((err) => console.error('Failed to load seller analytics:', err));
+    return () => { cancelled = true; };
+  }, [authUser, activeTab, items]);
+
   useEffect(() => {
     if (showEditModal) {
       setEditForm({
         name: currentUser.name || '',
         bio: currentUser.bio || '',
         phone: currentUser.phone || '',
+        locationAddress: currentUser.location?.address || '',
       });
     }
-  }, [showEditModal, currentUser.name, currentUser.bio, currentUser.phone]);
+  }, [showEditModal, currentUser.name, currentUser.bio, currentUser.phone, currentUser.location]);
 
   const handleDeleteItem = (itemId) => {
     deleteItem(itemId);
@@ -130,7 +197,12 @@ export default function Profile() {
   const handleMenuClick = (action) => {
     switch (action) {
       case 'edit':
-        setEditForm({ name: currentUser.name, bio: currentUser.bio, phone: currentUser.phone });
+        setEditForm({
+          name: currentUser.name,
+          bio: currentUser.bio,
+          phone: currentUser.phone,
+          locationAddress: currentUser.location?.address || '',
+        });
         setShowEditModal(true);
         break;
       case 'privacy':
@@ -152,7 +224,15 @@ export default function Profile() {
 
   const handleEditSave = async () => {
     if (authUser) {
-      const result = await updateProfile({ name: editForm.name, bio: editForm.bio, phone: editForm.phone });
+      const payload = { name: editForm.name, bio: editForm.bio, phone: editForm.phone };
+      const currentAddress = currentUser.location?.address || '';
+      if (editForm.locationAddress !== currentAddress) {
+        payload.location = {
+          ...(currentUser.location || {}),
+          address: editForm.locationAddress,
+        };
+      }
+      const result = await updateProfile(payload);
       if (result?.success === false) {
         addToast(result.error || 'Failed to update profile', 'error');
         return;
@@ -166,7 +246,78 @@ export default function Profile() {
     const newValue = !settings[key];
     setSettings((prev) => ({ ...prev, [key]: newValue }));
     if (key === 'darkMode') toggleTheme();
+    api.settings.update({ [SETTING_KEY_MAP[key]]: newValue }).catch(() => {});
     addToast(`${key} ${newValue ? 'enabled' : 'disabled'}`, 'info');
+  };
+
+  const handleNotifToggle = (key) => {
+    const newValue = !notifPrefs[key];
+    setNotifPrefs((prev) => ({ ...prev, [key]: newValue }));
+    api.settings.update({ [NOTIF_KEY_MAP[key]]: newValue }).catch(() => {});
+  };
+
+  const handleSettingValue = (key, value) => {
+    setSettings((prev) => ({ ...prev, [key]: value }));
+    api.settings.update({ [SETTING_KEY_MAP[key]]: value }).catch(() => {});
+    addToast('Preference saved', 'success');
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    try {
+      const res = await api.upload.single(file);
+      if (!res?.file?.url) throw new Error('Upload failed');
+      const result = await updateProfile({ avatar: res.file.url });
+      if (result?.success === false) throw new Error(result.error || 'Failed to update profile');
+      addToast('Profile photo updated', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to upload photo', 'error');
+    } finally {
+      setAvatarUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (passwordForm.newPassword.length < 6) {
+      addToast('Password must be at least 6 characters', 'error');
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirm) {
+      addToast('Passwords do not match', 'error');
+      return;
+    }
+    const result = await changePassword(passwordForm.currentPassword, passwordForm.newPassword);
+    if (result?.success === false) {
+      addToast(result.error || 'Failed to change password', 'error');
+      return;
+    }
+    addToast('Password changed successfully', 'success');
+    setPasswordForm({ currentPassword: '', newPassword: '', confirm: '' });
+    setShowPasswordModal(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    const result = await deleteAccount(deleteAccountPassword);
+    if (result?.success === false) {
+      addToast(result.error || 'Failed to delete account', 'error');
+      return;
+    }
+    addToast('Account deleted', 'success');
+    setShowDeleteAccountModal(false);
+    setActiveTab('home');
+  };
+
+  const handleResendVerification = async () => {
+    setVerificationSending(true);
+    const result = await resendVerification();
+    setVerificationSending(false);
+    addToast(
+      result?.success === false ? (result.error || 'Failed to send') : 'Verification email sent',
+      result?.success === false ? 'error' : 'success'
+    );
   };
 
   const menuItems = [
@@ -300,6 +451,16 @@ export default function Profile() {
           )}
         </div>
 
+        {!currentUser.verified && (
+          <div className="verify-banner">
+            <ShieldIcon size={16} />
+            <span>Verify your email to build trust with buyers.</span>
+            <button className="verify-banner-btn" onClick={handleResendVerification} disabled={verificationSending}>
+              {verificationSending ? 'Sending...' : 'Send verification'}
+            </button>
+          </div>
+        )}
+
         <div className="profile-tabs">
           <button className={`profile-tab ${activeTab === 'listings' ? 'active' : ''}`} onClick={() => setActiveTabState('listings')}>
             Listings
@@ -405,12 +566,12 @@ export default function Profile() {
                 <div className="analytics-grid">
                   <div className="analytics-card">
                     <EyeIcon size={20} />
-                    <span className="analytics-value">{totalItemViews}</span>
+                    <span className="analytics-value">{(sellerStats?.totals?.views ?? totalItemViews).toLocaleString()}</span>
                     <span className="analytics-label">Total Views</span>
                   </div>
                   <div className="analytics-card">
                     <HeartIcon size={20} />
-                    <span className="analytics-value">{totalItemFavorites}</span>
+                    <span className="analytics-value">{(sellerStats?.totals?.favorites ?? totalItemFavorites).toLocaleString()}</span>
                     <span className="analytics-label">Total Favorites</span>
                   </div>
                   <div className="analytics-card">
@@ -419,22 +580,37 @@ export default function Profile() {
                     <span className="analytics-label">Inquiries</span>
                   </div>
                   <div className="analytics-card">
-                    <span className="analytics-value">{userActiveItems.length}</span>
+                    <ZapIcon size={20} />
+                    <span className="analytics-value">{sellerStats?.revenue?.sold ?? 0}</span>
+                    <span className="analytics-label">Items Sold</span>
+                  </div>
+                  <div className="analytics-card">
+                    <span className="analytics-value">{formatPrice(sellerStats?.revenue?.completed ?? 0)}</span>
+                    <span className="analytics-label">Earned</span>
+                  </div>
+                  <div className="analytics-card">
+                    <span className="analytics-value">{(sellerStats?.totals?.active ?? userActiveItems.length)}</span>
                     <span className="analytics-label">Active Items</span>
                   </div>
                 </div>
               </div>
 
-              {userActiveItems.length > 0 && (
+              {(sellerStats?.perItem?.length > 0) && (
                 <div className="analytics-per-item">
                   <h4 className="analytics-section-title">Per Listing Breakdown</h4>
-                  {userActiveItems.map((item) => (
+                  {(sellerStats.perItem).map((item) => (
                     <div key={item.id} className="analytics-row">
                       <div className="analytics-row-info">
-                        <img src={firstImage(item)} alt={item.title} className="analytics-row-img" />
+                        <img src={item.image || PLACEHOLDER_IMG} alt={item.title} className="analytics-row-img" />
                         <div>
                           <div className="analytics-row-title">{item.title}</div>
-                          <div className="analytics-row-price">{formatPrice(item.price)}</div>
+                          <div className="analytics-row-price">
+                            {item.status === 'sold' ? (
+                              <span style={{ color: 'var(--success)' }}>Sold × {item.sold_count}</span>
+                            ) : (
+                              <span className="status-badge">{item.status}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="analytics-row-stats">
@@ -446,13 +622,20 @@ export default function Profile() {
                           <HeartIcon size={14} />
                           <span>{item.favorites || 0}</span>
                         </div>
+                        <div className="analytics-stat" title="Sales">
+                          <ZapIcon size={14} />
+                          <span>{item.sold_count || 0}</span>
+                        </div>
+                        <div className="analytics-stat" title="Earned">
+                          <span>{formatPrice(item.revenue || 0)}</span>
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              {userActiveItems.length === 0 && (
+              {!sellerStats?.perItem?.length && userActiveItems.length === 0 && (
                 <div className="empty-state">
                   <h3 className="empty-title">No analytics data</h3>
                   <p className="empty-text">Create listings to see your performance</p>
@@ -473,7 +656,7 @@ export default function Profile() {
                         <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
                       </svg>
                     </span>
-                    <span className="dashboard-card-value">${getTotalRevenue(currentUser.id).toLocaleString()}</span>
+                    <span className="dashboard-card-value">{formatPrice(sellerStats?.revenue?.completed ?? getTotalRevenue(currentUser.id))}</span>
                     <span className="dashboard-card-label">Total Revenue</span>
                   </div>
                   <div className="dashboard-card dashboard-card--sales">
@@ -482,7 +665,7 @@ export default function Profile() {
                         <polyline points="20 6 9 17 4 12" />
                       </svg>
                     </span>
-                    <span className="dashboard-card-value">{getSoldItems(currentUser.id).length}</span>
+                    <span className="dashboard-card-value">{sellerStats?.revenue?.sold ?? getSoldItems(currentUser.id).length}</span>
                     <span className="dashboard-card-label">Items Sold</span>
                   </div>
                   <div className="dashboard-card dashboard-card--active">
@@ -491,7 +674,7 @@ export default function Profile() {
                         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
                       </svg>
                     </span>
-                    <span className="dashboard-card-value">{userActiveItems.length}</span>
+                    <span className="dashboard-card-value">{sellerStats?.totals?.active ?? userActiveItems.length}</span>
                     <span className="dashboard-card-label">Active</span>
                   </div>
                   <div className="dashboard-card dashboard-card--drafts">
@@ -507,18 +690,18 @@ export default function Profile() {
                 </div>
               </div>
 
-              {sales.length > 0 && (
+              {(sellerStats?.sales?.length > 0) && (
                 <div className="dashboard-section">
                   <h4 className="analytics-section-title">Recent Sales</h4>
                   <div className="sales-list">
-                    {sales.slice(0, 5).map((sale) => (
+                    {(sellerStats.sales).slice(0, 5).map((sale) => (
                       <div key={sale.id} className="sale-card">
-                        <img src={sale.itemImage || PLACEHOLDER_IMG} alt={sale.itemTitle} className="sale-card-img" />
+                        <img src={sale.item_image || PLACEHOLDER_IMG} alt={sale.item_title} className="sale-card-img" />
                         <div className="sale-card-body">
-                          <h4 className="sale-card-title">{sale.itemTitle}</h4>
-                          <span className="sale-card-price">${sale.price}</span>
+                          <h4 className="sale-card-title">{sale.item_title}</h4>
+                          <span className="sale-card-price">{formatPrice(sale.net_amount ?? sale.amount)}</span>
                           <span className="sale-card-date">
-                            {new Date(sale.soldAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                            {sale.completed_at ? new Date(sale.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
                           </span>
                         </div>
                       </div>
@@ -556,7 +739,7 @@ export default function Profile() {
                 </div>
               )}
 
-              {sales.length === 0 && templates.length === 0 && (
+              {!sellerStats?.sales?.length && templates.length === 0 && (
                 <div className="empty-state" style={{ marginTop: 20 }}>
                   <h3 className="empty-title">No sales yet</h3>
                   <p className="empty-text">Your sold items and revenue will appear here</p>
@@ -630,7 +813,11 @@ export default function Profile() {
         <div className="settings-form">
           <div className="settings-avatar-edit">
             <img src={currentUser.avatar} alt={currentUser.name} />
-            <button className="change-avatar-btn">Change Photo</button>
+            <input ref={avatarInputRef} type="file" accept="image/*" hidden onChange={handleAvatarChange} />
+            <button className="change-avatar-btn" onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading}>
+              <CameraIcon size={14} />
+              {avatarUploading ? 'Uploading...' : 'Change Photo'}
+            </button>
           </div>
           <div className="input-group">
             <label className="input-label">Name</label>
@@ -643,6 +830,10 @@ export default function Profile() {
           <div className="input-group">
             <label className="input-label">Phone</label>
             <input type="tel" className="input" value={editForm.phone} onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Location</label>
+            <input type="text" className="input" value={editForm.locationAddress} onChange={(e) => setEditForm({ ...editForm, locationAddress: e.target.value })} placeholder="e.g. Manhattan, NYC" />
           </div>
           <Button block onClick={handleEditSave}>Save Changes</Button>
         </div>
@@ -674,6 +865,68 @@ export default function Profile() {
             </div>
             <div className={`toggle ${settings.locationEnabled ? 'active' : ''}`} />
           </div>
+
+          <div className="settings-group-title">Notification Preferences</div>
+          {[
+            { key: 'messages', label: 'New Messages', desc: 'Notify when someone messages you' },
+            { key: 'priceDrops', label: 'Price Drops', desc: 'Alerts when a saved item drops in price' },
+            { key: 'followers', label: 'New Followers', desc: 'Notify when someone follows you' },
+            { key: 'boosts', label: 'Listing Boosts', desc: 'Updates about boosted listings' },
+          ].map(({ key, label, desc }) => (
+            <div key={key} className="setting-item" onClick={() => handleNotifToggle(key)}>
+              <div className="setting-icon"><BellIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">{label}</div>
+                <div className="setting-desc">{desc}</div>
+              </div>
+              <div className={`toggle ${notifPrefs[key] ? 'active' : ''}`} />
+            </div>
+          ))}
+
+          <div className="settings-group-title">Preferences</div>
+          <div className="setting-item">
+            <div className="setting-icon"><MapPinIcon size={20} /></div>
+            <div className="setting-text">
+              <div className="setting-title">Distance Unit</div>
+              <div className="setting-desc">Measurement unit for distances</div>
+            </div>
+            <div className="segmented">
+              {['km', 'mi'].map((unit) => (
+                <button
+                  key={unit}
+                  className={`segmented-btn ${settings.distanceUnit === unit ? 'active' : ''}`}
+                  onClick={() => handleSettingValue('distanceUnit', unit)}
+                >
+                  {unit}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="setting-item">
+            <div className="setting-icon"><GlobeIcon size={20} /></div>
+            <div className="setting-text">
+              <div className="setting-title">Language</div>
+              <div className="setting-desc">App language</div>
+            </div>
+            <select className="setting-select" value={settings.language} onChange={(e) => handleSettingValue('language', e.target.value)}>
+              <option value="English">English</option>
+              <option value="French">Français</option>
+              <option value="Spanish">Español</option>
+              <option value="Dutch">Nederlands</option>
+            </select>
+          </div>
+          <div className="setting-item">
+            <div className="setting-icon"><ShieldIcon size={20} /></div>
+            <div className="setting-text">
+              <div className="setting-title">Profile Visibility</div>
+              <div className="setting-desc">Who can see your profile</div>
+            </div>
+            <select className="setting-select" value={settings.profileVisibility} onChange={(e) => handleSettingValue('profileVisibility', e.target.value)}>
+              <option value="public">Public</option>
+              <option value="contacts">Contacts</option>
+              <option value="private">Private</option>
+            </select>
+          </div>
         </div>
       </Modal>
 
@@ -682,18 +935,104 @@ export default function Profile() {
           <div className="setting-item">
             <div className="setting-icon"><ShieldIcon size={20} /></div>
             <div className="setting-text">
-              <div className="setting-title">Two-Factor Auth</div>
-              <div className="setting-desc">Add extra security</div>
+              <div className="setting-title">Email Verification</div>
+              <div className="setting-desc">
+                {currentUser.verified ? 'Your email is verified' : 'Verify your email address'}
+              </div>
             </div>
-            <Button size="sm">Enable</Button>
+            {currentUser.verified ? (
+              <span className="verified-badge"><CheckIcon size={14} /> Verified</span>
+            ) : (
+              <Button size="sm" onClick={handleResendVerification} disabled={verificationSending}>
+                {verificationSending ? 'Sending...' : 'Resend'}
+              </Button>
+            )}
           </div>
-          <div className="setting-item">
+          <div className="setting-item" onClick={() => { setShowPasswordModal(true); setShowPrivacyModal(false); }}>
+            <div className="setting-icon"><ShieldIcon size={20} /></div>
+            <div className="setting-text">
+              <div className="setting-title">Change Password</div>
+              <div className="setting-desc">Update your account password</div>
+            </div>
+            <Button size="sm">Change</Button>
+          </div>
+          <div className="setting-item" onClick={() => { setShowSettingsModal(true); setShowPrivacyModal(false); }}>
             <div className="setting-icon"><GlobeIcon size={20} /></div>
             <div className="setting-text">
               <div className="setting-title">Profile Visibility</div>
               <div className="setting-desc">Who can see your profile</div>
             </div>
-            <span className="setting-value">Public</span>
+            <span className="setting-value">{settings.profileVisibility}</span>
+          </div>
+          <div className="setting-item">
+            <div className="setting-icon"><ShieldIcon size={20} /></div>
+            <div className="setting-text">
+              <div className="setting-title">Two-Factor Auth</div>
+              <div className="setting-desc">Add extra security</div>
+            </div>
+            <Button size="sm" onClick={() => addToast('Two-factor auth coming soon', 'info')}>Enable</Button>
+          </div>
+          <div className="setting-item danger-setting-item" onClick={() => { setShowDeleteAccountModal(true); setShowPrivacyModal(false); }}>
+            <div className="setting-icon"><TrashIcon size={20} /></div>
+            <div className="setting-text">
+              <div className="setting-title">Delete Account</div>
+              <div className="setting-desc">Permanently delete your account and data</div>
+            </div>
+            <Button size="sm" style={{ background: 'var(--error)', color: 'white' }}>Delete</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showPasswordModal} onClose={() => setShowPasswordModal(false)} title="Change Password">
+        <div className="settings-form">
+          <div className="input-group">
+            <label className="input-label">Current Password</label>
+            <input
+              type="password"
+              className="input"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+            />
+          </div>
+          <div className="input-group">
+            <label className="input-label">New Password</label>
+            <input
+              type="password"
+              className="input"
+              value={passwordForm.newPassword}
+              onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+            />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Confirm New Password</label>
+            <input
+              type="password"
+              className="input"
+              value={passwordForm.confirm}
+              onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+            />
+          </div>
+          <Button block onClick={handleChangePassword}>Update Password</Button>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showDeleteAccountModal} onClose={() => setShowDeleteAccountModal(false)} title="Delete Account">
+        <div className="delete-confirm">
+          <p className="delete-confirm-text">
+            This will permanently delete your account, listings, and all associated data. This action cannot be undone.
+          </p>
+          <div className="input-group">
+            <label className="input-label">Enter your password to confirm</label>
+            <input
+              type="password"
+              className="input"
+              value={deleteAccountPassword}
+              onChange={(e) => setDeleteAccountPassword(e.target.value)}
+            />
+          </div>
+          <div className="delete-confirm-actions">
+            <Button variant="secondary" block onClick={() => setShowDeleteAccountModal(false)}>Cancel</Button>
+            <Button block onClick={handleDeleteAccount} style={{ background: 'var(--error)', color: 'white' }}>Delete Account</Button>
           </div>
         </div>
       </Modal>

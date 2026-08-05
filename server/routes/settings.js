@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import logger from '../src/logger.js';
@@ -27,17 +26,16 @@ router.get('/', authenticateToken, (req, res) => {
 
 router.put('/', authenticateToken, (req, res) => {
   try {
-    const allowed = ['notifications', 'dark_mode', 'location_enabled', 'distance_unit', 'language', 'profile_visibility'];
-    const updates = [];
-    const params = [];
+    const booleanKeys = [
+      'notifications', 'dark_mode', 'location_enabled',
+      'notif_messages', 'notif_price_drops', 'notif_followers', 'notif_boosts',
+    ];
+    const allowed = [...booleanKeys, 'distance_unit', 'language', 'profile_visibility'];
 
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
-        if (['notifications', 'dark_mode', 'location_enabled'].includes(key)) {
-          db.prepare(`UPDATE user_settings SET ${key} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(req.body[key] ? 1 : 0, req.user.id);
-        } else {
-          db.prepare(`UPDATE user_settings SET ${key} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(req.body[key], req.user.id);
-        }
+        const value = booleanKeys.includes(key) ? (req.body[key] ? 1 : 0) : req.body[key];
+        db.prepare(`UPDATE user_settings SET ${key} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(value, req.user.id);
       }
     }
 

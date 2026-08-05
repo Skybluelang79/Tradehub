@@ -34,7 +34,7 @@ const SUGGESTED_CATEGORIES = {
   sofa: 'furniture', table: 'furniture', chair: 'furniture', desk: 'furniture', bed: 'furniture', shelf: 'furniture',
   bike: 'sports', ball: 'sports', gym: 'sports', yoga: 'sports', fitness: 'sports',
   book: 'books', novel: 'books', textbook: 'books',
-  car: 'vehicles', truck: 'vehicles', motorcycle: 'vehicles', bike: 'vehicles',
+  car: 'vehicles', truck: 'vehicles', motorcycle: 'vehicles',
 };
 
 function getPriceSuggestions(items, selectedCategory) {

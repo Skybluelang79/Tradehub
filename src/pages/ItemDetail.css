@@ -320,8 +320,8 @@
   width: calc(100% - 32px);
   max-width: 468px;
   display: flex;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 8px;
+  padding: 10px 12px;
   background: var(--background);
   border-top: 1px solid var(--border);
   z-index: 50;
@@ -329,16 +329,17 @@
 
 .detail-action-btn {
   flex: 1;
-  padding: 14px;
+  padding: 12px 6px;
   border-radius: var(--radius-md);
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 5px;
   cursor: pointer;
   transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
 .detail-action-btn.primary {
@@ -498,4 +499,215 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
   outline: none;
+}
+
+.buy-now-btn {
+  flex: 1.6;
+  background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+  border: none;
+  color: white;
+  box-shadow: 0 4px 14px rgba(233, 69, 96, 0.25);
+}
+
+.checkout-price-line {
+  font-size: 17px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.checkout-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.checkout-methods {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.checkout-method {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 13px 14px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.checkout-method.active {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.06);
+}
+
+.checkout-method-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.checkout-method-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.crypto-network-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.crypto-network-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.crypto-network-chip:hover {
+  border-color: var(--accent);
+}
+
+.crypto-network-chip.active {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.08);
+}
+
+.crypto-network-symbol {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--accent);
+  background: rgba(233, 69, 96, 0.1);
+  border-radius: var(--radius-full);
+  padding: 2px 7px;
+}
+
+.crypto-network-label {
+  font-size: 12px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.crypto-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  background: white;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+}
+
+.crypto-qr {
+  width: 200px;
+  height: 200px;
+  image-rendering: pixelated;
+}
+
+.crypto-qr-caption {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.checkout-error {
+  color: #EF4444;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.checkout-confirm-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: rgba(233, 69, 96, 0.06);
+  border: 1px solid rgba(233, 69, 96, 0.2);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.checkout-confirm-note svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.pay-info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pay-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pay-info-row--column {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.pay-info-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  width: 74px;
+  flex-shrink: 0;
+}
+
+.pay-info-value {
+  font-size: 14px;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.pay-info-value.mono {
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.3px;
+}
+
+.pay-info-value.break {
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.pay-info-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+}
+
+.copy-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }

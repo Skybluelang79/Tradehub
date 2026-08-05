@@ -2,10 +2,27 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { adminAuth } from '../middleware/adminAuth.js';
 import validate, { createDisputeSchema } from '../src/validation.js';
 import logger from '../src/logger.js';
 
 const router = Router();
+
+const FEE_RATE = Number(process.env.PAYMENT_FEE_PERCENT || 0) / 100;
+
+function notify(userId, type, title, body) {
+  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
+    .run(uuidv4(), userId, type, title, body);
+}
+
+function getWallet(userId) {
+  let w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);
+  if (!w) {
+    db.prepare('INSERT INTO wallets (user_id) VALUES (?)').run(userId);
+    w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);
+  }
+  return w;
+}
 
 router.post('/', authenticateToken, validate(createDisputeSchema), (req, res) => {
   try {
@@ -46,13 +63,20 @@ router.get('/', authenticateToken, (req, res) => {
     let disputes;
     if (req.user.isAdmin) {
       disputes = db.prepare(`
-        SELECT d.*, t.item_title FROM disputes d
+        SELECT d.*, t.item_title, t.amount, t.status as txn_status,
+          buyer.name as buyer_name, seller.name as seller_name,
+          opener.name as opener_name
+        FROM disputes d
         JOIN transactions t ON d.transaction_id = t.id
+        LEFT JOIN users buyer ON buyer.id = t.buyer_id
+        LEFT JOIN users seller ON seller.id = t.seller_id
+        LEFT JOIN users opener ON opener.id = d.opened_by
         ORDER BY d.created_at DESC
       `).all();
     } else {
       disputes = db.prepare(`
-        SELECT d.*, t.item_title FROM disputes d
+        SELECT d.*, t.item_title, t.amount, t.status as txn_status
+        FROM disputes d
         JOIN transactions t ON d.transaction_id = t.id
         WHERE t.buyer_id = ? OR t.seller_id = ?
         ORDER BY d.created_at DESC
@@ -87,9 +111,12 @@ router.get('/:id', authenticateToken, (req, res) => {
   }
 });
 
-router.put('/:id/resolve', authenticateToken, (req, res) => {
+router.put('/:id/resolve', adminAuth, (req, res) => {
   try {
     const { resolution, action } = req.body;
+    if (!['refund_buyer', 'release_seller'].includes(action)) {
+      return res.status(400).json({ error: 'Invalid resolution action' });
+    }
 
     const dispute = db.prepare('SELECT * FROM disputes WHERE id = ?').get(req.params.id);
     if (!dispute) return res.status(404).json({ error: 'Dispute not found' });
@@ -98,19 +125,41 @@ router.put('/:id/resolve', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'Dispute is already resolved' });
     }
 
+    const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(dispute.transaction_id);
+    if (!txn) return res.status(404).json({ error: 'Transaction not found' });
+
+    const amountCents = Math.round(txn.amount * 100);
+    const feeCents = Math.round(amountCents * FEE_RATE);
+    const netCents = amountCents - feeCents;
+
+    if (action === 'refund_buyer') {
+      if (txn.status === 'completed') {
+        const w = getWallet(txn.seller_id);
+        const available = Math.max(0, w.available_cents - netCents);
+        const lifetime = Math.max(0, w.lifetime_cents - netCents);
+        db.prepare("UPDATE wallets SET available_cents = ?, lifetime_cents = ?, updated_at = datetime('now') WHERE user_id = ?")
+          .run(available, lifetime, txn.seller_id);
+      }
+      db.prepare("UPDATE transactions SET status = 'refunded', completed_at = NULL WHERE id = ?").run(dispute.transaction_id);
+      db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
+      notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved. Payment of $${txn.amount} has been refunded to your balance.`);
+      notify(txn.seller_id, 'system', 'Dispute Resolved', `The dispute for "${txn.item_title}" was resolved in the buyer's favor.`);
+    } else if (action === 'release_seller') {
+      if (txn.status !== 'completed') {
+        getWallet(txn.seller_id);
+        db.prepare('UPDATE wallets SET available_cents = available_cents + ?, lifetime_cents = lifetime_cents + ?, updated_at = datetime(\'now\') WHERE user_id = ?')
+          .run(netCents, netCents, txn.seller_id);
+        db.prepare("UPDATE transactions SET status = 'completed', completed_at = datetime('now'), fee_amount = ?, net_amount = ? WHERE id = ?")
+          .run(feeCents / 100, netCents / 100, dispute.transaction_id);
+      }
+      notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved in the seller's favor.`);
+      notify(txn.seller_id, 'system', 'Dispute Resolved', `The dispute for "${txn.item_title}" was resolved in your favor. Payment released.`);
+    }
+
     db.prepare(`
       UPDATE disputes SET status = 'resolved', resolution = ?, resolved_by = ?, resolved_at = datetime('now')
       WHERE id = ?
     `).run(resolution || '', req.user.id, req.params.id);
-
-    const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(dispute.transaction_id);
-
-    if (action === 'refund_buyer') {
-      db.prepare("UPDATE transactions SET status = 'refunded' WHERE id = ?").run(dispute.transaction_id);
-      db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
-    } else if (action === 'release_seller') {
-      db.prepare("UPDATE transactions SET status = 'completed' WHERE id = ?").run(dispute.transaction_id);
-    }
 
     res.json({ success: true });
   } catch (err) {

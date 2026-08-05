@@ -7,7 +7,7 @@ import './AdminListings.css';
 
 const AdminListings = () => {
   const { listings: adminListings, updateListingStatus, deleteListing } = useAdmin();
-  const { items, getUser, currentUser } = useApp();
+  const { items, getUser } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [selectedListing, setSelectedListing] = useState(null);

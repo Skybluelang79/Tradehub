@@ -1,4 +1,4 @@
-import { SearchIcon, BellIcon, HeartIcon, ArrowLeftIcon, MoonIcon } from '../ui/Icons';
+import { SearchIcon, BellIcon, HeartIcon, ArrowLeftIcon, MoonIcon, HomeIcon } from '../ui/Icons';
 import { useApp } from '../../context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -15,9 +15,15 @@ export default function Header({
   transparent = false,
 }) {
   const variantClass = transparent ? 'header--transparent' : '';
-  const { unreadNotificationsCount } = useApp();
+  const { unreadNotificationsCount, activeTab, selectedItem } = useApp();
   const { isAuthenticated } = useAuth();
   const { isDark, toggleTheme } = useTheme();
+
+  const goHome = () => {
+    window.dispatchEvent(new CustomEvent('goHome'));
+  };
+
+  const showHomeBtn = activeTab !== 'home' || !!selectedItem;
 
   return (
     <header className={`header ${variantClass}`}>
@@ -34,6 +40,11 @@ export default function Header({
         </div>
 
         <div className="header-right">
+          {showHomeBtn && (
+            <button className="header-btn" onClick={goHome} title="Go to Homepage">
+              <HomeIcon size={20} />
+            </button>
+          )}
           <button className="theme-toggle-btn" onClick={toggleTheme} title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}>
             <MoonIcon size={16} />
           </button>

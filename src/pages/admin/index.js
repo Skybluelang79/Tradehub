@@ -2,5 +2,8 @@ export { default as AdminDashboard } from './AdminDashboard.jsx';
 export { default as AdminUsers } from './AdminUsers.jsx';
 export { default as AdminListings } from './AdminListings.jsx';
 export { default as AdminTransactions } from './AdminTransactions.jsx';
+export { default as AdminPayouts } from './AdminPayouts.jsx';
+export { default as AdminGiftCards } from './AdminGiftCards.jsx';
+export { default as AdminDisputes } from './AdminDisputes.jsx';
 export { default as AdminReports } from './AdminReports.jsx';
 export { default as AdminSettings } from './AdminSettings.jsx';

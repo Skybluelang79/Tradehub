@@ -85,7 +85,6 @@ function useAnimatedCounter(target, duration = 1500, enabled = true) {
   const [value, setValue] = useState(0);
   useEffect(() => {
     if (!enabled) return;
-    let start = 0;
     const startTime = performance.now();
     const animate = (now) => {
       const elapsed = now - startTime;
@@ -123,9 +122,7 @@ export default function PremiumSeller() {
   const monthlyRevenue = monthlySales * avgPrice;
   const freeFee = monthlyRevenue * 0.03;
   const premiumFee = monthlyRevenue * 0.02;
-  const proFee = monthlyRevenue * 0.015;
   const premiumSavings = useAnimatedCounter(Math.round(freeFee - premiumFee), 1200, showUpgrade);
-  const proSavings = useAnimatedCounter(Math.round(freeFee - proFee), 1200, showUpgrade);
 
   const spawnParticles = useCallback(() => {
     const newParticles = Array.from({ length: 12 }, (_, i) => ({

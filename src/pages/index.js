@@ -9,3 +9,4 @@ export { default as Signup } from './Signup';
 export { default as ForgotPassword } from './ForgotPassword';
 export { default as Favorites } from './Favorites';
 export { default as Notifications } from './Notifications';
+export { default as GiftMall } from './GiftMall';

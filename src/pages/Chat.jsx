@@ -11,7 +11,6 @@ import { getToken } from '../services/client';
 import {
   connectSocket,
   disconnectSocket,
-  getSocket,
   joinConversation,
   leaveConversation,
   sendMessage as socketSendMessage,
@@ -38,7 +37,6 @@ export default function Chat() {
     markConversationRead,
     getUser,
     items,
-    addNotification,
   } = useApp();
   const { user, isAuthenticated } = useAuth();
   const { addToast } = useToast();
@@ -64,35 +62,6 @@ export default function Chat() {
 
   const currentUserId = user?.id;
 
-  if (!isAuthenticated) {
-    return (
-      <div className="page">
-        <Header title="Messages" />
-        <div className="auth-gate">
-          <div className="auth-gate-icon">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </div>
-          <h3 className="auth-gate-title">Sign in to chat</h3>
-          <p className="auth-gate-text">Message sellers, negotiate prices, and close deals securely.</p>
-          <button
-            className="auth-gate-btn"
-            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }))}
-          >
-            Sign In
-          </button>
-          <button
-            className="auth-gate-link"
-            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'signup' }))}
-          >
-            Create an account
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   // Connect socket on mount
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -100,7 +69,6 @@ export default function Chat() {
     if (!token) return;
 
     connectSocket(token);
-    const socket = getSocket();
 
     const cleanupNewMsg = onNewMessage((message) => {
       // Dispatch a custom event so AppContext can handle it
@@ -384,6 +352,35 @@ export default function Chat() {
           />
           <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>
             <SendIcon size={20} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="page">
+        <Header title="Messages" />
+        <div className="auth-gate">
+          <div className="auth-gate-icon">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </div>
+          <h3 className="auth-gate-title">Sign in to chat</h3>
+          <p className="auth-gate-text">Message sellers, negotiate prices, and close deals securely.</p>
+          <button
+            className="auth-gate-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }))}
+          >
+            Sign In
+          </button>
+          <button
+            className="auth-gate-link"
+            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'signup' }))}
+          >
+            Create an account
           </button>
         </div>
       </div>

@@ -1,0 +1,259 @@
+.gift-mall {
+  min-height: 100vh;
+  background: var(--background);
+  padding-bottom: 24px;
+}
+
+.gift-mall-topbar {
+  position: relative;
+}
+
+.gift-mall-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 2;
+  transition: all var(--transition-fast);
+}
+
+.gift-mall-close:hover {
+  background: var(--surface-hover);
+}
+
+.section {
+  padding: 16px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.gift-mall-upload-icon {
+  color: var(--accent);
+}
+
+.gift-mall-loading,
+.gift-mall-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.gift-mall-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.gift-mall-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.gift-mall-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.gift-mall-card-front {
+  width: 100%;
+  aspect-ratio: 1.6;
+  object-fit: cover;
+  display: block;
+}
+
+.gift-mall-card-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: linear-gradient(135deg, var(--secondary), var(--primary));
+  color: white;
+  text-align: center;
+  padding: 10px;
+}
+
+.gift-mall-fallback-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gift-mall-fallback-sub {
+  font-size: 10px;
+  opacity: 0.8;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gift-mall-card-meta {
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.gift-mall-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gift-mall-card-cat {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gift-mall-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.gift-mall-uploader {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gift-mall-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 32px 16px;
+  transition: all var(--transition-fast);
+}
+
+.gift-mall-drop:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.gift-mall-drop.has-preview {
+  padding: 0;
+  border-style: solid;
+  overflow: hidden;
+}
+
+.gift-mall-drop img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  background: white;
+  display: block;
+}
+
+.gift-mall-drop-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.gift-mall-drop-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.gift-mall-design-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.gift-mall-design-actions {
+  margin-top: 4px;
+}
+
+.gift-mall-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  background: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  border-radius: var(--radius-lg);
+  color: var(--success);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.gift-mall-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.gift-mall-preview-face {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.gift-mall-preview-face img {
+  width: 100%;
+  display: block;
+}
+
+.gift-mall-preview-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+@media (max-width: 480px) {
+  .gift-mall-grid {
+    grid-template-columns: 1fr;
+  }
+}

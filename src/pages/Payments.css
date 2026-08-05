@@ -375,6 +375,37 @@
   color: var(--error);
 }
 
+.transaction-status.disputed {
+  background: rgba(139, 92, 246, 0.15);
+  color: #A78BFA;
+}
+
+.dispute-btn {
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #A78BFA;
+  background: rgba(139, 92, 246, 0.12);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dispute-btn:hover {
+  background: rgba(139, 92, 246, 0.25);
+}
+
+.dispute-btn.refund {
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.dispute-btn.refund:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
 .escrow-info-list {
   display: flex;
   flex-direction: column;
@@ -411,4 +442,211 @@
   font-size: 13px;
   color: var(--success);
   font-weight: 500;
+}
+
+.wallet-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.wallet-cell {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wallet-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.wallet-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.wallet-value.accent {
+  color: var(--accent);
+}
+
+.wallet-redeem-btn {
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.wallet-redeem-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.wallet-browse-btn {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.transaction-status.awaiting_payment {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--warning);
+}
+
+.gc-brand-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.gc-brand-grid-sm {
+  margin-top: 8px;
+}
+
+.gc-brand-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.gc-brand-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+
+.gc-brand-front {
+  width: 100%;
+  aspect-ratio: 1.6;
+  object-fit: cover;
+  display: block;
+}
+
+.gc-brand-front-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: linear-gradient(135deg, var(--secondary), var(--primary));
+  color: white;
+  text-align: center;
+  padding: 10px;
+}
+
+.gc-brand-fallback-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.gc-brand-fallback-sub {
+  font-size: 10px;
+  opacity: 0.8;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gc-brand-meta {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.gc-brand-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gc-brand-cat {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gc-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.gc-preview-face {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.gc-preview-face img {
+  width: 100%;
+  display: block;
+}
+
+.gc-preview-tag {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.gc-browse-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  cursor: pointer;
+  min-height: 90px;
+  padding: 14px;
+  overflow: hidden;
+  transition: all var(--transition-fast);
+}
+
+.gc-browse-card:hover {
+  border-color: var(--accent);
+}
+
+.gc-browse-card.has-preview {
+  padding: 0;
+  border-style: solid;
+}
+
+.gc-browse-card img {
+  width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+  background: white;
+  display: block;
+}
+
+.gc-browse-card-placeholder {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
 }

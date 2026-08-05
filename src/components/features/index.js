@@ -10,3 +10,4 @@ export { default as SafeTrading } from './SafeTrading';
 export { default as ListForFree } from './ListForFree';
 export { default as PremiumSeller } from './PremiumSeller';
 export { default as EncryptionBadge } from './EncryptionBadge';
+export { default as GiftCardModal } from './GiftCardModal';

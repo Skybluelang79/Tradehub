@@ -83,7 +83,7 @@ export const AdminProvider = ({ children }) => {
     { id: 8, title: 'Samsung 65" TV', price: 650, category: 'Electronics', seller: 'Jessica Taylor', status: 'approved', views: 1023, date: '2024-03-28' },
   ]);
 
-  const [transactions, setTransactions] = useState([
+  const [transactions] = useState([
     { id: 1, buyer: 'John Smith', seller: 'Sarah Johnson', item: 'iPhone 14 Pro', amount: 850, status: 'completed', date: '2024-04-01', fee: 25.50 },
     { id: 2, buyer: 'Mike Wilson', seller: 'Emily Davis', item: 'Nintendo Switch', amount: 280, status: 'pending', date: '2024-04-02', fee: 8.40 },
     { id: 3, buyer: 'Lisa Anderson', seller: 'Tom Martinez', item: 'Dyson Vacuum', amount: 420, status: 'completed', date: '2024-04-01', fee: 12.60 },
@@ -158,6 +158,7 @@ export const AdminProvider = ({ children }) => {
 
   const value = {
     isAdminAuth,
+    adminToken,
     adminLogin,
     adminLogout,
     adminLoginError,

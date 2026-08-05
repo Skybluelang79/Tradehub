@@ -7,8 +7,8 @@ export default function PriceChart({ priceHistory, currentPrice }) {
     if (!priceHistory || priceHistory.length === 0) return [];
     const intervals = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 };
     const days = intervals[interval] || 30;
-    const now = Date.now();
-    const cutoff = now - days * 86400000;
+    const latestTs = priceHistory.reduce((m, p) => Math.max(m, new Date(p.date).getTime()), 0);
+    const cutoff = latestTs - days * 86400000;
     return priceHistory.filter(p => new Date(p.date).getTime() > cutoff);
   }, [priceHistory, interval]);
 

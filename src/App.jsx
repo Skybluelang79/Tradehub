@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { AppProvider, useApp, LanguageProvider, CookieProvider, ThemeProvider } from './context';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { EncryptionProvider } from './context/EncryptionContext';
@@ -7,7 +7,7 @@ import { BottomNav } from './components/layout';
 import { OfflineIndicator } from './components/features';
 
 
-import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, Favorites, Notifications } from './pages';
+import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, Favorites, Notifications, GiftMall } from './pages';
 import { AdminProvider, useAdmin } from './context/AdminContext.jsx';
 import AdminLayout from './components/admin/AdminLayout.jsx';
 import AdminLogin from './components/admin/AdminLogin.jsx';
@@ -16,6 +16,9 @@ import {
   AdminUsers,
   AdminListings,
   AdminTransactions,
+  AdminPayouts,
+  AdminGiftCards,
+  AdminDisputes,
   AdminReports,
   AdminSettings
 } from './pages/admin';
@@ -59,7 +62,7 @@ function AuthPages({ onAuthSuccess, initialView = 'login' }) {
 }
 
 function AppContent() {
-  const { activeTab, selectedItem, setActiveTab, unreadMessagesCount } = useApp();
+  const { activeTab, selectedItem, setActiveTab, setSelectedItem, unreadMessagesCount } = useApp();
   const { isAuthenticated } = useAuth();
   const { isAdminAuth } = useAdmin();
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -68,31 +71,35 @@ function AppContent() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showGiftMall, setShowGiftMall] = useState(false);
   const [authRedirectTab, setAuthRedirectTab] = useState(null);
   const [authInitialView, setAuthInitialView] = useState('login');
-  const [pageKey, setPageKey] = useState(0);
-  const prevTabRef = useRef(activeTab);
 
   useEffect(() => {
     const onAuth = (e) => { setAuthInitialView(e.detail || 'login'); setShowAuthModal(true); };
     const onNotifs = () => setShowNotifications(true);
     const onFavs = () => setShowFavorites(true);
+    const onMall = () => setShowGiftMall(true);
+    const onHome = () => {
+      setShowFavorites(false);
+      setShowNotifications(false);
+      setShowGiftMall(false);
+      setSelectedItem(null);
+      setActiveTab('home');
+    };
     window.addEventListener('openAuthModal', onAuth);
     window.addEventListener('openNotifications', onNotifs);
     window.addEventListener('openFavorites', onFavs);
+    window.addEventListener('openGiftMall', onMall);
+    window.addEventListener('goHome', onHome);
     return () => {
       window.removeEventListener('openAuthModal', onAuth);
       window.removeEventListener('openNotifications', onNotifs);
       window.removeEventListener('openFavorites', onFavs);
+      window.removeEventListener('openGiftMall', onMall);
+      window.removeEventListener('goHome', onHome);
     };
-  }, []);
-
-  useEffect(() => {
-    if (activeTab !== prevTabRef.current) {
-      setPageKey(prev => prev + 1);
-      prevTabRef.current = activeTab;
-    }
-  }, [activeTab]);
+  }, [setActiveTab, setSelectedItem]);
 
   const handleAdminNavigate = (path) => {
     setAdminPath(path);
@@ -106,6 +113,12 @@ function AppContent() {
         return <AdminListings />;
       case '/admin/transactions':
         return <AdminTransactions />;
+      case '/admin/payouts':
+        return <AdminPayouts />;
+      case '/admin/gift-cards':
+        return <AdminGiftCards />;
+      case '/admin/disputes':
+        return <AdminDisputes />;
       case '/admin/reports':
         return <AdminReports />;
       case '/admin/settings':
@@ -168,6 +181,12 @@ function AppContent() {
     );
   }
 
+  if (showGiftMall) {
+    return (
+      <GiftMall onClose={() => setShowGiftMall(false)} />
+    );
+  }
+
   if (isAdminMode) {
     return (
       <AdminLayout currentPath={adminPath} onNavigate={handleAdminNavigate} onExit={() => setIsAdminMode(false)}>
@@ -211,7 +230,7 @@ function AppContent() {
       <OfflineIndicator />
 
       <main className="main-content">
-        <div className="page-transition-wrapper" key={pageKey}>
+        <div className="page-transition-wrapper" key={activeTab}>
           {renderPage()}
         </div>
       </main>

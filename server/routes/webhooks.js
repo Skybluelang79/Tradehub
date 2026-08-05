@@ -1,4 +1,5 @@
 import express from 'express';
+import crypto from 'node:crypto';
 import Stripe from 'stripe';
 import db from '../db.js';
 import logger from '../src/logger.js';
@@ -27,10 +28,20 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
     switch (event.type) {
       case 'payment_intent.succeeded': {
         const intent = event.data.object;
-        db.prepare(`
-          UPDATE transactions SET status = 'completed', completed_at = datetime('now')
-          WHERE stripe_payment_intent_id = ?
-        `).run(intent.id);
+        const txn = db.prepare(
+          'SELECT * FROM transactions WHERE stripe_payment_intent_id = ?'
+        ).get(intent.id);
+        if (txn && txn.status === 'awaiting_payment') {
+          db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
+          db.prepare(`
+            INSERT INTO notifications (id, user_id, type, title, body)
+            VALUES (?, ?, 'payment', 'Payment Received', ?)
+          `).run(
+            crypto.randomUUID(),
+            txn.buyer_id,
+            `Payment of $${txn.amount} for "${txn.item_title}" was received and is held in escrow.`
+          );
+        }
         logger.info(`Payment succeeded: ${intent.id}`);
         break;
       }
@@ -55,6 +66,8 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
           if (txn) {
             db.prepare("UPDATE transactions SET status = 'refunded' WHERE stripe_payment_intent_id = ?").run(intentId);
             db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
+            db.prepare("UPDATE wallets SET available_cents = MAX(0, available_cents - ?), lifetime_cents = MAX(0, lifetime_cents - ?) WHERE user_id = ?")
+              .run(Math.round(txn.net_amount * 100), Math.round(txn.net_amount * 100), txn.seller_id);
           }
         }
         logger.info(`Charge refunded: ${charge.id}`);

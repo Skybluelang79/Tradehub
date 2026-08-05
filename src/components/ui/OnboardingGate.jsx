@@ -9,7 +9,7 @@ const LOCATION_STORAGE_KEY = 'tradehub_location_granted';
 
 export default function OnboardingGate({ children }) {
   const { t } = useTranslation();
-  const { consent, acceptAll, rejectAll, showCustomize, preferences, setPreferences, savePreferences, openCustomize, setShowCustomize } = useCookie();
+  const { consent, acceptAll, rejectAll, showCustomize, preferences, setPreferences, savePreferences, openCustomize } = useCookie();
 
   const [locationGranted, setLocationGranted] = useState(() => {
     return localStorage.getItem(LOCATION_STORAGE_KEY) === 'true';
@@ -49,7 +49,7 @@ export default function OnboardingGate({ children }) {
     if (locationGranted && !cookiesDone) {
       acceptAll();
     }
-  }, [locationGranted]);
+  }, [locationGranted, cookiesDone, acceptAll]);
 
   if (isReady) {
     return children;

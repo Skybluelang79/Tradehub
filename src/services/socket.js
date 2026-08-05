@@ -1,10 +1,12 @@
 import { io } from 'socket.io-client';
 
 const SOCKET_URL = window.location.origin;
+const SOCKET_DISABLED = import.meta.env.VITE_DISABLE_SOCKET === 'true';
 
 let socket = null;
 
 export function connectSocket(token) {
+  if (SOCKET_DISABLED) return null;
   if (socket?.connected) return socket;
 
   socket = io(SOCKET_URL, {

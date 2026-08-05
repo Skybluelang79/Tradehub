@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import './Ad.css';
 
 const banners = [
@@ -44,7 +44,7 @@ const pushes = [
 export function AdBanner({ className = '' }) {
   const [currentAd, setCurrentAd] = useState(0);
   const [dismissed, setDismissed] = useState(false);
-  const banner = useMemo(() => banners[Math.floor(Math.random() * banners.length)], []);
+  const [banner] = useState(() => banners[Math.floor(Math.random() * banners.length)]);
 
   if (dismissed) return null;
 
@@ -80,14 +80,14 @@ export function AdBanner({ className = '' }) {
 
 export function AdCard({ title, subtitle, className = '' }) {
   const [dismissed, setDismissed] = useState(false);
-  const card = useMemo(() => {
+  const [card] = useState(() => {
     const cards = [
       { title: 'Featured Deal', subtitle: 'Limited time offer', icon: 'star' },
       { title: 'Flash Sale', subtitle: 'Prices dropping fast! ⚡', icon: 'clock' },
       { title: 'New Arrivals', subtitle: 'Fresh inventory daily', icon: 'package' },
     ];
     return cards[Math.floor(Math.random() * cards.length)];
-  }, []);
+  });
 
   if (dismissed) return null;
 
@@ -125,7 +125,7 @@ export function AdInline({ className = '', text = 'Promoted Content' }) {
 
 export function AdPush({ className = '' }) {
   const [dismissed, setDismissed] = useState(false);
-  const push = useMemo(() => pushes[Math.floor(Math.random() * pushes.length)], []);
+  const [push] = useState(() => pushes[Math.floor(Math.random() * pushes.length)]);
 
   if (dismissed) return null;
 

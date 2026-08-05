@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import jwt from 'jsonwebtoken';
 import db from '../db.js';
 import { generateToken, authenticateToken } from '../middleware/auth.js';
 import validate, {
@@ -202,7 +201,7 @@ router.get('/me', authenticateToken, (req, res) => {
 
 router.put('/me', authenticateToken, validate(updateProfileSchema), (req, res) => {
   try {
-    const { name, bio, phone, avatar } = req.validatedBody;
+    const { name, bio, phone, avatar, location } = req.validatedBody;
     const updates = [];
     const params = [];
 
@@ -210,6 +209,11 @@ router.put('/me', authenticateToken, validate(updateProfileSchema), (req, res) =
     if (bio !== undefined) { updates.push('bio = ?'); params.push(bio); }
     if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
     if (avatar !== undefined) { updates.push('avatar = ?'); params.push(avatar); }
+    if (location !== undefined) {
+      if (location.address !== undefined) { updates.push('location_address = ?'); params.push(location.address); }
+      if (location.lat !== undefined) { updates.push('location_lat = ?'); params.push(location.lat); }
+      if (location.lng !== undefined) { updates.push('location_lng = ?'); params.push(location.lng); }
+    }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
@@ -220,7 +224,7 @@ router.put('/me', authenticateToken, validate(updateProfileSchema), (req, res) =
 
     db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, created_at FROM users WHERE id = ?').get(req.user.id);
+    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, created_at FROM users WHERE id = ?').get(req.user.id);
     res.json({ user });
   } catch (err) {
     logger.error('Update profile error:', err);
@@ -337,6 +341,7 @@ router.delete('/me', authenticateToken, (req, res) => {
     db.prepare('DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?').run(req.user.id, req.user.id);
     db.prepare('DELETE FROM payment_methods WHERE user_id = ?').run(req.user.id);
     db.prepare('DELETE FROM templates WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(req.user.id);
     db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
 
     res.json({ success: true, message: 'Account permanently deleted' });

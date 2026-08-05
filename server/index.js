@@ -2,39 +2,20 @@ import 'dotenv/config';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
+import app from './app.js';
 import db from './db.js';
 import logger from './src/logger.js';
-import { errorHandler, notFound } from './src/errorHandler.js';
-import { apiLimiter } from './src/rateLimiter.js';
 import { startScheduler } from './src/scheduler.js';
-
-import authRoutes from './routes/auth.js';
-import itemRoutes from './routes/items.js';
-import chatRoutes from './routes/chat.js';
-import paymentRoutes from './routes/payments.js';
-import reviewRoutes from './routes/reviews.js';
-import uploadRoutes from './routes/upload.js';
-import notificationRoutes from './routes/notifications.js';
-import templateRoutes from './routes/templates.js';
-import reportRoutes from './routes/reports.js';
-import adminRoutes from './routes/admin.js';
-import disputeRoutes from './routes/disputes.js';
-import blockRoutes from './routes/blocking.js';
-import promotionRoutes from './routes/promotions.js';
-import webhookRoutes from './routes/webhooks.js';
-import subscriptionRoutes from './routes/subscriptions.js';
-import settingsRoutes from './routes/settings.js';
+import { ensureLoaded } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const app = express();
 const server = createServer(app);
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, 'uploads');
 const io = new Server(server, {
@@ -43,15 +24,6 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
   },
 });
-
-['uploads', 'logs'].forEach(dir => {
-  const p = dir === 'uploads' ? UPLOADS_DIR : join(__dirname, dir);
-  if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
-});
-
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '10mb' }));
-app.use('/uploads', express.static(UPLOADS_DIR));
 
 const frontendDist = join(__dirname, '..', 'dist');
 if (process.env.NODE_ENV === 'production' && fs.existsSync(frontendDist)) {
@@ -63,32 +35,6 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(frontendDist)) {
     res.redirect('/Tradehub/');
   });
 }
-
-app.use('/api', apiLimiter);
-
-app.use('/api/auth', authRoutes);
-app.use('/api/items', itemRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/payments', paymentRoutes);
-app.use('/api/reviews', reviewRoutes);
-app.use('/api/upload', uploadRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/templates', templateRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/disputes', disputeRoutes);
-app.use('/api/blocking', blockRoutes);
-app.use('/api/promotions', promotionRoutes);
-app.use('/api/webhooks', webhookRoutes);
-app.use('/api/subscription', subscriptionRoutes);
-app.use('/api/settings', settingsRoutes);
-
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
-
-app.use(notFound);
-app.use(errorHandler);
 
 const onlineUsers = new Map();
 
@@ -184,7 +130,10 @@ io.on('connection', (socket) => {
 startScheduler();
 
 const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => {
-  logger.info(`TradeHub API running on http://localhost:${PORT}`);
-  logger.info(`WebSocket ready on port ${PORT}`);
+
+ensureLoaded().then(() => {
+  server.listen(PORT, () => {
+    logger.info(`TradeHub API running on http://localhost:${PORT}`);
+    logger.info(`WebSocket ready on port ${PORT}`);
+  });
 });

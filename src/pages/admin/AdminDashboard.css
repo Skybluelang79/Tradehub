@@ -527,6 +527,33 @@
   line-height: 1;
 }
 
+.health-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surface, rgba(255, 255, 255, 0.03));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.health-row span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.health-row strong {
+  font-size: 15px;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
 @media (max-width: 1200px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);

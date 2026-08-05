@@ -16,9 +16,9 @@ dist-ssr
 .env.local
 .env.*.local
 server/node_modules
-server/*.db
-server/*.db-shm
-server/*.db-wal
+*.db
+*.db-shm
+*.db-wal
 server/uploads/*
 !server/uploads/.gitkeep
 
@@ -32,3 +32,6 @@ server/uploads/*
 *.njsproj
 *.sln
 *.sw?
+
+# Local Netlify folder
+.netlify

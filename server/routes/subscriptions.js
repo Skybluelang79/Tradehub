@@ -125,7 +125,6 @@ router.post('/cancel', authenticateToken, (req, res) => {
 router.get('/benefits', authenticateToken, (req, res) => {
   try {
     const sub = getSubscription(req.user.id);
-    const plan = PLANS[sub.plan] || PLANS.free;
 
     const isTrial = sub.status === 'trial' && sub.trial_end && new Date(sub.trial_end) > new Date();
     const effectivePlan = isTrial ? 'premium' : sub.plan;

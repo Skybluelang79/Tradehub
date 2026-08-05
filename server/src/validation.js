@@ -16,6 +16,11 @@ export const updateProfileSchema = z.object({
   bio: z.string().max(500).optional(),
   phone: z.string().max(20).optional(),
   avatar: z.string().url().optional().or(z.literal('')),
+  location: z.object({
+    lat: z.number().min(-90).max(90).optional(),
+    lng: z.number().min(-180).max(180).optional(),
+    address: z.string().max(200).optional(),
+  }).optional(),
 });
 
 export const changePasswordSchema = z.object({

@@ -16,6 +16,97 @@
   display: none;
 }
 
+.extra-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px 8px;
+}
+
+.filter-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+.filter-panel {
+  flex: 1 1 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  animation: slideUp 0.2s ease;
+}
+
+.filter-panel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-panel-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.filter-price-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-price-input {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+}
+
+.filter-price-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.filter-price-sep {
+  color: var(--text-tertiary);
+}
+
+.filter-condition-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-clear {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
 .filter-chip {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -337,6 +428,52 @@
 
 .mini-item-price--sale {
   color: var(--warning);
+}
+
+.gift-mall-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: calc(100% - 32px);
+  margin: 16px;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--secondary), var(--primary));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: white;
+  text-align: left;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+
+.gift-mall-banner:hover {
+  transform: translateY(-2px);
+}
+
+.gift-mall-banner-icon {
+  font-size: 28px;
+}
+
+.gift-mall-banner-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gift-mall-banner-text strong {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.gift-mall-banner-text small {
+  font-size: 12px;
+  opacity: 0.85;
+}
+
+.gift-mall-banner-arrow {
+  font-size: 22px;
+  opacity: 0.9;
 }
 
 .mini-item-price-original {
