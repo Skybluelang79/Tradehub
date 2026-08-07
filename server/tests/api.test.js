@@ -135,7 +135,7 @@ describe('Admin Dashboard', () => {
   beforeAll(async () => {
     const login = await supertest(app)
       .post('/api/admin/login')
-      .send({ email: 'admin@tradehub.com', password: 'admin123' });
+      .send({ email: 'admin@tradehub.com', password: process.env.ADMIN_PASSWORD || 'admin123' });
     adminToken = login.body.token;
     expect(adminToken).toBeTruthy();
   });

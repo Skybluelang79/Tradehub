@@ -4,6 +4,7 @@ import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import validate, { createDisputeSchema } from '../src/validation.js';
+import { refundTxn } from './payments.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -111,7 +112,7 @@ router.get('/:id', authenticateToken, (req, res) => {
   }
 });
 
-router.put('/:id/resolve', adminAuth, (req, res) => {
+router.put('/:id/resolve', adminAuth, async (req, res) => {
   try {
     const { resolution, action } = req.body;
     if (!['refund_buyer', 'release_seller'].includes(action)) {
@@ -133,16 +134,8 @@ router.put('/:id/resolve', adminAuth, (req, res) => {
     const netCents = amountCents - feeCents;
 
     if (action === 'refund_buyer') {
-      if (txn.status === 'completed') {
-        const w = getWallet(txn.seller_id);
-        const available = Math.max(0, w.available_cents - netCents);
-        const lifetime = Math.max(0, w.lifetime_cents - netCents);
-        db.prepare("UPDATE wallets SET available_cents = ?, lifetime_cents = ?, updated_at = datetime('now') WHERE user_id = ?")
-          .run(available, lifetime, txn.seller_id);
-      }
-      db.prepare("UPDATE transactions SET status = 'refunded', completed_at = NULL WHERE id = ?").run(dispute.transaction_id);
-      db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
-      notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved. Payment of $${txn.amount} has been refunded to your balance.`);
+      await refundTxn(txn);
+      notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved. Payment of $${txn.amount} has been refunded.`);
       notify(txn.seller_id, 'system', 'Dispute Resolved', `The dispute for "${txn.item_title}" was resolved in the buyer's favor.`);
     } else if (action === 'release_seller') {
       if (txn.status !== 'completed') {

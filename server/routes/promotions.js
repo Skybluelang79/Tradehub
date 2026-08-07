@@ -7,6 +7,45 @@ import logger from '../src/logger.js';
 
 const router = Router();
 
+export function validateAndApplyPromo(code, amount) {
+  if (!code || !String(code).trim()) return { discount: 0, promo: null };
+
+  const promo = db.prepare(`
+    SELECT * FROM promotions
+    WHERE code = ? AND active = 1
+    AND (max_uses = 0 OR used_count < max_uses)
+    AND (expires_at IS NULL OR expires_at > datetime('now'))
+  `).get(String(code).trim().toUpperCase());
+
+  if (!promo) {
+    const err = new Error('Invalid or expired promotion code');
+    err.status = 400;
+    throw err;
+  }
+
+  if (promo.min_purchase && amount < promo.min_purchase) {
+    const err = new Error(`Minimum purchase of $${promo.min_purchase} required`);
+    err.status = 400;
+    throw err;
+  }
+
+  let discount = 0;
+  if (promo.discount_type === 'percentage') {
+    discount = amount * (promo.discount_value / 100);
+    discount = Math.min(discount, amount);
+  } else {
+    discount = Math.min(promo.discount_value, amount);
+  }
+  discount = Math.round(discount * 100) / 100;
+
+  db.prepare('UPDATE promotions SET used_count = used_count + 1 WHERE id = ?').run(promo.id);
+  if (promo.max_uses > 0 && promo.used_count + 1 >= promo.max_uses) {
+    db.prepare('UPDATE promotions SET active = 0 WHERE id = ?').run(promo.id);
+  }
+
+  return { discount, promo };
+}
+
 router.post('/', authenticateToken, validate(createPromotionSchema), (req, res) => {
   try {
     const { code, discount_type, discount_value, max_uses, expires_at, min_purchase } = req.validatedBody;

@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
+import { requiredEnv } from '../src/env.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'tradehub-secret-key-change-in-production-2026';
+const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
 
 export function adminAuth(req, res, next) {
   const token = req.headers['authorization']?.split(' ')[1];

@@ -9,6 +9,15 @@ export default defineConfig({
   base,
   build: {
     outDir,
+    rolldownOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/react')) return 'react';
+          if (id.includes('node_modules/socket.io-client') || id.includes('node_modules/engine.io-client')) return 'socket';
+          if (id.includes('node_modules/stripe')) return 'stripe';
+        },
+      },
+    },
   },
   server: {
     host: '0.0.0.0',

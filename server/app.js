@@ -1,11 +1,13 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { join } from 'path';
 import fs from 'fs';
 import { __dirname } from './src/paths.js';
 import { errorHandler, notFound } from './src/errorHandler.js';
 import { apiLimiter } from './src/rateLimiter.js';
+import { allowedOrigins } from './src/env.js';
 
 import authRoutes from './routes/auth.js';
 import itemRoutes from './routes/items.js';
@@ -24,16 +26,21 @@ import webhookRoutes from './routes/webhooks.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import payoutRoutes from './routes/payouts.js';
 import settingsRoutes from './routes/settings.js';
+import followRoutes from './routes/follows.js';
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, 'uploads');
 const USE_BLOB = process.env.NETLIFY === 'true' || process.env.DB_BLOB === 'true' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 const app = express();
 
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '10mb' }));
+app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+app.use(cors({
+  origin: allowedOrigins(),
+  credentials: true,
+}));
+app.use(express.json({ limit: '1mb' }));
 
 if (USE_BLOB) {
   app.get('/uploads/:filename', async (req, res, next) => {
@@ -77,6 +84,7 @@ app.use('/api/webhooks', webhookRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/payouts', payoutRoutes);
+app.use('/api/follows', followRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

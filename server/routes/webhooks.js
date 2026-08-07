@@ -9,15 +9,16 @@ const router = express.Router();
 router.post('/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
 
-  if (!webhookSecret) {
-    logger.warn('Stripe webhook secret not configured, skipping verification');
-    return res.status(200).json({ received: true });
+  if (!webhookSecret || !stripeSecretKey) {
+    logger.error('Stripe webhook rejected: STRIPE_WEBHOOK_SECRET / STRIPE_SECRET_KEY not configured');
+    return res.status(503).json({ error: 'Stripe not configured' });
   }
 
   let event;
   try {
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_placeholder');
+    const stripe = new Stripe(stripeSecretKey);
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
   } catch (err) {
     logger.error(`Stripe webhook signature verification failed: ${err.message}`);
@@ -28,19 +29,21 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
     switch (event.type) {
       case 'payment_intent.succeeded': {
         const intent = event.data.object;
-        const txn = db.prepare(
+        const txns = db.prepare(
           'SELECT * FROM transactions WHERE stripe_payment_intent_id = ?'
-        ).get(intent.id);
-        if (txn && txn.status === 'awaiting_payment') {
-          db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
-          db.prepare(`
-            INSERT INTO notifications (id, user_id, type, title, body)
-            VALUES (?, ?, 'payment', 'Payment Received', ?)
-          `).run(
-            crypto.randomUUID(),
-            txn.buyer_id,
-            `Payment of $${txn.amount} for "${txn.item_title}" was received and is held in escrow.`
-          );
+        ).all(intent.id);
+        for (const txn of txns) {
+          if (txn.status === 'awaiting_payment') {
+            db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
+            db.prepare(`
+              INSERT INTO notifications (id, user_id, type, title, body)
+              VALUES (?, ?, 'payment', 'Payment Received', ?)
+            `).run(
+              crypto.randomUUID(),
+              txn.buyer_id,
+              `Payment of $${txn.amount} for "${txn.item_title}" was received and is held in escrow.`
+            );
+          }
         }
         logger.info(`Payment succeeded: ${intent.id}`);
         break;
@@ -60,14 +63,24 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
         const charge = event.data.object;
         const intentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
         if (intentId) {
-          const txn = db.prepare(
+          const txns = db.prepare(
             'SELECT * FROM transactions WHERE stripe_payment_intent_id = ?'
-          ).get(intentId);
-          if (txn) {
-            db.prepare("UPDATE transactions SET status = 'refunded' WHERE stripe_payment_intent_id = ?").run(intentId);
+          ).all(intentId);
+          for (const txn of txns) {
+            if (txn.status === 'refunded') continue;
+            if (txn.status === 'completed') {
+              db.prepare('UPDATE wallets SET available_cents = MAX(0, available_cents - ?), lifetime_cents = MAX(0, lifetime_cents - ?) WHERE user_id = ?')
+                .run(Math.round(txn.net_amount * 100), Math.round(txn.net_amount * 100), txn.seller_id);
+            }
+            if (txn.credit_cents > 0) {
+              const w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(txn.buyer_id);
+              if (w) {
+                db.prepare('UPDATE wallets SET credit_cents = credit_cents + ?, updated_at = datetime(\'now\') WHERE user_id = ?')
+                  .run(txn.credit_cents, txn.buyer_id);
+              }
+            }
+            db.prepare("UPDATE transactions SET status = 'refunded', completed_at = NULL WHERE id = ?").run(txn.id);
             db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
-            db.prepare("UPDATE wallets SET available_cents = MAX(0, available_cents - ?), lifetime_cents = MAX(0, lifetime_cents - ?) WHERE user_id = ?")
-              .run(Math.round(txn.net_amount * 100), Math.round(txn.net_amount * 100), txn.seller_id);
           }
         }
         logger.info(`Charge refunded: ${charge.id}`);

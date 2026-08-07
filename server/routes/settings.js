@@ -14,6 +14,18 @@ function getUserSettings(userId) {
   return settings;
 }
 
+router.get('/platform', (req, res) => {
+  try {
+    const rows = db.prepare("SELECT key, value FROM platform_settings WHERE key IN ('site_name','support_email','maintenance_mode','platform_fee_percent','currency','terms_url','privacy_url','about_text')").all();
+    const settings = {};
+    rows.forEach((r) => { settings[r.key] = r.value; });
+    res.json({ settings });
+  } catch (err) {
+    logger.error('Get platform settings error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/', authenticateToken, (req, res) => {
   try {
     const settings = getUserSettings(req.user.id);

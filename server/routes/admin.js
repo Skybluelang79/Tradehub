@@ -6,12 +6,19 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { exportDatabase, replaceDatabase } from '../db.js';
 import { adminLimiter } from '../src/rateLimiter.js';
+import { sendNotificationEmail } from '../src/email.js';
+import { refundTxn } from './payments.js';
+import { requiredEnv } from '../src/env.js';
 import logger from '../src/logger.js';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const pkg = require('../package.json');
 
 const router = Router();
 const ADMIN_EMAIL = 'admin@tradehub.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-const JWT_SECRET = process.env.JWT_SECRET || 'tradehub-secret-key-change-in-production-2026';
+const ADMIN_PASSWORD = requiredEnv('ADMIN_PASSWORD', 'admin123');
+const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
 const USER_STATUSES = ['active', 'suspended', 'banned'];
 const TX_STATUSES = ['pending', 'completed', 'refunded', 'awaiting_payment', 'failed', 'cancelled'];
 
@@ -311,10 +318,36 @@ router.delete('/users/:id', adminAuth, (req, res) => {
     if (target.email === ADMIN_EMAIL) {
       return res.status(400).json({ error: 'Cannot delete the primary admin account' });
     }
-    db.prepare("UPDATE items SET status = 'removed' WHERE seller_id = ?").run(req.params.id);
-    logAudit(req.adminId, 'user_suspended', 'user', req.params.id);
+    const uid = target.id;
+    db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM notifications WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM favorites WHERE user_id = ? OR item_id IN (SELECT id FROM items WHERE seller_id = ?)').run(uid, uid);
+    db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM item_images WHERE item_id IN (SELECT id FROM items WHERE seller_id = ?)').run(uid);
+    db.prepare('DELETE FROM items WHERE seller_id = ?').run(uid);
+    db.prepare('DELETE FROM conversations WHERE buyer_id = ? OR seller_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(uid, uid);
+    db.prepare('DELETE FROM reviews WHERE reviewer_id = ? OR reviewee_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM payment_methods WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM templates WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM user_reports WHERE reported_user_id = ? OR reporter_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM reports WHERE reporter_id = ?').run(uid);
+    db.prepare('DELETE FROM disputes WHERE buyer_id = ? OR seller_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM subscriptions WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM wallets WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM payouts WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM gift_card_designs WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM gift_cards WHERE redeemed_by = ?').run(uid);
+    db.prepare('DELETE FROM transactions WHERE buyer_id = ? OR seller_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM email_verifications WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM password_resets WHERE email = ?').run(target.email);
+    db.prepare('DELETE FROM users WHERE id = ?').run(uid);
+    logAudit(req.adminId, 'user_deleted', 'user', uid, { email: target.email });
     res.json({ success: true });
   } catch (err) {
+    logger.error('Delete user error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -601,6 +634,170 @@ router.post('/backup', adminAuth, async (req, res) => {
     res.json({ success: true, size: buffer.length });
   } catch (err) {
     logger.error('Restore error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- Platform settings -----------------------------------------------------
+
+router.get('/settings', adminAuth, (req, res) => {
+  try {
+    const rows = db.prepare('SELECT * FROM platform_settings ORDER BY key').all();
+    const settings = {};
+    rows.forEach((r) => { settings[r.key] = r.value; });
+    res.json({ settings });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/settings', adminAuth, (req, res) => {
+  try {
+    const allowed = ['site_name', 'support_email', 'maintenance_mode', 'platform_fee_percent', 'currency', 'terms_url', 'privacy_url', 'about_text'];
+    const updated = [];
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        db.prepare(`UPDATE platform_settings SET value = ?, updated_at = datetime('now') WHERE key = ?`).run(String(req.body[key]), key);
+        updated.push(key);
+      }
+    }
+    logAudit(req.adminId, 'settings_update', 'platform_settings', null, { updated });
+    const rows = db.prepare('SELECT * FROM platform_settings ORDER BY key').all();
+    const settings = {};
+    rows.forEach((r) => { settings[r.key] = r.value; });
+    res.json({ success: true, settings });
+  } catch (err) {
+    logger.error('Update platform settings error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/system-info', adminAuth, async (req, res) => {
+  try {
+    const buf = await exportDatabase();
+    const pendingReports =
+      db.prepare("SELECT COUNT(*) as c FROM reports WHERE status = 'pending'").get().c +
+      db.prepare("SELECT COUNT(*) as c FROM user_reports WHERE status = 'pending'").get().c;
+    const mem = process.memoryUsage();
+    res.json({
+      version: pkg.version,
+      name: pkg.name,
+      node: process.version,
+      platform: process.platform,
+      arch: process.arch,
+      uptimeSeconds: Math.round(process.uptime()),
+      memory: { rss: mem.rss, heapUsed: mem.heapUsed },
+      env: process.env.NODE_ENV || 'development',
+      dbMode: process.env.NETLIFY === 'true' ? 'blob' : 'file',
+      dbSize: buf.length,
+      counts: {
+        users: db.prepare('SELECT COUNT(*) as c FROM users').get().c,
+        items: db.prepare('SELECT COUNT(*) as c FROM items').get().c,
+        transactions: db.prepare('SELECT COUNT(*) as c FROM transactions').get().c,
+        notifications: db.prepare('SELECT COUNT(*) as c FROM notifications').get().c,
+        pendingReports,
+      },
+      now: new Date().toISOString(),
+    });
+  } catch (err) {
+    logger.error('System info error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- Admin refund ----------------------------------------------------------
+
+router.post('/transactions/:txnId/refund', adminAuth, async (req, res) => {
+  try {
+    const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.txnId);
+    if (!txn) return res.status(404).json({ error: 'Transaction not found' });
+    if (txn.status === 'refunded') return res.status(400).json({ error: 'Transaction already refunded' });
+    await refundTxn(txn);
+    try {
+      const buyer = db.prepare('SELECT email FROM users WHERE id = ?').get(txn.buyer_id);
+      if (buyer?.email) {
+        sendNotificationEmail(buyer.email, 'Refund issued', `Your payment for "${txn.item_title}" has been refunded by TradeHub.`).catch(() => {});
+      }
+    } catch {}
+    logAudit(req.adminId, 'refund', 'transaction', txn.id, { amount: txn.amount });
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('Admin refund error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// ---- Admin promotions ------------------------------------------------------
+
+router.get('/promotions', adminAuth, (req, res) => {
+  try {
+    const promotions = db.prepare('SELECT * FROM promotions ORDER BY created_at DESC').all();
+    res.json({ promotions });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/promotions', adminAuth, (req, res) => {
+  try {
+    const { code, discount_type, discount_value, max_uses, expires_at, min_purchase } = req.body;
+    if (!code || !String(code).trim()) return res.status(400).json({ error: 'Code is required' });
+    if (!['percentage', 'fixed'].includes(discount_type)) {
+      return res.status(400).json({ error: 'discount_type must be percentage or fixed' });
+    }
+    const value = parseFloat(discount_value);
+    if (isNaN(value) || value <= 0) return res.status(400).json({ error: 'Valid discount_value is required' });
+    const existing = db.prepare('SELECT id FROM promotions WHERE code = ?').get(String(code).trim().toUpperCase());
+    if (existing) return res.status(409).json({ error: 'Promotion code already exists' });
+    const id = uuidv4();
+    db.prepare(`
+      INSERT INTO promotions (id, code, discount_type, discount_value, max_uses, expires_at, min_purchase)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(id, String(code).trim().toUpperCase(), discount_type, value, max_uses || 0, expires_at || null, min_purchase || null);
+    logAudit(req.adminId, 'promotion_create', 'promotion', id, { code: String(code).trim().toUpperCase() });
+    res.status(201).json({ promotion: db.prepare('SELECT * FROM promotions WHERE id = ?').get(id) });
+  } catch (err) {
+    logger.error('Create admin promotion error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/promotions/:id', adminAuth, (req, res) => {
+  try {
+    const existing = db.prepare('SELECT * FROM promotions WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Promotion not found' });
+    const { code, discount_type, discount_value, max_uses, expires_at, min_purchase, active } = req.body;
+    db.prepare(`
+      UPDATE promotions SET code = ?, discount_type = ?, discount_value = ?, max_uses = ?,
+        expires_at = ?, min_purchase = ?, active = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(
+      code?.trim().toUpperCase() ?? existing.code,
+      discount_type ?? existing.discount_type,
+      discount_value !== undefined ? parseFloat(discount_value) : existing.discount_value,
+      max_uses !== undefined ? max_uses : existing.max_uses,
+      expires_at !== undefined ? expires_at : existing.expires_at,
+      min_purchase !== undefined ? min_purchase : existing.min_purchase,
+      active !== undefined ? (active ? 1 : 0) : existing.active,
+      existing.id
+    );
+    logAudit(req.adminId, 'promotion_update', 'promotion', existing.id);
+    res.json({ promotion: db.prepare('SELECT * FROM promotions WHERE id = ?').get(existing.id) });
+  } catch (err) {
+    logger.error('Update admin promotion error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.delete('/promotions/:id', adminAuth, (req, res) => {
+  try {
+    const existing = db.prepare('SELECT * FROM promotions WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Promotion not found' });
+    db.prepare('DELETE FROM promotions WHERE id = ?').run(existing.id);
+    logAudit(req.adminId, 'promotion_delete', 'promotion', existing.id);
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('Delete admin promotion error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

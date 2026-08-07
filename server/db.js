@@ -388,6 +388,19 @@ function applySchema() {
       PRIMARY KEY (blocker_id, blocked_id)
     );
 
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id TEXT NOT NULL,
+      following_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (follower_id, following_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS platform_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT DEFAULT '',
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS promotions (
       id TEXT PRIMARY KEY,
       code TEXT UNIQUE NOT NULL,
@@ -502,6 +515,19 @@ function applySchema() {
       processed_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS carts (
+      user_id TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (user_id, item_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_carts_user ON carts(user_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at);
+    CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
+
     CREATE TABLE IF NOT EXISTS gift_card_designs (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -555,6 +581,28 @@ function migrate() {
   ensureColumn('gift_cards', 'voided_by', 'TEXT');
   ensureColumn('users', 'status', "TEXT DEFAULT 'active'");
   ensureColumn('users', 'banned_reason', "TEXT DEFAULT ''");
+  ensureColumn('transactions', 'promo_code', "TEXT DEFAULT ''");
+  ensureColumn('transactions', 'discount_amount', 'REAL DEFAULT 0');
+  ensureColumn('transactions', 'original_amount', 'REAL DEFAULT 0');
+  ensureColumn('transactions', 'credit_cents', 'INTEGER DEFAULT 0');
+
+  seedPlatformSettings();
+}
+
+function seedPlatformSettings() {
+  const defaults = {
+    site_name: 'TradeHub',
+    support_email: 'support@tradehub.app',
+    maintenance_mode: '0',
+    platform_fee_percent: '10',
+    currency: 'USD',
+    terms_url: '',
+    privacy_url: '',
+    about_text: '',
+  };
+  for (const [key, value] of Object.entries(defaults)) {
+    db.prepare('INSERT OR IGNORE INTO platform_settings (key, value) VALUES (?, ?)').run(key, value);
+  }
 }
 
 async function seedDemoIfNeeded() {

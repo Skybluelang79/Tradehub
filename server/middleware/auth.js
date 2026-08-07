@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken';
 import db from '../db.js';
+import { requiredEnv } from '../src/env.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'tradehub-secret-key-change-in-production-2026';
+const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
 
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -13,10 +14,17 @@ export function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, created_at FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, created_at FROM users WHERE id = ?').get(decoded.userId);
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
+    }
+
+    if (user.status === 'banned') {
+      return res.status(403).json({ error: 'Your account has been banned' });
+    }
+    if (user.status === 'suspended') {
+      return res.status(403).json({ error: 'Your account has been suspended' });
     }
 
     req.user = user;
@@ -36,8 +44,8 @@ export function optionalAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, created_at FROM users WHERE id = ?').get(decoded.userId);
-    req.user = user || null;
+    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, created_at FROM users WHERE id = ?').get(decoded.userId);
+    req.user = user && user.status === 'active' ? user : null;
   } catch (err) {
     req.user = null;
   }

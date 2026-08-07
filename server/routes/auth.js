@@ -8,13 +8,14 @@ import validate, {
   changePasswordSchema, forgotPasswordSchema, resetPasswordSchema,
 } from '../src/validation.js';
 import { authLimiter } from '../src/rateLimiter.js';
+import { requiredEnv } from '../src/env.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../src/email.js';
 import logger from '../src/logger.js';
 
 const router = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'tradehub-secret-key-change-in-production-2026';
-const REFRESH_SECRET = process.env.REFRESH_SECRET || 'tradehub-refresh-secret-change-in-production-2026';
+const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
+const REFRESH_SECRET = requiredEnv('REFRESH_SECRET', 'tradehub-refresh-secret-change-in-production-2026');
 
 function generateRefreshToken(userId) {
   const token = uuidv4();
@@ -84,6 +85,13 @@ router.post('/login', authLimiter, validate(loginSchema), (req, res) => {
     const validPassword = bcrypt.compareSync(password, user.password);
     if (!validPassword) {
       return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    if (user.status === 'banned') {
+      return res.status(403).json({ error: 'Your account has been banned', reason: user.banned_reason || '' });
+    }
+    if (user.status === 'suspended') {
+      return res.status(403).json({ error: 'Your account has been suspended', reason: user.banned_reason || '' });
     }
 
     const token = generateToken(user.id);

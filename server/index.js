@@ -8,8 +8,9 @@ import fs from 'fs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import app from './app.js';
-import db from './db.js';
+import db, { flushDB } from './db.js';
 import logger from './src/logger.js';
+import { requiredEnv, allowedOrigins } from './src/env.js';
 import { startScheduler } from './src/scheduler.js';
 import { ensureLoaded } from './db.js';
 
@@ -18,9 +19,10 @@ const __dirname = dirname(__filename);
 
 const server = createServer(app);
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, 'uploads');
+const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
 const io = new Server(server, {
   cors: {
-    origin: true,
+    origin: allowedOrigins(),
     methods: ['GET', 'POST'],
   },
 });
@@ -43,7 +45,7 @@ io.use((socket, next) => {
   if (!token) return next(new Error('Authentication required'));
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tradehub-secret-key-change-in-production-2026');
+    const decoded = jwt.verify(token, JWT_SECRET);
     const user = db.prepare('SELECT id, name, avatar FROM users WHERE id = ?').get(decoded.userId);
     if (!user) return next(new Error('User not found'));
     socket.user = user;
@@ -137,3 +139,26 @@ ensureLoaded().then(() => {
     logger.info(`WebSocket ready on port ${PORT}`);
   });
 });
+
+let shuttingDown = false;
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info(`Received ${signal}, shutting down gracefully...`);
+  try {
+    await new Promise((resolve) => {
+      server.close(resolve);
+      io.close();
+      setTimeout(resolve, 5000).unref();
+    });
+    await flushDB();
+    logger.info('Shutdown complete');
+    process.exit(0);
+  } catch (err) {
+    logger.error('Error during shutdown:', err);
+    process.exit(1);
+  }
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
