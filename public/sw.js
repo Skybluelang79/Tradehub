@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tradehub-v1';
+const CACHE_NAME = 'tradehub-v2';
 const BASE = self.registration.scope;
 
 const APP_SHELL = [

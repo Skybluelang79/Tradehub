@@ -92,12 +92,17 @@ function AppContent() {
       if (isAdminAuth) setIsAdminMode(true);
       else setShowAdminLogin(true);
     };
+    const onAdminSessionExpired = () => {
+      setIsAdminMode(false);
+      setShowAdminLogin(true);
+    };
     window.addEventListener('openAuthModal', onAuth);
     window.addEventListener('openNotifications', onNotifs);
     window.addEventListener('openFavorites', onFavs);
     window.addEventListener('openGiftMall', onMall);
     window.addEventListener('goHome', onHome);
     window.addEventListener('openAdminLogin', onAdminLogin);
+    window.addEventListener('adminSessionExpired', onAdminSessionExpired);
     return () => {
       window.removeEventListener('openAuthModal', onAuth);
       window.removeEventListener('openNotifications', onNotifs);
@@ -105,6 +110,7 @@ function AppContent() {
       window.removeEventListener('openGiftMall', onMall);
       window.removeEventListener('goHome', onHome);
       window.removeEventListener('openAdminLogin', onAdminLogin);
+      window.removeEventListener('adminSessionExpired', onAdminSessionExpired);
     };
   }, [setActiveTab, setSelectedItem, isAdminAuth]);
 

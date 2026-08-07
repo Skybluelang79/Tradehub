@@ -26,6 +26,10 @@ async function request(path, options = {}) {
   const data = await res.json();
 
   if (!res.ok) {
+    if (options.asAdmin && (res.status === 401 || res.status === 403)) {
+      localStorage.removeItem('tradehub_admin_token');
+      window.dispatchEvent(new CustomEvent('adminSessionExpired'));
+    }
     throw new Error(data.error || `Request failed: ${res.status}`);
   }
   return data;
