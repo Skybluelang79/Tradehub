@@ -529,10 +529,9 @@
 
 .checkout-method {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: 13px 14px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
   border-radius: var(--radius-md);
   border: 1.5px solid var(--border);
   background: var(--surface);
@@ -541,9 +540,49 @@
   transition: all var(--transition-fast);
 }
 
+.checkout-method:hover {
+  border-color: var(--text-tertiary);
+}
+
 .checkout-method.active {
   border-color: var(--accent);
   background: rgba(233, 69, 96, 0.06);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.checkout-method-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: white;
+}
+
+.checkout-method-icon.card {
+  background: linear-gradient(135deg, #1a1f71, #2b3990);
+}
+
+.checkout-method-icon.wallet {
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+}
+
+.checkout-method-icon.bank {
+  background: linear-gradient(135deg, #0f766e, #14b8a6);
+}
+
+.checkout-method-icon.crypto {
+  background: linear-gradient(135deg, #b45309, #f59e0b);
+}
+
+.checkout-method-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .checkout-method-name {
@@ -555,6 +594,31 @@
 .checkout-method-desc {
   font-size: 12px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkout-method-radio {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  flex-shrink: 0;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.checkout-method.active .checkout-method-radio {
+  border-color: var(--accent);
+}
+
+.checkout-method.active .checkout-method-radio::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .crypto-network-grid {

@@ -88,19 +88,25 @@ function AppContent() {
       setSelectedItem(null);
       setActiveTab('home');
     };
+    const onAdminLogin = () => {
+      if (isAdminAuth) setIsAdminMode(true);
+      else setShowAdminLogin(true);
+    };
     window.addEventListener('openAuthModal', onAuth);
     window.addEventListener('openNotifications', onNotifs);
     window.addEventListener('openFavorites', onFavs);
     window.addEventListener('openGiftMall', onMall);
     window.addEventListener('goHome', onHome);
+    window.addEventListener('openAdminLogin', onAdminLogin);
     return () => {
       window.removeEventListener('openAuthModal', onAuth);
       window.removeEventListener('openNotifications', onNotifs);
       window.removeEventListener('openFavorites', onFavs);
       window.removeEventListener('openGiftMall', onMall);
       window.removeEventListener('goHome', onHome);
+      window.removeEventListener('openAdminLogin', onAdminLogin);
     };
-  }, [setActiveTab, setSelectedItem]);
+  }, [setActiveTab, setSelectedItem, isAdminAuth]);
 
   const handleAdminNavigate = (path) => {
     setAdminPath(path);
@@ -200,22 +206,6 @@ function AppContent() {
 
   return (
     <div className="app-container">
-      <button
-        className="admin-toggle-btn"
-        onClick={() => {
-          if (isAdminAuth) {
-            setIsAdminMode(true);
-          } else {
-            setShowAdminLogin(true);
-          }
-        }}
-        title={isAdminAuth ? 'Admin Panel' : 'Admin Login'}
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-        </svg>
-      </button>
-
       {!isAuthenticated && (
         <div className="auth-top-bar">
           <span className="auth-top-bar-text">Sign in to unlock all features</span>

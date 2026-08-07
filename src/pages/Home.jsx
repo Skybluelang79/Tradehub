@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Header } from '../components/layout';
 import { ItemsGrid, AdBanner, AdCard, AdPush, BrandSponsor, SafeTrading, ListForFree, PremiumSeller, SearchSuggestions, PullToRefresh } from '../components/features';
-import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon, FilterIcon } from '../components/ui/Icons';
+import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon, FilterIcon, ShieldIcon } from '../components/ui/Icons';
 import { useApp } from '../context';
 import { categories, distanceOptions, sortOptions, conditionOptions } from '../services/api';
 import { useDebounce } from '../hooks';
@@ -355,6 +355,14 @@ export default function Home() {
         <AdCard />
       </div>
       </PullToRefresh>
+
+      <footer className="home-footer">
+        <span className="home-footer-copy">© {new Date().getFullYear()} TradeHub</span>
+        <button className="home-footer-admin" onClick={() => window.dispatchEvent(new CustomEvent('openAdminLogin'))}>
+          <ShieldIcon size={13} />
+          Admin Login
+        </button>
+      </footer>
     </div>
   );
 }

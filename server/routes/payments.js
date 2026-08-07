@@ -36,7 +36,6 @@ const CRYPTO_NETWORK_META = {
 };
 
 function getCryptoNetworks() {
-  const fallback = process.env.CRYPTO_ADDRESS || 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh';
   const configured = {};
   try {
     Object.assign(configured, JSON.parse(process.env.CRYPTO_ADDRESSES || '{}'));
@@ -49,11 +48,17 @@ function getCryptoNetworks() {
     .split(',').map((s) => s.trim().toLowerCase()).filter(Boolean);
   if (list.length === 0) list.push('bitcoin');
   const hasAnyConfig = Object.keys(configured).length > 0;
-  return list.map((id) => {
+  const fallback = process.env.CRYPTO_ADDRESS;
+  const networks = list.map((id) => {
     const meta = CRYPTO_NETWORK_META[id] || { id, label: id.toUpperCase(), symbol: id.toUpperCase() };
     const address = configured[id] || (hasAnyConfig ? '' : fallback);
     return { id: meta.id, label: meta.label, symbol: meta.symbol, address, configured: !!configured[id] };
   }).filter((n) => n.address);
+  if (networks.length === 0) return [];
+  if (!hasAnyConfig && fallback) {
+    return networks.slice(0, 1).map((n) => ({ ...n, label: 'Crypto (unconfigured)', symbol: n.symbol }));
+  }
+  return networks;
 }
 
 function getCryptoPlaceholder() {

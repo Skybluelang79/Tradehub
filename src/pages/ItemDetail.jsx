@@ -76,6 +76,8 @@ export default function ItemDetail() {
   const [showAllReviews, setShowAllReviews] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [checkoutMethod, setCheckoutMethod] = useState('card');
+  const [availableMethods, setAvailableMethods] = useState(null);
+  const [walletCredit, setWalletCredit] = useState(0);
   const [giftCode, setGiftCode] = useState('');
   const [cryptoNetworks, setCryptoNetworks] = useState([]);
   const [cryptoNetwork, setCryptoNetwork] = useState('');
@@ -86,6 +88,8 @@ export default function ItemDetail() {
   const resetCheckout = () => {
     setShowCheckout(false);
     setCheckoutMethod('card');
+    setAvailableMethods(null);
+    setWalletCredit(0);
     setGiftCode('');
     setCryptoNetworks([]);
     setCryptoNetwork('');
@@ -104,12 +108,23 @@ export default function ItemDetail() {
     setCheckoutMethod('card');
     setCryptoNetwork('');
     api.payments.options().then((r) => {
-      const crypto = r.methods?.find((m) => m.id === 'crypto');
-      if (crypto?.details?.networks?.length) {
-        setCryptoNetworks(crypto.details.networks);
-        setCryptoNetwork(crypto.details.networks[0].id);
+      const methods = (r.methods || []).filter((m) => m.enabled !== false);
+      setAvailableMethods(methods);
+      if (methods.length) {
+        const preferred = ['card', 'gift_card', 'bank', 'crypto'].filter((id) => methods.some((m) => m.id === id));
+        setCheckoutMethod(preferred[0]);
       }
-    }).catch(() => {});
+      setWalletCredit(r.creditCents ?? methods.find((m) => m.id === 'gift_card')?.creditCents ?? 0);
+      const crypto = methods.find((m) => m.id === 'crypto');
+      const networks = crypto?.details?.networks || [];
+      setCryptoNetworks(networks);
+      setCryptoNetwork(networks[0]?.id || '');
+    }).catch(() => {
+      setAvailableMethods([
+        { id: 'card', name: 'Card / Stripe', enabled: true },
+        { id: 'gift_card', name: 'Gift Card / Store Credit', enabled: true },
+      ]);
+    });
     setShowCheckout(true);
   };
 
@@ -279,6 +294,59 @@ export default function ItemDetail() {
       setShowReviewModal(false);
       setReviewText('');
       setReviewRating(5);
+    }
+  };
+
+  const displayMethods = availableMethods ?? [
+    { id: 'card', name: 'Card / Stripe', enabled: true },
+    { id: 'gift_card', name: 'Gift Card / Store Credit', enabled: true },
+  ];
+
+  const renderMethodIcon = (id) => {
+    switch (id) {
+      case 'card':
+        return (
+          <span className="checkout-method-icon card">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+              <line x1="1" y1="10" x2="23" y2="10" />
+            </svg>
+          </span>
+        );
+      case 'gift_card':
+        return (
+          <span className="checkout-method-icon wallet">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" />
+              <path d="M3 5v14a2 2 0 0 0 2 2h16v-5" />
+              <path d="M18 12a2 2 0 0 0 0 4h4v-4z" />
+            </svg>
+          </span>
+        );
+      case 'bank':
+        return (
+          <span className="checkout-method-icon bank">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="3" y1="21" x2="21" y2="21" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+              <polygon points="2,4 12,1 22,4 12,7" />
+              <line x1="5" y1="10" x2="5" y2="21" />
+              <line x1="12" y1="10" x2="12" y2="21" />
+              <line x1="19" y1="10" x2="19" y2="21" />
+            </svg>
+          </span>
+        );
+      default:
+        return (
+          <span className="checkout-method-icon crypto">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M9.5 8.5h4.2a2.3 2.3 0 0 1 0 4.6H9.5z" />
+              <path d="M9.5 13.2h4.8a2.3 2.3 0 0 1 0 4.6H9.5z" />
+              <line x1="10.5" y1="8.5" x2="10.5" y2="17.8" />
+            </svg>
+          </span>
+        );
     }
   };
 
@@ -708,21 +776,26 @@ export default function ItemDetail() {
             <p className="checkout-sub">Payments are held in escrow until you confirm receipt.</p>
 
             <div className="checkout-methods">
-              {[
-                { id: 'card', name: 'Card / Stripe', desc: 'Credit, debit, Apple Pay' },
-                { id: 'bank', name: 'Bank Transfer', desc: 'Direct transfer, verified by platform' },
-                { id: 'crypto', name: 'Crypto', desc: 'BTC · ETH · USDT' },
-                { id: 'gift_card', name: 'Gift Card / Store Credit', desc: 'Use credit or a gift card code' },
-              ].map((m) => (
-                <button
-                  key={m.id}
-                  className={`checkout-method ${checkoutMethod === m.id ? 'active' : ''}`}
-                  onClick={() => setCheckoutMethod(m.id)}
-                >
-                  <span className="checkout-method-name">{m.name}</span>
-                  <span className="checkout-method-desc">{m.desc}</span>
-                </button>
-              ))}
+              {displayMethods.map((m) => {
+                const methodDesc =
+                  m.id === 'card' ? 'Credit, debit, Apple Pay' :
+                  m.id === 'gift_card' ? walletCredit > 0 ? `${formatPrice(walletCredit / 100)} available` : 'Use store credit or a gift card' :
+                  m.description || '';
+                return (
+                  <button
+                    key={m.id}
+                    className={`checkout-method ${checkoutMethod === m.id ? 'active' : ''}`}
+                    onClick={() => setCheckoutMethod(m.id)}
+                  >
+                    {renderMethodIcon(m.id)}
+                    <span className="checkout-method-text">
+                      <span className="checkout-method-name">{m.name}</span>
+                      <span className="checkout-method-desc">{methodDesc}</span>
+                    </span>
+                    <span className="checkout-method-radio" aria-hidden="true" />
+                  </button>
+                );
+              })}
             </div>
 
             {checkoutMethod === 'crypto' && cryptoNetworks.length > 0 && (

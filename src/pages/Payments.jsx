@@ -4,7 +4,7 @@ import { Badge, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
 import { GiftCardModal } from '../components/features';
 import { useToast } from '../components/ui/Toast';
-import { ShieldIcon, PlusIcon, CheckIcon, ClockIcon } from '../components/ui/Icons';
+import { ShieldIcon, PlusIcon, CheckIcon, ClockIcon, GiftIcon, TrendingUpIcon } from '../components/ui/Icons';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/client';
@@ -285,11 +285,37 @@ export default function Payments() {
       </div>
 
       {wallet && (
-        <div className="section">
-          <div className="section-header">
-            <h2 className="section-title">Wallet</h2>
-            <button className="wallet-redeem-btn" onClick={() => setShowRedeemModal(true)}>Redeem Gift Card</button>
+        <div className="pay-hero">
+          <div className="pay-hero-glow" aria-hidden="true" />
+          <div className="pay-hero-top">
+            <div>
+              <span className="pay-hero-label">Total Balance</span>
+              <div className="pay-hero-balance">{formatCents(wallet.available_cents + wallet.credit_cents)}</div>
+              <span className="pay-hero-sub">Store credit + available earnings</span>
+            </div>
+            <span className="pay-hero-shield" title="Escrow protected">
+              <ShieldIcon size={22} />
+            </span>
           </div>
+          <div className="pay-hero-actions">
+            <button className="pay-hero-btn" onClick={() => setShowRedeemModal(true)}>
+              <GiftIcon size={16} />
+              Redeem Gift Card
+            </button>
+            <button className="pay-hero-btn" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
+              <GiftIcon size={16} />
+              Gift Mall
+            </button>
+            <button className="pay-hero-btn" onClick={() => setShowPayoutModal(true)} disabled={!wallet || wallet.available_cents < 100}>
+              <TrendingUpIcon size={16} />
+              Payout
+            </button>
+          </div>
+        </div>
+      )}
+
+      {wallet && (
+        <div className="section">
           <div className="wallet-grid">
             <div className="wallet-cell">
               <span className="wallet-label">Store Credit</span>
@@ -313,17 +339,54 @@ export default function Payments() {
 
       <div className="section">
         <div className="section-header">
-          <h2 className="section-title">Gift Cards</h2>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="wallet-redeem-btn" onClick={() => setShowGiftCardModal(true)}>Browse Brands</button>
-            <button className="wallet-redeem-btn" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>Gift Mall</button>
-            <button className="wallet-redeem-btn" onClick={() => setShowRedeemModal(true)}>Redeem a Card</button>
+          <h2 className="section-title">Payment Methods</h2>
+          <span className="section-subtitle">Cards &amp; wallets</span>
+        </div>
+
+        {activeMethods.length === 0 && (
+          <div className="empty-state" style={{ padding: '20px' }}>
+            <p className="empty-text" style={{ marginBottom: 12 }}>No payment methods added yet. Add a card to check out faster.</p>
           </div>
+        )}
+
+        {activeMethods.map((method) => (
+          <div key={method.id} className="payment-card-item">
+            <div className={`card-brand-icon ${method.brand || method.type}`}>{(method.brand || method.type).toUpperCase()}</div>
+            <div className="card-details">
+              <div className="card-number">•••• •••• •••• {method.last4}</div>
+              <div className="card-expiry">Expires {method.exp_month}/{method.exp_year}</div>
+            </div>
+            {method.is_default && <span className="default-tag">Default</span>}
+            <div className="card-actions">
+              {!method.is_default && <button className="card-action-btn" onClick={() => handleSetDefault(method.id)}>Set Default</button>}
+              <button className="card-action-btn danger" onClick={() => handleRemoveCard(method.id)}>Remove</button>
+            </div>
+          </div>
+        ))}
+
+        <button className="add-card-btn" onClick={() => setShowAddModal(true)}>
+          <PlusIcon size={20} />
+          Add New Card
+        </button>
+        <p className="pay-trust-note">
+          <ShieldIcon size={12} />
+          Your card details are stored securely and never shared with sellers.
+        </p>
+      </div>
+
+      <div className="section">
+        <div className="section-header">
+          <h2 className="section-title">Gift Cards &amp; Store Credit</h2>
+          <button className="wallet-redeem-btn" onClick={() => setShowRedeemModal(true)}>Redeem</button>
         </div>
         <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
-          Browse our gift card brands, share your own card design, or redeem a gift card balance to your store credit.
+          Redeem a gift card to add store credit, or browse our gift card brands and the Gift Mall.
         </p>
-        <button className="wallet-redeem-btn wallet-browse-btn" onClick={() => setShowGiftCardModal(true)}>
+        <button className="wallet-redeem-btn wallet-browse-btn" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
+          <GiftIcon size={16} />
+          Browse Gift Mall
+        </button>
+        <button className="wallet-redeem-btn wallet-browse-btn" onClick={() => setShowGiftCardModal(true)} style={{ marginTop: 8 }}>
           View sample brand designs
         </button>
       </div>
@@ -366,38 +429,6 @@ export default function Payments() {
             </div>
           </>
         )}
-      </div>
-
-      <div className="section">
-        <div className="section-header">
-          <h2 className="section-title">Payment Methods</h2>
-        </div>
-
-        {activeMethods.length === 0 && (
-          <div className="empty-state" style={{ padding: '20px' }}>
-            <p className="empty-text" style={{ marginBottom: 12 }}>No payment methods added yet</p>
-          </div>
-        )}
-
-        {activeMethods.map((method) => (
-          <div key={method.id} className="payment-card-item">
-            <div className={`card-brand-icon ${method.brand || method.type}`}>{(method.brand || method.type).toUpperCase()}</div>
-            <div className="card-details">
-              <div className="card-number">•••• •••• •••• {method.last4}</div>
-              <div className="card-expiry">Expires {method.exp_month}/{method.exp_year}</div>
-            </div>
-            {method.is_default && <span className="default-tag">Default</span>}
-            <div className="card-actions">
-              {!method.is_default && <button className="card-action-btn" onClick={() => handleSetDefault(method.id)}>Set Default</button>}
-              <button className="card-action-btn danger" onClick={() => handleRemoveCard(method.id)}>Remove</button>
-            </div>
-          </div>
-        ))}
-
-        <button className="add-card-btn" onClick={() => setShowAddModal(true)}>
-          <PlusIcon size={20} />
-          Add New Card
-        </button>
       </div>
 
       <div className="section">
