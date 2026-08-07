@@ -35,3 +35,6 @@ server/uploads/*
 
 # Local Netlify folder
 .netlify
+
+# Local backups
+backups/
