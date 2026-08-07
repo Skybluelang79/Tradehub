@@ -10,10 +10,7 @@ import { sendNotificationEmail } from '../src/email.js';
 import { refundTxn } from './payments.js';
 import { requiredEnv } from '../src/env.js';
 import logger from '../src/logger.js';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const pkg = require('../package.json');
+import pkg from '../package.json' with { type: 'json' };
 
 const router = Router();
 const ADMIN_EMAIL = 'admin@tradehub.com';
