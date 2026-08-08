@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { ShieldIcon, BellIcon, LockIcon, GlobeIcon, PaletteIcon, SaveIcon } from './Icons.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import LanguageSwitcher from '../../components/ui/LanguageSwitcher.jsx';
+import { api } from '../../services/client.js';
+import { useToast } from '../../components/ui/Toast.jsx';
 import './AdminSettings.css';
 
 const STORAGE_KEY = 'tradehub_admin_settings';
@@ -11,6 +13,10 @@ const defaultSettings = {
   siteUrl: 'https://tradehub.app',
   supportEmail: 'support@tradehub.app',
   maintenanceMode: false,
+  currency: 'USD',
+  termsUrl: '',
+  privacyUrl: '',
+  aboutText: '',
   registrationEnabled: true,
   emailVerification: true,
   twoFactorAuth: false,
@@ -32,6 +38,40 @@ const defaultSettings = {
   cookiePreferences: false,
 };
 
+const BACKEND_KEYS = {
+  site_name: 'siteName',
+  support_email: 'supportEmail',
+  maintenance_mode: 'maintenanceMode',
+  platform_fee_percent: 'transactionFeePercent',
+  currency: 'currency',
+  terms_url: 'termsUrl',
+  privacy_url: 'privacyUrl',
+  about_text: 'aboutText',
+};
+
+const toServerPayload = (s) => ({
+  site_name: s.siteName,
+  support_email: s.supportEmail,
+  maintenance_mode: s.maintenanceMode ? '1' : '0',
+  platform_fee_percent: String(s.transactionFeePercent),
+  currency: s.currency,
+  terms_url: s.termsUrl,
+  privacy_url: s.privacyUrl,
+  about_text: s.aboutText,
+});
+
+const applyServerSettings = (s, server) => {
+  const next = { ...s };
+  for (const [serverKey, uiKey] of Object.entries(BACKEND_KEYS)) {
+    const v = server[serverKey];
+    if (v === undefined || v === null) continue;
+    if (uiKey === 'maintenanceMode') next[uiKey] = String(v) === '1' || v === true;
+    else if (uiKey === 'transactionFeePercent') next[uiKey] = parseFloat(v) || 0;
+    else next[uiKey] = String(v);
+  }
+  return next;
+};
+
 const AdminSettings = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState(() => {
@@ -42,7 +82,26 @@ const AdminSettings = () => {
       return defaultSettings;
     }
   });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const { addToast } = useToast();
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await api.admin.settingsGet();
+        if (!active) return;
+        setSettings((prev) => applyServerSettings(prev, data.settings || {}));
+      } catch (err) {
+        if (active) addToast(err.message || 'Failed to load settings', 'error');
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [addToast]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
@@ -56,10 +115,19 @@ const AdminSettings = () => {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-    setShowSaveModal(true);
-    setTimeout(() => setShowSaveModal(false), 2000);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const data = await api.admin.settingsUpdate(toServerPayload(settings));
+      setSettings((prev) => applyServerSettings(prev, data.settings || {}));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      setShowSaveModal(true);
+      setTimeout(() => setShowSaveModal(false), 2000);
+    } catch (err) {
+      addToast(err.message || 'Failed to save settings', 'error');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const tabs = [
@@ -76,11 +144,11 @@ const AdminSettings = () => {
       <div className="admin-page-header">
         <div className="header-left">
           <h1>Settings</h1>
-          <p>Configure your platform settings</p>
+          <p>{loading ? 'Loading settings…' : 'Configure your platform settings'}</p>
         </div>
-        <button className="btn-primary" onClick={handleSave}>
+        <button className="btn-primary" onClick={handleSave} disabled={loading || saving}>
           <SaveIcon size={16} />
-          Save Changes
+          {saving ? 'Saving…' : 'Save Changes'}
         </button>
       </div>
 
@@ -108,6 +176,7 @@ const AdminSettings = () => {
                   <input
                     type="text"
                     value={settings.siteName}
+                    disabled={loading}
                     onChange={(e) => handleChange('siteName', e.target.value)}
                   />
                 </div>
@@ -116,6 +185,7 @@ const AdminSettings = () => {
                   <input
                     type="url"
                     value={settings.siteUrl}
+                    disabled={loading}
                     onChange={(e) => handleChange('siteUrl', e.target.value)}
                   />
                 </div>
@@ -124,7 +194,44 @@ const AdminSettings = () => {
                   <input
                     type="email"
                     value={settings.supportEmail}
+                    disabled={loading}
                     onChange={(e) => handleChange('supportEmail', e.target.value)}
+                  />
+                </div>
+                <div className="setting-item">
+                  <label>Currency</label>
+                  <input
+                    type="text"
+                    value={settings.currency}
+                    disabled={loading}
+                    onChange={(e) => handleChange('currency', e.target.value)}
+                  />
+                </div>
+                <div className="setting-item">
+                  <label>Terms URL</label>
+                  <input
+                    type="url"
+                    value={settings.termsUrl}
+                    disabled={loading}
+                    onChange={(e) => handleChange('termsUrl', e.target.value)}
+                  />
+                </div>
+                <div className="setting-item">
+                  <label>Privacy URL</label>
+                  <input
+                    type="url"
+                    value={settings.privacyUrl}
+                    disabled={loading}
+                    onChange={(e) => handleChange('privacyUrl', e.target.value)}
+                  />
+                </div>
+                <div className="setting-item">
+                  <label>About Text</label>
+                  <textarea
+                    rows="3"
+                    value={settings.aboutText}
+                    disabled={loading}
+                    onChange={(e) => handleChange('aboutText', e.target.value)}
                   />
                 </div>
               </div>
@@ -139,6 +246,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.maintenanceMode}
+                      disabled={loading}
                       onChange={() => handleToggle('maintenanceMode')}
                     />
                     <span className="toggle-slider"></span>
@@ -153,6 +261,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.registrationEnabled}
+                      disabled={loading}
                       onChange={() => handleToggle('registrationEnabled')}
                     />
                     <span className="toggle-slider"></span>
@@ -167,6 +276,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.emailVerification}
+                      disabled={loading}
                       onChange={() => handleToggle('emailVerification')}
                     />
                     <span className="toggle-slider"></span>
@@ -190,6 +300,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.twoFactorAuth}
+                      disabled={loading}
                       onChange={() => handleToggle('twoFactorAuth')}
                     />
                     <span className="toggle-slider"></span>
@@ -203,6 +314,7 @@ const AdminSettings = () => {
                   <input
                     type="number"
                     value={settings.sessionTimeout}
+                    disabled={loading}
                     onChange={(e) => handleChange('sessionTimeout', parseInt(e.target.value))}
                   />
                 </div>
@@ -211,6 +323,7 @@ const AdminSettings = () => {
                   <input
                     type="number"
                     value={settings.maxLoginAttempts}
+                    disabled={loading}
                     onChange={(e) => handleChange('maxLoginAttempts', parseInt(e.target.value))}
                   />
                 </div>
@@ -219,6 +332,7 @@ const AdminSettings = () => {
                   <input
                     type="number"
                     value={settings.apiRateLimit}
+                    disabled={loading}
                     onChange={(e) => handleChange('apiRateLimit', parseInt(e.target.value))}
                   />
                 </div>
@@ -235,6 +349,7 @@ const AdminSettings = () => {
                   <input
                     type="number"
                     value={settings.itemsPerPage}
+                    disabled={loading}
                     onChange={(e) => handleChange('itemsPerPage', parseInt(e.target.value))}
                   />
                 </div>
@@ -243,6 +358,7 @@ const AdminSettings = () => {
                   <input
                     type="number"
                     value={settings.maxImagesPerItem}
+                    disabled={loading}
                     onChange={(e) => handleChange('maxImagesPerItem', parseInt(e.target.value))}
                   />
                 </div>
@@ -251,6 +367,7 @@ const AdminSettings = () => {
                   <input
                     type="number"
                     value={settings.maxListingPrice}
+                    disabled={loading}
                     onChange={(e) => handleChange('maxListingPrice', parseInt(e.target.value))}
                   />
                 </div>
@@ -268,6 +385,7 @@ const AdminSettings = () => {
                     type="number"
                     step="0.1"
                     value={settings.transactionFeePercent}
+                    disabled={loading}
                     onChange={(e) => handleChange('transactionFeePercent', parseFloat(e.target.value))}
                   />
                 </div>
@@ -280,6 +398,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.buyerProtectionEnabled}
+                      disabled={loading}
                       onChange={() => handleToggle('buyerProtectionEnabled')}
                     />
                     <span className="toggle-slider"></span>
@@ -302,6 +421,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.pushNotifications}
+                      disabled={loading}
                       onChange={() => handleToggle('pushNotifications')}
                     />
                     <span className="toggle-slider"></span>
@@ -316,6 +436,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.emailNotifications}
+                      disabled={loading}
                       onChange={() => handleToggle('emailNotifications')}
                     />
                     <span className="toggle-slider"></span>
@@ -330,6 +451,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.weeklyDigest}
+                      disabled={loading}
                       onChange={() => handleToggle('weeklyDigest')}
                     />
                     <span className="toggle-slider"></span>
@@ -344,6 +466,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.marketingEmails}
+                      disabled={loading}
                       onChange={() => handleToggle('marketingEmails')}
                     />
                     <span className="toggle-slider"></span>
@@ -367,6 +490,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.cookieConsentEnabled}
+                      disabled={loading}
                       onChange={() => handleToggle('cookieConsentEnabled')}
                     />
                     <span className="toggle-slider"></span>
@@ -381,6 +505,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.cookieAnalytics}
+                      disabled={loading}
                       onChange={() => handleToggle('cookieAnalytics')}
                     />
                     <span className="toggle-slider"></span>
@@ -395,6 +520,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.cookieMarketing}
+                      disabled={loading}
                       onChange={() => handleToggle('cookieMarketing')}
                     />
                     <span className="toggle-slider"></span>
@@ -409,6 +535,7 @@ const AdminSettings = () => {
                     <input
                       type="checkbox"
                       checked={settings.cookiePreferences}
+                      disabled={loading}
                       onChange={() => handleToggle('cookiePreferences')}
                     />
                     <span className="toggle-slider"></span>

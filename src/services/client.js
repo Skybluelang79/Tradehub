@@ -193,6 +193,8 @@ export const api = {
     auditLogs: (params = {}) => adminRequest(`/admin/audit-logs?${new URLSearchParams(params).toString()}`),
     exportCsv: (kind) => adminDownload(`/admin/export/${kind}`, `${kind}-${Date.now()}.csv`),
     broadcast: (data) => adminRequest('/admin/broadcast', { method: 'POST', body: JSON.stringify(data) }),
+    settingsGet: () => adminRequest('/admin/settings'),
+    settingsUpdate: (data) => adminRequest('/admin/settings', { method: 'PUT', body: JSON.stringify(data) }),
     backup: () => adminDownload('/admin/backup', `tradehub-backup-${Date.now()}.db`),
     restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.stringify(data) }),
   },
