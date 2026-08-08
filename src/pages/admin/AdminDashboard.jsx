@@ -17,7 +17,7 @@ const AdminDashboard = ({ onNavigate }) => {
   const { adminToken } = useAdmin();
   const { addToast } = useToast();
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !adminToken);
 
   const load = useCallback(() => {
     if (!adminToken) return;
