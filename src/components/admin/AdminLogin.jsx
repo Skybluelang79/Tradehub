@@ -12,7 +12,7 @@ export default function AdminLogin({ onClose, onSuccess }) {
     e.preventDefault();
     setLoading(true);
     await new Promise((r) => setTimeout(r, 500));
-    const ok = adminLogin(password);
+    const ok = await adminLogin(password);
     setLoading(false);
     if (ok) {
       if (onSuccess) onSuccess();
