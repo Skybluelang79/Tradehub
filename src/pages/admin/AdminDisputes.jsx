@@ -34,7 +34,10 @@ export default function AdminDisputes() {
   const [resolveNote, setResolveNote] = useState('');
 
   const refresh = useCallback(async () => {
-    if (!isAdminAuth) return;
+    if (!isAdminAuth) {
+      window.dispatchEvent(new CustomEvent('adminSessionExpired'));
+      return;
+    }
     setLoading(true);
     try {
       const r = await api.disputes.all();
