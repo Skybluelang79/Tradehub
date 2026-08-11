@@ -20,7 +20,10 @@ const AdminDashboard = ({ onNavigate }) => {
   const [loading, setLoading] = useState(() => !adminToken);
 
   const load = useCallback(() => {
-    if (!adminToken) return;
+    if (!adminToken) {
+      window.dispatchEvent(new CustomEvent('adminSessionExpired'));
+      return;
+    }
     let cancelled = false;
     api.admin.dashboard()
       .then((r) => { if (!cancelled) setData(r); })
