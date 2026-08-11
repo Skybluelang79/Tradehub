@@ -168,7 +168,7 @@
 
 .add-card-btn:hover {
   border-color: var(--accent);
-  background: rgba(233, 69, 96, 0.05);
+  background: rgba(15, 138, 99, 0.05);
 }
 
 .add-card-btn svg {
@@ -309,7 +309,7 @@
 
 .card-type-option.active {
   border-color: var(--accent);
-  background: rgba(233, 69, 96, 0.1);
+  background: rgba(15, 138, 99, 0.1);
 }
 
 .card-type-option span {

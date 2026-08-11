@@ -8,3 +8,4 @@ export * from './Icons';
 export { default as LanguageSwitcher } from './LanguageSwitcher';
 export { default as CookieConsent } from './CookieConsent';
 export { default as OnboardingGate } from './OnboardingGate';
+export { TradeHubLogo, TradeHubWordmark, TradeHubBrand } from './Logo';

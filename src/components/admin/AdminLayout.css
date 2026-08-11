@@ -114,7 +114,7 @@
 }
 
 .admin-exit-btn:hover {
-  background: rgba(233, 69, 96, 0.2);
+  background: rgba(15, 138, 99, 0.2);
   border-color: var(--accent);
   color: white;
 }

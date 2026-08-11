@@ -42,7 +42,7 @@ router.put('/', authenticateToken, (req, res) => {
       'notifications', 'dark_mode', 'location_enabled',
       'notif_messages', 'notif_price_drops', 'notif_followers', 'notif_boosts',
     ];
-    const allowed = [...booleanKeys, 'distance_unit', 'language', 'profile_visibility'];
+    const allowed = [...booleanKeys, 'distance_unit', 'language', 'profile_visibility', 'currency'];
 
     for (const key of allowed) {
       if (req.body[key] !== undefined) {

@@ -61,7 +61,6 @@
   "auth.noAccount": "Pas de compte ?",
   "auth.hasAccount": "Déjà un compte ?",
   "auth.resetInstructions": "Instructions envoyées",
-  "auth.demoCredentials": "Demo: demo@tradehub.com / demo123",
   "item.detail": "Détails",
   "item.messageSeller": "Contacter",
   "item.shareLocation": "Partager",

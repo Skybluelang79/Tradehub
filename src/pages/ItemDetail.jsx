@@ -85,6 +85,7 @@ export default function ItemDetail() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [checkoutError, setCheckoutError] = useState('');
+  const [showShareModal, setShowShareModal] = useState(false);
 
   const [bidAmount, setBidAmount] = useState('');
   const [bidBusy, setBidBusy] = useState(false);
@@ -286,6 +287,37 @@ export default function ItemDetail() {
   const showSale = hasSale && !saleEnded;
   const displayPrice = showSale ? selectedItem.salePrice : selectedItem.price;
 
+  const getItemShareUrl = () => {
+    try {
+      return `${window.location.origin}${window.location.pathname}?item=${encodeURIComponent(selectedItem.id)}`;
+    } catch {
+      return window.location.href;
+    }
+  };
+
+  const buildShareLinks = () => {
+    if (!selectedItem) return [];
+    const url = getItemShareUrl();
+    const title = selectedItem.title;
+    const price = formatPrice(displayPrice);
+    const text = `${title} — ${price} on TradeHub`;
+    return [
+      { id: 'facebook', name: 'Facebook', url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, color: '#1877F2' },
+      { id: 'x', name: 'X (Twitter)', url: `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, color: '#7A8599' },
+      { id: 'whatsapp', name: 'WhatsApp', url: `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`, color: '#25D366' },
+      { id: 'telegram', name: 'Telegram', url: `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`, color: '#26A5E4' },
+      { id: 'email', name: 'Email', url: `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(`${text}\n${url}`)}`, color: '#EA4335' },
+    ];
+  };
+
+  const handleSocialShare = (shareUrl) => {
+    window.open(shareUrl, '_blank', 'noopener,noreferrer,width=640,height=560');
+  };
+
+  const handleCopyLink = () => {
+    copyToClipboard(getItemShareUrl(), 'Link');
+  };
+
   const isAuction = !!selectedItem.isAuction;
   const auctionEnded = selectedItem.auctionEndsAt && new Date(selectedItem.auctionEndsAt) <= new Date(now);
   const auctionActive = isAuction && selectedItem.auctionStatus !== 'ended' && !auctionEnded;
@@ -456,7 +488,7 @@ export default function ItemDetail() {
           >
             <HeartIcon size={20} filled={isFavorite(selectedItem.id)} />
           </button>
-          <button className="header-btn" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={handleShare}>
+          <button className="header-btn" style={{ background: 'rgba(0,0,0,0.5)' }} onClick={() => setShowShareModal(true)}>
             <ShareIcon size={20} />
           </button>
         </div>
@@ -798,6 +830,52 @@ export default function ItemDetail() {
         </div>
       </Modal>
       
+      <Modal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        title="Share this listing"
+      >
+        <div className="share-sheet">
+          {navigator.share && (
+            <button className="share-sheet-primary" onClick={() => { handleShare(); setShowShareModal(false); }}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+              Share via device
+            </button>
+          )}
+          <div className="share-sheet-grid">
+            {buildShareLinks().map((opt) => (
+              <button
+                key={opt.id}
+                className="share-sheet-option"
+                style={{ '--brand': opt.color }}
+                onClick={() => handleSocialShare(opt.url)}
+              >
+                <span className="share-sheet-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    {opt.id === 'facebook' && <path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z" />}
+                    {opt.id === 'x' && <><path d="M4 4l16 16" /><path d="M20 4L4 20" /></>}
+                    {opt.id === 'whatsapp' && <><path d="M21 11.5a8.5 8.5 0 0 1-12.4 7.6L3 21l2-5.5A8.5 8.5 0 1 1 21 11.5z" /><path d="M9.5 9.5c.3 2 2 3.7 4 4l1.2-1.2 1.8 1" /></>}
+                    {opt.id === 'telegram' && <><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></>}
+                    {opt.id === 'email' && <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M22 7l-10 6L2 7" /></>}
+                  </svg>
+                </span>
+                <span className="share-sheet-name">{opt.name}</span>
+              </button>
+            ))}
+          </div>
+          <button className="share-sheet-copy" onClick={handleCopyLink}>
+            <CopyIcon size={18} />
+            Copy link
+          </button>
+        </div>
+      </Modal>
+
       {showLightbox && (
         <ImageLightbox
           images={selectedItem.images}

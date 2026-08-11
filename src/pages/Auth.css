@@ -24,7 +24,7 @@
 .auth-logo {
   width: 72px;
   height: 72px;
-  background: linear-gradient(135deg, var(--accent) 0%, #c73e54 100%);
+  background: linear-gradient(135deg, var(--gold), var(--gold-hover));
   border-radius: 20px;
   display: flex;
   align-items: center;
@@ -107,7 +107,7 @@
 .input-wrapper input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(233, 69, 96, 0.1);
+  box-shadow: 0 0 0 3px rgba(15, 138, 99, 0.1);
 }
 
 .input-wrapper input.error {
@@ -264,7 +264,7 @@
 
 .auth-submit-btn:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(233, 69, 96, 0.4);
+  box-shadow: 0 8px 24px rgba(15, 138, 99, 0.4);
 }
 
 .auth-submit-btn:disabled {
@@ -283,15 +283,6 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-.demo-hint {
-  text-align: center;
-  padding: 12px;
-  background: rgba(59, 130, 246, 0.1);
-  border-radius: 8px;
-  font-size: 12px;
-  color: #3b82f6;
 }
 
 .auth-footer {

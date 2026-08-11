@@ -1,24 +1,26 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --primary: #1A1A2E;
-  --secondary: #16213E;
-  --accent: #E94560;
-  --accent-hover: #FF5A75;
-  --success: #4ADE80;
-  --success-dark: #22C55E;
-  --warning: #FBBF24;
-  --error: #EF4444;
-  --background: #0F0F1A;
-  --background-secondary: #141428;
-  --surface: #1F1F2E;
-  --surface-hover: #2A2A3E;
-  --surface-active: #353550;
-  --text-primary: #FFFFFF;
-  --text-secondary: #A0A0B0;
-  --text-tertiary: #6B6B7B;
-  --border: #2A2A3E;
-  --border-light: #3A3A4E;
+  --primary: #131521;
+  --secondary: #1A1D2C;
+  --accent: #0F8A63;
+  --accent-hover: #14A077;
+  --gold: #C9A961;
+  --gold-hover: #DCC086;
+  --success: #34D399;
+  --success-dark: #2EC48B;
+  --warning: #F5C542;
+  --error: #EF5555;
+  --background: #0C0D14;
+  --background-secondary: #11131C;
+  --surface: #171A24;
+  --surface-hover: #1F2330;
+  --surface-active: #282D3D;
+  --text-primary: #F7F5F1;
+  --text-secondary: #A6ABB8;
+  --text-tertiary: #6E7380;
+  --border: #22262F;
+  --border-light: #313743;
   --overlay: rgba(0, 0, 0, 0.6);
   
   --radius-sm: 8px;
@@ -27,9 +29,9 @@
   --radius-xl: 20px;
   --radius-full: 9999px;
   
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.3);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.45);
   
   --transition-fast: 150ms ease;
   --transition-base: 200ms ease;
@@ -40,20 +42,22 @@
 }
 
 [data-theme="light"] {
-  --primary: #F0F0F5;
-  --secondary: #E8E8F0;
-  --accent: #E94560;
-  --accent-hover: #D63450;
-  --background: #F5F5FA;
-  --background-secondary: #EEEEF5;
+  --primary: #F1F3F0;
+  --secondary: #E5E9E4;
+  --accent: #0B7A55;
+  --accent-hover: #0A6A4A;
+  --gold: #A8883B;
+  --gold-hover: #93752F;
+  --background: #F7F9F6;
+  --background-secondary: #EFF2EE;
   --surface: #FFFFFF;
-  --surface-hover: #F0F0F5;
-  --surface-active: #E0E0E8;
-  --text-primary: #1A1A2E;
-  --text-secondary: #6B6B7B;
-  --text-tertiary: #9B9BAB;
-  --border: #E0E0E8;
-  --border-light: #D0D0D8;
+  --surface-hover: #F2F5F1;
+  --surface-active: #E0E5DF;
+  --text-primary: #161A18;
+  --text-secondary: #5E6A64;
+  --text-tertiary: #8B958E;
+  --border: #DFE5DF;
+  --border-light: #CDD5CD;
   --overlay: rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
@@ -361,8 +365,8 @@ button:hover .bell-icon {
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
-  background: linear-gradient(135deg, rgba(233, 69, 96, 0.1), rgba(255, 90, 117, 0.05));
-  border-bottom: 1px solid rgba(233, 69, 96, 0.2);
+  background: linear-gradient(135deg, rgba(15, 138, 99, 0.1), rgba(20, 160, 119, 0.05));
+  border-bottom: 1px solid rgba(15, 138, 99, 0.2);
 }
 
 .auth-top-bar-text {
@@ -754,8 +758,8 @@ button:hover .bell-icon {
 
 /* Live Preview */
 .live-preview {
-  background: linear-gradient(135deg, rgba(233,69,96,0.08), rgba(255,90,117,0.03));
-  border: 1px solid rgba(233,69,96,0.15);
+  background: linear-gradient(135deg, rgba(15,138,99,0.08), rgba(20,160,119,0.03));
+  border: 1px solid rgba(15,138,99,0.15);
   border-radius: var(--radius-lg);
   padding: 16px;
   margin-bottom: 16px;
@@ -869,7 +873,7 @@ button:hover .bell-icon {
   gap: 8px;
   padding: 8px 16px;
   background: var(--warning);
-  color: #1A1A2E;
+  color: #161A18;
   font-size: 12px;
   font-weight: 500;
   z-index: 200;

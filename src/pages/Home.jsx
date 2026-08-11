@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Header } from '../components/layout';
-import { ItemsGrid, AdBanner, AdCard, AdPush, BrandSponsor, SafeTrading, ListForFree, PremiumSeller, SearchSuggestions, PullToRefresh } from '../components/features';
+import { ItemsGrid, AdBanner, AdCard, AdPush, BrandSponsor, SafeTrading, ListForFree, PremiumSeller, SearchSuggestions, PullToRefresh, SocialLinks } from '../components/features';
 import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon, FilterIcon, ShieldIcon } from '../components/ui/Icons';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
@@ -138,7 +138,7 @@ export default function Home() {
   return (
       <div className="page">
         <Header
-          title="TradeHub"
+          brand
           subtitle="Find local deals near you"
           rightComponent={
             <button className="header-btn" onClick={() => setShowSearch(!showSearch)}>
@@ -321,6 +321,7 @@ export default function Home() {
         <ListForFree onList={() => setActiveTab('add')} />
         <PremiumSeller />
         <AdBanner />
+        <SocialLinks />
 
         <button className="gift-mall-banner" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
           <span className="gift-mall-banner-icon">🎁</span>

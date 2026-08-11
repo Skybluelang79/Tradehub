@@ -584,6 +584,7 @@ function migrate() {
   ensureColumn('user_settings', 'notif_price_drops', 'INTEGER DEFAULT 1');
   ensureColumn('user_settings', 'notif_followers', 'INTEGER DEFAULT 1');
   ensureColumn('user_settings', 'notif_boosts', 'INTEGER DEFAULT 1');
+  ensureColumn('user_settings', 'currency', "TEXT DEFAULT 'USD'");
   ensureColumn('users', 'avatar', "TEXT DEFAULT ''");
   ensureColumn('users', 'bio', "TEXT DEFAULT ''");
   ensureColumn('users', 'phone', "TEXT DEFAULT ''");
@@ -634,24 +635,6 @@ function seedPlatformSettings() {
   }
 }
 
-async function seedDemoIfNeeded() {
-  const existingDemo = db.prepare('SELECT id FROM users WHERE email = ?').get('demo@tradehub.com');
-  if (existingDemo) return;
-
-  const bcrypt = await import('bcryptjs');
-  const { v4: uuidv4 } = await import('uuid');
-  const demoId = uuidv4();
-  const hashedPassword = bcrypt.default.hashSync('demo123', 10);
-  const avatar = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex';
-
-  db.prepare(`
-    INSERT INTO users (id, name, email, password, avatar, bio, phone, verified, rating, review_count)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(demoId, 'Alex Morgan', 'demo@tradehub.com', hashedPassword, avatar, 'Passionate collector and tech enthusiast', '+1 (555) 123-4567', 1, 4.8, 23);
-
-  console.log('Demo user seeded: demo@tradehub.com / demo123');
-}
-
 export function ensureLoaded() {
   if (initialized) return Promise.resolve();
   if (initPromise) return initPromise;
@@ -664,7 +647,6 @@ export function ensureLoaded() {
     if (!USE_BLOB) {
       rawDb = fs.existsSync(DB_PATH) ? new SQL.Database(fs.readFileSync(DB_PATH)) : new SQL.Database();
       applySchema();
-      await seedDemoIfNeeded();
       initialized = true;
       return;
     }
@@ -690,7 +672,6 @@ export function ensureLoaded() {
     if (!rawDb) rawDb = new SQL.Database();
 
     applySchema();
-    if (!hasData) await seedDemoIfNeeded();
     initialized = true;
 
     if (!hasData) {

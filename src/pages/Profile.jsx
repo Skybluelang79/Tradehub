@@ -13,6 +13,7 @@ import {
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import { useTranslation } from '../context/LanguageContext';
 import { formatDate, formatPrice } from '../utils/helpers';
 import { categories } from '../services/api';
 import AddListing from './AddListing';
@@ -44,6 +45,7 @@ export default function Profile() {
   } = useApp();
   const { user: authUser, logout, updateProfile, changePassword, deleteAccount, resendVerification } = useAuth();
   const { toggleTheme, setTheme } = useTheme();
+  const { setLang } = useTranslation();
   const { addToast } = useToast();
 
   const normalizeUser = (u) => {
@@ -111,7 +113,16 @@ export default function Profile() {
     distanceUnit: 'km',
     language: 'English',
     profileVisibility: 'public',
+    currency: 'USD',
   });
+
+  const SETTINGS_TABS = [
+    { id: 'general', label: 'General', icon: '⚙' },
+    { id: 'notifications', label: 'Notifications', icon: '🔔' },
+    { id: 'preferences', label: 'Preferences', icon: '✨' },
+    { id: 'searches', label: 'Saved Searches', icon: '🔍' },
+  ];
+  const [settingsTab, setSettingsTab] = useState('general');
 
   const [notifPrefs, setNotifPrefs] = useState({
     messages: true,
@@ -150,6 +161,20 @@ export default function Profile() {
     distanceUnit: 'distance_unit',
     language: 'language',
     profileVisibility: 'profile_visibility',
+    currency: 'currency',
+  };
+
+  const LANGUAGE_TO_CODE = {
+    English: 'en',
+    French: 'fr',
+    Spanish: 'es',
+    German: 'de',
+  };
+  const CODE_TO_LANGUAGE = {
+    en: 'English',
+    fr: 'French',
+    es: 'Spanish',
+    de: 'German',
   };
 
   const NOTIF_KEY_MAP = {
@@ -170,6 +195,7 @@ export default function Profile() {
         distanceUnit: s.distance_unit || 'km',
         language: s.language || 'English',
         profileVisibility: s.profile_visibility || 'public',
+        currency: s.currency || 'USD',
       });
       setNotifPrefs({
         messages: !!s.notif_messages,
@@ -178,6 +204,8 @@ export default function Profile() {
         boosts: !!s.notif_boosts,
       });
       if (s.dark_mode === 1) setTheme(true);
+      const langCode = LANGUAGE_TO_CODE[s.language];
+      if (langCode) setLang(langCode);
     }).catch(() => {});
   }, [authUser, setTheme]);
 
@@ -338,6 +366,10 @@ export default function Profile() {
   const handleSettingValue = (key, value) => {
     setSettings((prev) => ({ ...prev, [key]: value }));
     api.settings.update({ [SETTING_KEY_MAP[key]]: value }).catch(() => {});
+    if (key === 'language') {
+      const langCode = LANGUAGE_TO_CODE[value];
+      if (langCode) setLang(langCode);
+    }
     addToast('Preference saved', 'success');
   };
 

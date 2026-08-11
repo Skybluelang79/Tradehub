@@ -38,7 +38,7 @@
   border-radius: var(--radius-lg);
   opacity: 0;
   transition: opacity var(--transition-base);
-  background: linear-gradient(135deg, rgba(233,69,96,0.03), rgba(233,69,96,0));
+  background: linear-gradient(135deg, rgba(15,138,99,0.03), rgba(15,138,99,0));
   pointer-events: none;
 }
 
@@ -48,8 +48,8 @@
 
 .item-card:hover {
   transform: translateY(-6px) scale(1.01);
-  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(233, 69, 96, 0.12);
-  border-color: rgba(233, 69, 96, 0.15);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(15, 138, 99, 0.12);
+  border-color: rgba(15, 138, 99, 0.15);
 }
 
 .item-card:active {
@@ -105,7 +105,7 @@
   color: var(--accent);
   background: rgba(255, 255, 255, 0.95);
   border-color: transparent;
-  box-shadow: 0 2px 12px rgba(233, 69, 96, 0.3);
+  box-shadow: 0 2px 12px rgba(15, 138, 99, 0.3);
 }
 
 .item-favorite.active {
@@ -140,15 +140,15 @@
 
 .item-boosted-badge {
   padding: 4px 10px;
-  background: linear-gradient(135deg, var(--accent), #FF8A65);
+  background: linear-gradient(135deg, var(--gold), var(--gold-hover));
   border-radius: var(--radius-sm);
   font-size: 9px;
   font-weight: 700;
-  color: white;
+  color: #1C1A24;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-left: auto;
-  box-shadow: 0 2px 8px rgba(233, 69, 96, 0.3);
+  box-shadow: 0 2px 8px rgba(201, 169, 97, 0.3);
 }
 
 .item-sale-badge {
@@ -157,7 +157,7 @@
   border-radius: var(--radius-sm);
   font-size: 10px;
   font-weight: 700;
-  color: #1A1A2E;
+  color: #161A18;
   animation: pulse 2s infinite;
   box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
 }

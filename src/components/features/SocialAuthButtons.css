@@ -1,0 +1,67 @@
+.social-auth {
+  margin-top: 20px;
+}
+
+.social-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 14px;
+}
+
+.social-auth-divider::before,
+.social-auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.social-auth-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.social-auth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  transition: all var(--transition-base);
+}
+
+.social-auth-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--border-light);
+  transform: translateY(-1px);
+}
+
+.social-auth-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.social-auth-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-light);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: social-auth-spin 0.6s linear infinite;
+}
+
+@keyframes social-auth-spin {
+  to { transform: rotate(360deg); }
+}

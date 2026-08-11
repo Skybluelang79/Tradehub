@@ -61,6 +61,7 @@ export const api = {
   auth: {
     signup: (data) => request('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
     login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+    social: (data) => request('/auth/social', { method: 'POST', body: JSON.stringify(data) }),
     me: () => request('/auth/me'),
     updateProfile: (data) => request('/auth/me', { method: 'PUT', body: JSON.stringify(data) }),
     changePassword: (data) => request('/auth/change-password', { method: 'PUT', body: JSON.stringify(data) }),

@@ -46,6 +46,24 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  const socialLogin = useCallback(async (provider, token) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.auth.social({ provider, token });
+      setToken(data.token);
+      localStorage.setItem('tradehub_token', data.token);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Social login failed');
+      return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const signup = useCallback(async (userData) => {
     setIsLoading(true);
     setError(null);
@@ -133,6 +151,7 @@ export function AuthProvider({ children }) {
     error,
     login,
     signup,
+    socialLogin,
     logout,
     updateProfile,
     changePassword,

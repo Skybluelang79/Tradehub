@@ -56,9 +56,8 @@ cd server && npm run dev
 npm run dev
 ```
 
-The server seeds a demo account on first run:
+The server seeds an admin account on first run:
 
-- User: `demo@tradehub.com` / `demo123`
 - Admin: `admin@tradehub.com` / (the value of `ADMIN_PASSWORD`)
 
 ## Tests

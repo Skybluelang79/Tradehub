@@ -105,6 +105,81 @@ router.post('/login', authLimiter, validate(loginSchema), (req, res) => {
   }
 });
 
+router.post('/social', authLimiter, async (req, res) => {
+  try {
+    const { provider, token } = req.body || {};
+    if (!token) return res.status(400).json({ error: 'Token required' });
+    if (!['google', 'facebook'].includes(provider)) {
+      return res.status(400).json({ error: 'Unsupported provider' });
+    }
+
+    let profile;
+    if (provider === 'google') {
+      const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`);
+      if (!r.ok) return res.status(401).json({ error: 'Invalid Google token' });
+      const data = await r.json();
+      if (!data.email) return res.status(401).json({ error: 'Google account has no email' });
+      profile = {
+        email: data.email.toLowerCase(),
+        name: data.name || data.email.split('@')[0],
+        avatar: data.picture || '',
+        verified: data.email_verified ? 1 : 0,
+      };
+    } else {
+      const appId = requiredEnv('FACEBOOK_APP_ID', '');
+      const appSecret = requiredEnv('FACEBOOK_APP_SECRET', '');
+      if (!appId || !appSecret) return res.status(503).json({ error: 'Facebook login is not configured' });
+      const r = await fetch(
+        `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(token)}&access_token=${appId}|${appSecret}`
+      );
+      if (!r.ok) return res.status(401).json({ error: 'Invalid Facebook token' });
+      const { data } = await r.json();
+      if (!data.is_valid) return res.status(401).json({ error: 'Invalid Facebook token' });
+      const p = await fetch(`https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${encodeURIComponent(token)}`);
+      const fb = await p.json();
+      profile = {
+        email: (fb.email || '').toLowerCase(),
+        name: fb.name || 'TradeHub User',
+        avatar: fb.picture?.data?.url || '',
+        verified: 1,
+      };
+    }
+
+    if (!profile.email) return res.status(401).json({ error: 'Email is required from social provider' });
+
+    let user = db.prepare('SELECT * FROM users WHERE email = ?').get(profile.email);
+    if (!user) {
+      const id = uuidv4();
+      const hashedPassword = bcrypt.hashSync(`${uuidv4()}${Date.now()}`, 10);
+      db.prepare(`
+        INSERT INTO users (id, name, email, password, avatar, verified)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(id, profile.name, profile.email, hashedPassword, profile.avatar, profile.verified);
+      db.prepare('INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)').run(id);
+      db.prepare(`
+        INSERT OR IGNORE INTO subscriptions (id, user_id, plan, status, trial_end)
+        VALUES (?, ?, 'premium', 'trial', datetime('now', '+90 days'))
+      `).run(uuidv4(), id);
+      user = db.prepare('SELECT * FROM users WHERE email = ?').get(profile.email);
+    }
+
+    if (user.status === 'banned') {
+      return res.status(403).json({ error: 'Your account has been banned', reason: user.banned_reason || '' });
+    }
+    if (user.status === 'suspended') {
+      return res.status(403).json({ error: 'Your account has been suspended', reason: user.banned_reason || '' });
+    }
+
+    const authToken = generateToken(user.id);
+    const refreshToken = generateRefreshToken(user.id);
+    const { password: _, ...userWithoutPassword } = user;
+    res.json({ token: authToken, refreshToken, user: userWithoutPassword });
+  } catch (err) {
+    logger.error('Social login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/refresh', (req, res) => {
   try {
     const { refreshToken } = req.body;

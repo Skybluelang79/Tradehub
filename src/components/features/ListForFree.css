@@ -20,8 +20,8 @@
 }
 
 .list-free-card.hovered {
-  border-color: rgba(233, 69, 96, 0.3);
-  box-shadow: 0 8px 40px rgba(233, 69, 96, 0.08);
+  border-color: rgba(15, 138, 99, 0.3);
+  box-shadow: 0 8px 40px rgba(15, 138, 99, 0.08);
 }
 
 .list-free-bg {
@@ -130,7 +130,7 @@
 }
 
 .list-free-title-accent {
-  background: linear-gradient(135deg, var(--accent), #FF5A75, #FF8A65);
+  background: linear-gradient(135deg, var(--gold), var(--gold-hover), #EED9A0);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -163,12 +163,12 @@
 
 .list-free-dropzone:hover {
   border-color: var(--accent);
-  background: rgba(233, 69, 96, 0.04);
+  background: rgba(15, 138, 99, 0.04);
 }
 
 .list-free-dropzone.drag-over {
   border-color: var(--accent);
-  background: rgba(233, 69, 96, 0.08);
+  background: rgba(15, 138, 99, 0.08);
   transform: scale(1.01);
 }
 
@@ -181,7 +181,7 @@
 .dropzone-icon {
   width: 40px;
   height: 40px;
-  background: rgba(233, 69, 96, 0.1);
+  background: rgba(15, 138, 99, 0.1);
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
@@ -283,10 +283,10 @@
   gap: 10px;
   width: 100%;
   padding: 15px 24px;
-  background: linear-gradient(135deg, var(--accent), #FF5A75);
+  background: linear-gradient(135deg, var(--gold), var(--gold-hover));
   border: none;
   border-radius: var(--radius-md);
-  color: white;
+  color: #1C1A24;
   font-size: 15px;
   font-weight: 700;
   cursor: pointer;
@@ -311,7 +311,7 @@
 
 .list-free-cta:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 24px rgba(233, 69, 96, 0.35);
+  box-shadow: 0 6px 24px rgba(15, 138, 99, 0.35);
 }
 
 .list-free-cta:active {
@@ -388,7 +388,7 @@
 .list-free-step-num {
   width: 26px;
   height: 26px;
-  background: rgba(233, 69, 96, 0.1);
+  background: rgba(15, 138, 99, 0.1);
   border-radius: 50%;
   display: flex;
   align-items: center;

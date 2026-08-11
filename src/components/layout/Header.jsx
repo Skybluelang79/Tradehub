@@ -1,4 +1,5 @@
 import { SearchIcon, BellIcon, HeartIcon, ArrowLeftIcon, MoonIcon, HomeIcon } from '../ui/Icons';
+import { TradeHubBrand } from '../ui/Logo';
 import { useApp } from '../../context';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
@@ -13,6 +14,7 @@ export default function Header({
   leftComponent,
   rightComponent,
   transparent = false,
+  brand = false,
 }) {
   const variantClass = transparent ? 'header--transparent' : '';
   const { unreadNotificationsCount, activeTab, selectedItem } = useApp();
@@ -35,8 +37,19 @@ export default function Header({
             </button>
           )}
           {leftComponent}
-          {title && <h1 className="header-title">{title}</h1>}
-          {subtitle && <p className="header-subtitle">{subtitle}</p>}
+          {brand ? (
+            <div className="header-brand-wrap">
+              <button className="header-brand" onClick={goHome} aria-label="TradeHub home">
+                <TradeHubBrand size={36} textSize={24} />
+              </button>
+              {subtitle && <p className="header-subtitle">{subtitle}</p>}
+            </div>
+          ) : (
+            <>
+              {title && <h1 className="header-title">{title}</h1>}
+              {subtitle && <p className="header-subtitle">{subtitle}</p>}
+            </>
+          )}
         </div>
 
         <div className="header-right">

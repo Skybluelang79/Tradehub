@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
+import { TradeHubLogo } from '../components/ui';
+import { SocialAuthButtons } from '../components/features';
 import './Auth.css';
 
 export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
@@ -68,11 +70,7 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
       <div className="auth-container">
         <div className="auth-header">
           <div className="auth-logo">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2L2 7l10 5 10-5-10-5z" />
-              <path d="M2 17l10 5 10-5" />
-              <path d="M2 12l10 5 10-5" />
-            </svg>
+            <TradeHubLogo size={48} />
           </div>
           <h1>Welcome Back</h1>
           <p>Sign in to continue trading</p>
@@ -182,11 +180,9 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
               'Sign In'
             )}
           </button>
-
-          <div className="demo-hint">
-            <span>Demo: demo@tradehub.com / demo123</span>
-          </div>
         </form>
+
+        <SocialAuthButtons onClose={onClose} />
 
         <div className="auth-footer">
           <p>

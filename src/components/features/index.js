@@ -11,3 +11,5 @@ export { default as ListForFree } from './ListForFree';
 export { default as PremiumSeller } from './PremiumSeller';
 export { default as EncryptionBadge } from './EncryptionBadge';
 export { default as GiftCardModal } from './GiftCardModal';
+export { default as SocialLinks } from './SocialLinks';
+export { default as SocialAuthButtons } from './SocialAuthButtons';
