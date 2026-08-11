@@ -27,6 +27,19 @@ const conditionLabels = {
   fair: 'Fair',
 };
 
+const LANGUAGE_TO_CODE = {
+  English: 'en',
+  French: 'fr',
+  Spanish: 'es',
+  German: 'de',
+};
+const CODE_TO_LANGUAGE = {
+  en: 'English',
+  fr: 'French',
+  es: 'Spanish',
+  de: 'German',
+};
+
 const PLACEHOLDER_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72"%3E%3Crect fill="%231f1f2e" width="72" height="72" rx="8"/%3E%3Ctext x="36" y="40" text-anchor="middle" fill="%236B6B7B" font-size="11"%3E📦%3C/text%3E%3C/svg%3E';
 
 function firstImage(item) {
@@ -164,19 +177,6 @@ export default function Profile() {
     currency: 'currency',
   };
 
-  const LANGUAGE_TO_CODE = {
-    English: 'en',
-    French: 'fr',
-    Spanish: 'es',
-    German: 'de',
-  };
-  const CODE_TO_LANGUAGE = {
-    en: 'English',
-    fr: 'French',
-    es: 'Spanish',
-    de: 'German',
-  };
-
   const NOTIF_KEY_MAP = {
     messages: 'notif_messages',
     priceDrops: 'notif_price_drops',
@@ -207,7 +207,7 @@ export default function Profile() {
       const langCode = LANGUAGE_TO_CODE[s.language];
       if (langCode) setLang(langCode);
     }).catch(() => {});
-  }, [authUser, setTheme]);
+  }, [authUser, setTheme, setLang]);
 
   const userReviews = useMemo(() => getReviewsForUser(currentUser.id), [getReviewsForUser, currentUser.id]);
   const userRating = useMemo(() => getUserRating(currentUser.id), [getUserRating, currentUser.id]);
@@ -986,125 +986,170 @@ export default function Profile() {
       </Modal>
 
       <Modal isOpen={showSettingsModal} onClose={() => setShowSettingsModal(false)} title="Settings">
-        <div className="settings-list">
-          <div className="setting-item" onClick={() => handleSettingToggle('notifications')}>
-            <div className="setting-icon"><BellIcon size={20} /></div>
-            <div className="setting-text">
-              <div className="setting-title">Notifications</div>
-              <div className="setting-desc">Receive push notifications</div>
-            </div>
-            <div className={`toggle ${settings.notifications ? 'active' : ''}`} />
-          </div>
-          <div className="setting-item" onClick={() => handleSettingToggle('darkMode')}>
-            <div className="setting-icon"><MoonIcon size={20} /></div>
-            <div className="setting-text">
-              <div className="setting-title">Dark Mode</div>
-              <div className="setting-desc">Enable dark theme</div>
-            </div>
-            <div className={`toggle ${settings.darkMode ? 'active' : ''}`} />
-          </div>
-          <div className="setting-item" onClick={() => handleSettingToggle('locationEnabled')}>
-            <div className="setting-icon"><MapPinIcon size={20} /></div>
-            <div className="setting-text">
-              <div className="setting-title">Location</div>
-              <div className="setting-desc">Allow location access</div>
-            </div>
-            <div className={`toggle ${settings.locationEnabled ? 'active' : ''}`} />
-          </div>
+        <div className="settings-tabs">
+          {SETTINGS_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              className={`settings-tab ${settingsTab === tab.id ? 'active' : ''}`}
+              onClick={() => setSettingsTab(tab.id)}
+            >
+              <span className="settings-tab-icon">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-          <div className="settings-group-title">Notification Preferences</div>
-          {[
-            { key: 'messages', label: 'New Messages', desc: 'Notify when someone messages you' },
-            { key: 'priceDrops', label: 'Price Drops', desc: 'Alerts when a saved item drops in price' },
-            { key: 'followers', label: 'New Followers', desc: 'Notify when someone follows you' },
-            { key: 'boosts', label: 'Listing Boosts', desc: 'Updates about boosted listings' },
-          ].map(({ key, label, desc }) => (
-            <div key={key} className="setting-item" onClick={() => handleNotifToggle(key)}>
+        {settingsTab === 'general' && (
+          <div className="settings-list">
+            <div className="settings-group-title">General</div>
+            <div className="setting-item" onClick={() => handleSettingToggle('notifications')}>
               <div className="setting-icon"><BellIcon size={20} /></div>
               <div className="setting-text">
-                <div className="setting-title">{label}</div>
-                <div className="setting-desc">{desc}</div>
+                <div className="setting-title">Notifications</div>
+                <div className="setting-desc">Receive push notifications</div>
               </div>
-              <div className={`toggle ${notifPrefs[key] ? 'active' : ''}`} />
+              <div className={`toggle ${settings.notifications ? 'active' : ''}`} />
             </div>
-          ))}
-
-          <div className="settings-group-title">Saved Searches</div>
-          {savedSearches.length === 0 ? (
-            <div className="setting-item">
-              <div className="setting-icon"><ZapIcon size={20} /></div>
+            <div className="setting-item" onClick={() => handleSettingToggle('darkMode')}>
+              <div className="setting-icon"><MoonIcon size={20} /></div>
               <div className="setting-text">
-                <div className="setting-title">No saved searches</div>
-                <div className="setting-desc">Use the "Save" button in the search bar to get alerts on new matches.</div>
+                <div className="setting-title">Dark Mode</div>
+                <div className="setting-desc">Enable dark theme</div>
+              </div>
+              <div className={`toggle ${settings.darkMode ? 'active' : ''}`} />
+            </div>
+            <div className="setting-item" onClick={() => handleSettingToggle('locationEnabled')}>
+              <div className="setting-icon"><MapPinIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">Location</div>
+                <div className="setting-desc">Allow location access</div>
+              </div>
+              <div className={`toggle ${settings.locationEnabled ? 'active' : ''}`} />
+            </div>
+          </div>
+        )}
+
+        {settingsTab === 'notifications' && (
+          <div className="settings-list">
+            <div className="settings-group-title">Notification Preferences</div>
+            {[
+              { key: 'messages', label: 'New Messages', desc: 'Notify when someone messages you' },
+              { key: 'priceDrops', label: 'Price Drops', desc: 'Alerts when a saved item drops in price' },
+              { key: 'followers', label: 'New Followers', desc: 'Notify when someone follows you' },
+              { key: 'boosts', label: 'Listing Boosts', desc: 'Updates about boosted listings' },
+            ].map(({ key, label, desc }) => (
+              <div key={key} className="setting-item" onClick={() => handleNotifToggle(key)}>
+                <div className="setting-icon"><BellIcon size={20} /></div>
+                <div className="setting-text">
+                  <div className="setting-title">{label}</div>
+                  <div className="setting-desc">{desc}</div>
+                </div>
+                <div className={`toggle ${notifPrefs[key] ? 'active' : ''}`} />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {settingsTab === 'preferences' && (
+          <div className="settings-list">
+            <div className="settings-group-title">Preferences</div>
+            <div className="setting-item">
+              <div className="setting-icon"><MapPinIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">Distance Unit</div>
+                <div className="setting-desc">Measurement unit for distances</div>
+              </div>
+              <div className="segmented">
+                {['km', 'mi'].map((unit) => (
+                  <button
+                    key={unit}
+                    type="button"
+                    className={`segmented-btn ${settings.distanceUnit === unit ? 'active' : ''}`}
+                    onClick={() => handleSettingValue('distanceUnit', unit)}
+                  >
+                    {unit}
+                  </button>
+                ))}
               </div>
             </div>
-          ) : (
-            savedSearches.map((s) => {
-              const summary = [
-                s.query && `"${s.query}"`,
-                s.category || null,
-                s.min_price && s.max_price ? `$${s.min_price}–$${s.max_price}` : s.min_price ? `From $${s.min_price}` : s.max_price ? `Up to $${s.max_price}` : null,
-              ].filter(Boolean).join(' · ');
-              return (
-                <div key={s.id} className="setting-item">
-                  <div className="setting-icon"><ZapIcon size={20} /></div>
-                  <div className="setting-text">
-                    <div className="setting-title">{s.name}</div>
-                    <div className="setting-desc">{summary || 'General search'}</div>
-                  </div>
-                  <button className="delete-search-btn" onClick={() => removeSavedSearch(s.id)} aria-label="Delete search">
-                    <TrashIcon size={16} />
-                  </button>
-                </div>
-              );
-            })
-          )}
+            <div className="setting-item">
+              <div className="setting-icon"><GlobeIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">Language</div>
+                <div className="setting-desc">App language</div>
+              </div>
+              <select className="setting-select" value={settings.language} onChange={(e) => handleSettingValue('language', e.target.value)}>
+                <option value="English">English</option>
+                <option value="French">Français</option>
+                <option value="Spanish">Español</option>
+                <option value="German">Deutsch</option>
+              </select>
+            </div>
+            <div className="setting-item">
+              <div className="setting-icon"><span className="currency-icon">$</span></div>
+              <div className="setting-text">
+                <div className="setting-title">Currency</div>
+                <div className="setting-desc">Display currency for prices</div>
+              </div>
+              <select className="setting-select" value={settings.currency} onChange={(e) => handleSettingValue('currency', e.target.value)}>
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="CAD">CAD (C$)</option>
+                <option value="AUD">AUD (A$)</option>
+                <option value="JPY">JPY (¥)</option>
+              </select>
+            </div>
+            <div className="setting-item">
+              <div className="setting-icon"><ShieldIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">Profile Visibility</div>
+                <div className="setting-desc">Who can see your profile</div>
+              </div>
+              <select className="setting-select" value={settings.profileVisibility} onChange={(e) => handleSettingValue('profileVisibility', e.target.value)}>
+                <option value="public">Public</option>
+                <option value="contacts">Contacts</option>
+                <option value="private">Private</option>
+              </select>
+            </div>
+          </div>
+        )}
 
-          <div className="settings-group-title">Preferences</div>
-          <div className="setting-item">
-            <div className="setting-icon"><MapPinIcon size={20} /></div>
-            <div className="setting-text">
-              <div className="setting-title">Distance Unit</div>
-              <div className="setting-desc">Measurement unit for distances</div>
-            </div>
-            <div className="segmented">
-              {['km', 'mi'].map((unit) => (
-                <button
-                  key={unit}
-                  className={`segmented-btn ${settings.distanceUnit === unit ? 'active' : ''}`}
-                  onClick={() => handleSettingValue('distanceUnit', unit)}
-                >
-                  {unit}
-                </button>
-              ))}
-            </div>
+        {settingsTab === 'searches' && (
+          <div className="settings-list">
+            <div className="settings-group-title">Saved Searches</div>
+            {savedSearches.length === 0 ? (
+              <div className="setting-item">
+                <div className="setting-icon"><ZapIcon size={20} /></div>
+                <div className="setting-text">
+                  <div className="setting-title">No saved searches</div>
+                  <div className="setting-desc">Use the "Save" button in the search bar to get alerts on new matches.</div>
+                </div>
+              </div>
+            ) : (
+              savedSearches.map((s) => {
+                const summary = [
+                  s.query && `"${s.query}"`,
+                  s.category || null,
+                  s.min_price && s.max_price ? `$${s.min_price}–$${s.max_price}` : s.min_price ? `From $${s.min_price}` : s.max_price ? `Up to $${s.max_price}` : null,
+                ].filter(Boolean).join(' · ');
+                return (
+                  <div key={s.id} className="setting-item">
+                    <div className="setting-icon"><ZapIcon size={20} /></div>
+                    <div className="setting-text">
+                      <div className="setting-title">{s.name}</div>
+                      <div className="setting-desc">{summary || 'General search'}</div>
+                    </div>
+                    <button className="delete-search-btn" onClick={() => removeSavedSearch(s.id)} aria-label="Delete search">
+                      <TrashIcon size={16} />
+                    </button>
+                  </div>
+                );
+              })
+            )}
           </div>
-          <div className="setting-item">
-            <div className="setting-icon"><GlobeIcon size={20} /></div>
-            <div className="setting-text">
-              <div className="setting-title">Language</div>
-              <div className="setting-desc">App language</div>
-            </div>
-            <select className="setting-select" value={settings.language} onChange={(e) => handleSettingValue('language', e.target.value)}>
-              <option value="English">English</option>
-              <option value="French">Français</option>
-              <option value="Spanish">Español</option>
-              <option value="Dutch">Nederlands</option>
-            </select>
-          </div>
-          <div className="setting-item">
-            <div className="setting-icon"><ShieldIcon size={20} /></div>
-            <div className="setting-text">
-              <div className="setting-title">Profile Visibility</div>
-              <div className="setting-desc">Who can see your profile</div>
-            </div>
-            <select className="setting-select" value={settings.profileVisibility} onChange={(e) => handleSettingValue('profileVisibility', e.target.value)}>
-              <option value="public">Public</option>
-              <option value="contacts">Contacts</option>
-              <option value="private">Private</option>
-            </select>
-          </div>
-        </div>
+        )}
       </Modal>
 
       <Modal isOpen={showPrivacyModal} onClose={() => setShowPrivacyModal(false)} title="Privacy & Security">

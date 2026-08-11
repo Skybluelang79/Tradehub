@@ -607,6 +607,11 @@
   flex-shrink: 0;
 }
 
+.currency-icon {
+  font-size: 18px;
+  font-weight: 700;
+}
+
 .setting-text {
   flex: 1;
   min-width: 0;
@@ -1596,6 +1601,45 @@
 }
 
 /* ── Settings groups & controls ── */
+.settings-tabs {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border);
+  padding: 0 4px 12px;
+  margin-bottom: 8px;
+  overflow-x: auto;
+}
+
+.settings-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.settings-tab-icon {
+  font-size: 14px;
+}
+
+.settings-tab:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.settings-tab.active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+}
+
 .settings-group-title {
   font-size: 12px;
   font-weight: 600;

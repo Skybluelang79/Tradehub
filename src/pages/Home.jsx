@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Header } from '../components/layout';
-import { ItemsGrid, AdBanner, AdCard, AdPush, BrandSponsor, SafeTrading, ListForFree, PremiumSeller, SearchSuggestions, PullToRefresh, SocialLinks } from '../components/features';
+import { ItemsGrid, AdBanner, AdCard, AdPush, BrandSponsor, SafeTrading, ListForFree, PremiumSeller, SearchSuggestions, PullToRefresh, SocialLinks, CommunityFeed } from '../components/features';
 import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon, FilterIcon, ShieldIcon } from '../components/ui/Icons';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
@@ -322,6 +322,7 @@ export default function Home() {
         <PremiumSeller />
         <AdBanner />
         <SocialLinks />
+        <CommunityFeed items={items} onItemClick={setSelectedItem} />
 
         <button className="gift-mall-banner" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
           <span className="gift-mall-banner-icon">🎁</span>
