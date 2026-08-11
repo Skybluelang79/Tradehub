@@ -13,6 +13,11 @@ const PLANS = {
   pro: { name: 'Pro', price: 24.99, fee: 0.015, boosts: 5, maxListings: -1, badge: 'Pro Seller' },
 };
 
+const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
+const stripe = STRIPE_KEY && !STRIPE_KEY.includes('placeholder') ? new Stripe(STRIPE_KEY) : null;
+const IS_PROD = process.env.NODE_ENV === 'production';
+const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+
 function getSubscription(userId) {
   let sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);
   if (!sub) {
@@ -59,7 +64,7 @@ router.get('/plans', (req, res) => {
   }
 });
 
-router.post('/upgrade', authenticateToken, (req, res) => {
+router.post('/upgrade', authenticateToken, async (req, res) => {
   try {
     const { plan: targetPlan } = req.body;
     if (!targetPlan || !PLANS[targetPlan]) {
@@ -69,6 +74,35 @@ router.post('/upgrade', authenticateToken, (req, res) => {
     const sub = getSubscription(req.user.id);
     if (targetPlan === sub.plan) {
       return res.status(400).json({ error: `Already on the ${targetPlan} plan` });
+    }
+
+    // Paid plans require real payment in production. Create a Stripe Checkout
+    // session; the subscription is activated by the checkout.session.completed
+    // webhook. In development/demo mode the legacy free upgrade is kept so the
+    // feature can still be demonstrated without Stripe.
+    const isPaid = PLANS[targetPlan].price > 0;
+    if (isPaid && IS_PROD) {
+      if (!stripe) {
+        return res.status(503).json({ error: 'Paid subscriptions require Stripe to be configured' });
+      }
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription',
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: { name: `${PLANS[targetPlan].name} Seller Plan` },
+            recurring: { interval: 'month' },
+            unit_amount: Math.round(PLANS[targetPlan].price * 100),
+          },
+          quantity: 1,
+        }],
+        metadata: { userId: req.user.id, plan: targetPlan },
+        client_reference_id: req.user.id,
+        success_url: `${APP_URL}/profile?upgrade=success&plan=${targetPlan}`,
+        cancel_url: `${APP_URL}/profile?upgrade=cancelled`,
+        allow_promotion_codes: false,
+      });
+      return res.json({ requires_payment: true, checkoutUrl: session.url });
     }
 
     db.prepare(`

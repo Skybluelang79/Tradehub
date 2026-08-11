@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { Header } from '../components/layout';
 import { Avatar, Rating, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
@@ -14,6 +14,7 @@ import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { formatDate, formatPrice } from '../utils/helpers';
+import { categories } from '../services/api';
 import AddListing from './AddListing';
 import '../styles/globals.css';
 import './Profile.css';
@@ -36,7 +37,7 @@ function firstImage(item) {
 export default function Profile() {
   const {
     items, getReviewsForUser, getUserRating, setActiveTab,
-    deleteItem, boostItem, getUserListings,
+    deleteItem, updateItem, boostItem, getUserListings,
     getUserDrafts, getUserActiveListings, getItemAnalytics,
     conversations, getSoldItems, getTotalRevenue,
     deleteTemplate, templates,
@@ -88,6 +89,12 @@ export default function Profile() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(null);
   const [editItemId, setEditItemId] = useState(null);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showBulkEditModal, setShowBulkEditModal] = useState(false);
+  const [bulkForm, setBulkForm] = useState({ price: '', category: '', condition: '', quantity: '' });
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [showBoostModal, setShowBoostModal] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
@@ -112,6 +119,29 @@ export default function Profile() {
     followers: true,
     boosts: true,
   });
+
+  const [savedSearches, setSavedSearches] = useState([]);
+
+  const loadSavedSearches = useCallback(async () => {
+    try {
+      const { searches } = await api.searches.list();
+      setSavedSearches(searches || []);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (showSettingsModal) loadSavedSearches();
+  }, [showSettingsModal, loadSavedSearches]);
+
+  const removeSavedSearch = async (id) => {
+    try {
+      await api.searches.remove(id);
+      setSavedSearches((prev) => prev.filter((s) => s.id !== id));
+      addToast({ type: 'success', message: 'Search removed' });
+    } catch (err) {
+      addToast({ type: 'error', message: err.message });
+    }
+  };
 
   const SETTING_KEY_MAP = {
     notifications: 'notifications',
@@ -186,6 +216,55 @@ export default function Profile() {
     deleteItem(itemId);
     setShowDeleteConfirm(null);
     addToast('Listing deleted', 'success');
+  };
+
+  const toggleBulkMode = () => {
+    setBulkMode((m) => !m);
+    setSelectedIds([]);
+  };
+
+  const toggleSelectItem = (id) => {
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkBusy(true);
+    try {
+      await api.items.bulkDelete(selectedIds);
+      selectedIds.forEach((id) => deleteItem(id));
+      addToast({ type: 'success', message: `${selectedIds.length} listing${selectedIds.length > 1 ? 's' : ''} deleted` });
+      setShowBulkDeleteConfirm(false);
+      setSelectedIds([]);
+      setBulkMode(false);
+    } catch (err) {
+      addToast({ type: 'error', message: err.message });
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  const confirmBulkUpdate = async () => {
+    if (selectedIds.length === 0) return;
+    const updates = {};
+    if (bulkForm.price !== '') updates.price = Number(bulkForm.price);
+    if (bulkForm.category) updates.category = bulkForm.category;
+    if (bulkForm.condition) updates.condition = bulkForm.condition;
+    if (bulkForm.quantity !== '') updates.quantity = Number(bulkForm.quantity);
+    setBulkBusy(true);
+    try {
+      const res = await api.items.bulkUpdate(selectedIds, updates);
+      selectedIds.forEach((id) => updateItem(id, updates));
+      addToast({ type: 'success', message: `${res.updated} listing${res.updated > 1 ? 's' : ''} updated` });
+      setShowBulkEditModal(false);
+      setBulkForm({ price: '', category: '', condition: '', quantity: '' });
+      setSelectedIds([]);
+      setBulkMode(false);
+    } catch (err) {
+      addToast({ type: 'error', message: err.message });
+    } finally {
+      setBulkBusy(false);
+    }
   };
 
   const handleBoostItem = (itemId, days) => {
@@ -518,42 +597,77 @@ export default function Profile() {
                 </div>
               ) : (
                 <div className="listings-section">
-                  <h4 className="listings-section-title">
-                    Active ({userActiveItems.length})
-                  </h4>
-                  <div className="listings-list">
-                    {userActiveItems.map((item) => (
-                      <div key={item.id} className="listing-card">
-                        <img src={firstImage(item)} alt={item.title} className="listing-card-img" />
-                        <div className="listing-card-body">
-                          <h4 className="listing-card-title">{item.title}</h4>
-                          <span className="listing-card-price">{formatPrice(item.price)}</span>
-                          <div className="listing-card-meta">
-                            <span><EyeIcon size={12} /> {item.views || 0}</span>
-                            <span><HeartIcon size={12} /> {item.favorites || 0}</span>
-                            {item.boosted && <span className="boost-badge">Boosted</span>}
-                          </div>
-                          <span className={`listing-card-status ${item.condition}`}>
-                            {conditionLabels[item.condition] || item.condition}
-                          </span>
-                        </div>
-                        <div className="listing-card-actions">
-                          <button className="listing-action-btn" onClick={() => setShowAnalytics(item.id)} title="Analytics">
-                            <TrendingUpIcon size={16} />
-                          </button>
-                          <button className="listing-action-btn" onClick={() => setShowBoostModal(item.id)} title="Boost">
-                            <ZapIcon size={16} />
-                          </button>
-                          <button className="listing-action-btn" onClick={() => setEditItemId(item.id)} title="Edit">
-                            <EditIcon size={16} />
-                          </button>
-                          <button className="listing-action-btn danger" onClick={() => setShowDeleteConfirm(item.id)} title="Delete">
-                            <TrashIcon size={16} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="listings-section-header">
+                    <h4 className="listings-section-title">
+                      Active ({userActiveItems.length})
+                    </h4>
+                    {userActiveItems.length > 1 && (
+                      <button className={`bulk-toggle-btn ${bulkMode ? 'active' : ''}`} onClick={toggleBulkMode}>
+                        {bulkMode ? 'Done' : 'Bulk edit'}
+                      </button>
+                    )}
                   </div>
+                  <div className="listings-list">
+                    {userActiveItems.map((item) => {
+                      const isSelected = selectedIds.includes(item.id);
+                      return (
+                        <div
+                          key={item.id}
+                          className={`listing-card ${bulkMode ? 'bulk-mode' : ''} ${isSelected ? 'selected' : ''}`}
+                          onClick={bulkMode ? () => toggleSelectItem(item.id) : undefined}
+                        >
+                          {bulkMode && (
+                            <div className={`bulk-checkbox ${isSelected ? 'checked' : ''}`}>
+                              <CheckIcon size={14} />
+                            </div>
+                          )}
+                          <img src={firstImage(item)} alt={item.title} className="listing-card-img" />
+                          <div className="listing-card-body">
+                            <h4 className="listing-card-title">{item.title}</h4>
+                            <span className="listing-card-price">{formatPrice(item.price)}</span>
+                            <div className="listing-card-meta">
+                              <span><EyeIcon size={12} /> {item.views || 0}</span>
+                              <span><HeartIcon size={12} /> {item.favorites || 0}</span>
+                              {item.boosted && <span className="boost-badge">Boosted</span>}
+                            </div>
+                            <span className={`listing-card-status ${item.condition}`}>
+                              {conditionLabels[item.condition] || item.condition}
+                            </span>
+                          </div>
+                          <div className="listing-card-actions">
+                            <button className="listing-action-btn" onClick={() => setShowAnalytics(item.id)} title="Analytics">
+                              <TrendingUpIcon size={16} />
+                            </button>
+                            <button className="listing-action-btn" onClick={() => setShowBoostModal(item.id)} title="Boost">
+                              <ZapIcon size={16} />
+                            </button>
+                            <button className="listing-action-btn" onClick={() => setEditItemId(item.id)} title="Edit">
+                              <EditIcon size={16} />
+                            </button>
+                            <button className="listing-action-btn danger" onClick={() => setShowDeleteConfirm(item.id)} title="Delete">
+                              <TrashIcon size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {bulkMode && (
+                    <div className="bulk-action-bar">
+                      <span className="bulk-count">{selectedIds.length} selected</span>
+                      <div className="bulk-actions">
+                        <button className="bulk-action-btn" disabled={selectedIds.length === 0} onClick={() => setShowBulkEditModal(true)}>
+                          <EditIcon size={15} /> Edit
+                        </button>
+                        <button className="bulk-action-btn danger" disabled={selectedIds.length === 0} onClick={() => setShowBulkDeleteConfirm(true)}>
+                          <TrashIcon size={15} /> Delete
+                        </button>
+                        <button className="bulk-action-btn select-all" disabled={selectedIds.length === userActiveItems.length} onClick={() => setSelectedIds(userActiveItems.map((i) => i.id))}>
+                          Select all
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -883,6 +997,37 @@ export default function Profile() {
             </div>
           ))}
 
+          <div className="settings-group-title">Saved Searches</div>
+          {savedSearches.length === 0 ? (
+            <div className="setting-item">
+              <div className="setting-icon"><ZapIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">No saved searches</div>
+                <div className="setting-desc">Use the "Save" button in the search bar to get alerts on new matches.</div>
+              </div>
+            </div>
+          ) : (
+            savedSearches.map((s) => {
+              const summary = [
+                s.query && `"${s.query}"`,
+                s.category || null,
+                s.min_price && s.max_price ? `$${s.min_price}–$${s.max_price}` : s.min_price ? `From $${s.min_price}` : s.max_price ? `Up to $${s.max_price}` : null,
+              ].filter(Boolean).join(' · ');
+              return (
+                <div key={s.id} className="setting-item">
+                  <div className="setting-icon"><ZapIcon size={20} /></div>
+                  <div className="setting-text">
+                    <div className="setting-title">{s.name}</div>
+                    <div className="setting-desc">{summary || 'General search'}</div>
+                  </div>
+                  <button className="delete-search-btn" onClick={() => removeSavedSearch(s.id)} aria-label="Delete search">
+                    <TrashIcon size={16} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+
           <div className="settings-group-title">Preferences</div>
           <div className="setting-item">
             <div className="setting-icon"><MapPinIcon size={20} /></div>
@@ -1054,6 +1199,55 @@ export default function Profile() {
             <Button variant="secondary" block onClick={() => setShowDeleteConfirm(null)}>Cancel</Button>
             <Button block onClick={() => handleDeleteItem(showDeleteConfirm)} style={{ background: 'var(--error)', color: 'white' }}>Delete</Button>
           </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showBulkDeleteConfirm} onClose={() => setShowBulkDeleteConfirm(false)} title="Delete Selected">
+        <div className="delete-confirm">
+          <p className="delete-confirm-text">
+            Are you sure you want to delete {selectedIds.length} selected listing{selectedIds.length > 1 ? 's' : ''}? This action cannot be undone.
+          </p>
+          <div className="delete-confirm-actions">
+            <Button variant="secondary" block onClick={() => setShowBulkDeleteConfirm(false)} disabled={bulkBusy}>Cancel</Button>
+            <Button block onClick={confirmBulkDelete} disabled={bulkBusy} style={{ background: 'var(--error)', color: 'white' }}>
+              {bulkBusy ? 'Deleting…' : 'Delete'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showBulkEditModal} onClose={() => setShowBulkEditModal(false)} title={`Edit ${selectedIds.length} Listing${selectedIds.length > 1 ? 's' : ''}`}>
+        <div className="settings-form">
+          <p className="bulk-edit-hint">Only fill in the fields you want to change. Empty fields are left untouched.</p>
+          <div className="input-group">
+            <label className="input-label">Price ($)</label>
+            <input type="number" min="0" className="input" value={bulkForm.price} onChange={(e) => setBulkForm({ ...bulkForm, price: e.target.value })} placeholder="Leave empty to keep" />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Category</label>
+            <select className="input" value={bulkForm.category} onChange={(e) => setBulkForm({ ...bulkForm, category: e.target.value })}>
+              <option value="">Keep current</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Condition</label>
+            <select className="input" value={bulkForm.condition} onChange={(e) => setBulkForm({ ...bulkForm, condition: e.target.value })}>
+              <option value="">Keep current</option>
+              {[{ value: 'new', label: 'New' }, { value: 'like_new', label: 'Like New' }, { value: 'good', label: 'Good' }, { value: 'fair', label: 'Fair' }].map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="input-group">
+            <label className="input-label">Quantity</label>
+            <input type="number" min="1" className="input" value={bulkForm.quantity} onChange={(e) => setBulkForm({ ...bulkForm, quantity: e.target.value })} placeholder="Leave empty to keep" />
+          </div>
+          <Button block onClick={confirmBulkUpdate} disabled={bulkBusy || selectedIds.length === 0}>
+            {bulkBusy ? 'Updating…' : 'Apply Changes'}
+          </Button>
         </div>
       </Modal>
 

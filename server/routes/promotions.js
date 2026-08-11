@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { adminAuth } from '../middleware/adminAuth.js';
 import validate, { createPromotionSchema } from '../src/validation.js';
 import logger from '../src/logger.js';
 
 const router = Router();
 
+// Validates a promo code and computes the discount. Does NOT consume usage -
+// consumption happens in consumePromo() only when a purchase is completed, so
+// abandoned payments no longer burn the code.
 export function validateAndApplyPromo(code, amount) {
   if (!code || !String(code).trim()) return { discount: 0, promo: null };
 
@@ -38,15 +41,33 @@ export function validateAndApplyPromo(code, amount) {
   }
   discount = Math.round(discount * 100) / 100;
 
+  return { discount, promo };
+}
+
+// Called when a transaction is finalized (payment completed).
+export function consumePromo(code) {
+  if (!code) return;
+  const promo = db.prepare('SELECT * FROM promotions WHERE code = ?').get(String(code).trim().toUpperCase());
+  if (!promo) return;
   db.prepare('UPDATE promotions SET used_count = used_count + 1 WHERE id = ?').run(promo.id);
   if (promo.max_uses > 0 && promo.used_count + 1 >= promo.max_uses) {
     db.prepare('UPDATE promotions SET active = 0 WHERE id = ?').run(promo.id);
   }
-
-  return { discount, promo };
 }
 
-router.post('/', authenticateToken, validate(createPromotionSchema), (req, res) => {
+// Called when a completed purchase is refunded: undo one usage and re-enable
+// the code if it was auto-deactivated by reaching its max uses.
+export function releasePromo(code) {
+  if (!code) return;
+  const promo = db.prepare('SELECT * FROM promotions WHERE code = ?').get(String(code).trim().toUpperCase());
+  if (!promo) return;
+  const used = Math.max(0, (promo.used_count || 0) - 1);
+  const expired = promo.expires_at && promo.expires_at <= new Date().toISOString();
+  const canEnable = promo.max_uses > 0 && used < promo.max_uses && !expired;
+  db.prepare('UPDATE promotions SET used_count = ?, active = ? WHERE id = ?').run(used, canEnable ? 1 : promo.active, promo.id);
+}
+
+router.post('/', adminAuth, validate(createPromotionSchema), (req, res) => {
   try {
     const { code, discount_type, discount_value, max_uses, expires_at, min_purchase } = req.validatedBody;
 
@@ -69,7 +90,7 @@ router.post('/', authenticateToken, validate(createPromotionSchema), (req, res) 
   }
 });
 
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', adminAuth, (req, res) => {
   try {
     const promotions = db.prepare('SELECT * FROM promotions ORDER BY created_at DESC').all();
     res.json({ promotions });
@@ -122,28 +143,7 @@ router.post('/validate', (req, res) => {
   }
 });
 
-router.post('/apply', (req, res) => {
-  try {
-    const { code } = req.body;
-    if (!code) return res.status(400).json({ error: 'Code required' });
-
-    const promo = db.prepare('SELECT * FROM promotions WHERE code = ? AND active = 1').get(code.toUpperCase());
-    if (!promo) return res.status(400).json({ error: 'Invalid code' });
-
-    db.prepare('UPDATE promotions SET used_count = used_count + 1 WHERE id = ?').run(promo.id);
-
-    if (promo.max_uses > 0 && promo.used_count + 1 >= promo.max_uses) {
-      db.prepare('UPDATE promotions SET active = 0 WHERE id = ?').run(promo.id);
-    }
-
-    res.json({ success: true });
-  } catch (err) {
-    logger.error('Apply promotion error:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.put('/:id', authenticateToken, (req, res) => {
+router.put('/:id', adminAuth, (req, res) => {
   try {
     const { active, code, discount_type, discount_value, max_uses, expires_at, min_purchase } = req.body;
     const existing = db.prepare('SELECT * FROM promotions WHERE id = ?').get(req.params.id);
@@ -173,7 +173,7 @@ router.put('/:id', authenticateToken, (req, res) => {
   }
 });
 
-router.delete('/:id', authenticateToken, (req, res) => {
+router.delete('/:id', adminAuth, (req, res) => {
   try {
     const existing = db.prepare('SELECT * FROM promotions WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Promotion not found' });

@@ -26,6 +26,16 @@ import { formatDate, formatTime, formatPrice } from '../utils/helpers';
 import '../styles/globals.css';
 import './Chat.css';
 
+function formatDayLabel(date) {
+  const now = new Date();
+  const d = new Date(date);
+  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  if (start === startToday) return 'Today';
+  if (start === startToday - 86400000) return 'Yesterday';
+  return formatDate(date);
+}
+
 export default function Chat() {
   const {
     conversations,
@@ -52,6 +62,10 @@ export default function Chat() {
 
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
+  const chatScrollRef = useRef(null);
+  const [showScrollBtn, setShowScrollBtn] = useState(false);
+  const [convSearch, setConvSearch] = useState('');
   const [encInitializing, setEncInitializing] = useState(false);
   const [encReady, setEncReady] = useState(false);
   const [typingUsers, setTypingUsers] = useState({});
@@ -140,6 +154,7 @@ export default function Chat() {
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowScrollBtn(false);
   };
 
   useEffect(() => {
@@ -203,6 +218,29 @@ export default function Chat() {
     }, 2000);
   }, [selectedConversation]);
 
+  const autoResizeInput = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+  }, []);
+
+  const copyMessage = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      addToast({ type: 'success', message: 'Message copied' });
+    } catch {
+      addToast({ type: 'error', message: 'Could not copy message' });
+    }
+  };
+
+  const handleChatScroll = () => {
+    const el = chatScrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setShowScrollBtn(!nearBottom);
+  };
+
   if (selectedConversation) {
     const conv = conversations.find((c) => c.id === selectedConversation);
     if (!conv) {
@@ -235,6 +273,7 @@ export default function Chat() {
           socketSendMessage(selectedConversation, plaintext);
         }
         setInputText('');
+        requestAnimationFrame(autoResizeInput);
 
         if (isTypingRef.current) {
           isTypingRef.current = false;
@@ -310,45 +349,84 @@ export default function Chat() {
           </div>
         )}
 
-        <div className="chat-messages">
-          {convMessages.map((msg, i) => (
-            <div
-              key={msg.id}
-              className={`message-bubble ${msg.senderId === currentUserId ? 'sent' : 'received'} msg-appear`}
-              style={{ animationDelay: `${Math.min(i * 30, 300)}ms` }}
-            >
-              <p className="message-text">{msg.text}</p>
-              <span className="message-time">
-                {formatTime(msg.time)}
-                {msg.senderId === currentUserId && (
-                  <span className={`read-receipt ${msg.read ? 'read' : ''}`}>
-                    {msg.read ? '✓✓' : '✓'}
-                  </span>
-                )}
-              </span>
-            </div>
-          ))}
+        <div className="chat-messages" ref={chatScrollRef} onScroll={handleChatScroll}>
+          {(() => {
+            const items = [];
+            let lastDate = null;
+            let lastSender = null;
+            let lastTime = 0;
+            convMessages.forEach((msg) => {
+              const t = new Date(msg.time);
+              const day = new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+              if (day !== lastDate) {
+                items.push({ type: 'date', label: formatDayLabel(t) });
+                lastDate = day;
+              }
+              const isFirstInGroup = msg.senderId !== lastSender || (t.getTime() - lastTime > 5 * 60 * 1000);
+              if (msg.senderId !== lastSender) lastSender = msg.senderId;
+              lastTime = t.getTime();
+              items.push({ type: 'msg', msg, first: isFirstInGroup });
+            });
+            return items.map((it, i) => {
+              if (it.type === 'date') {
+                return <div key={`date-${i}`} className="chat-date-sep">{it.label}</div>;
+              }
+              const { msg, first } = it;
+              const isSent = msg.senderId === currentUserId;
+              return (
+                <div key={msg.id} className={`message-row ${isSent ? 'sent' : 'received'} ${first ? 'first' : ''}`}>
+                  <div
+                    className={`message-bubble ${isSent ? 'sent' : 'received'} ${first ? 'first' : ''}`}
+                    onClick={() => copyMessage(msg.text)}
+                    title="Click to copy"
+                  >
+                    {!isSent && first && <span className="message-sender">{otherUser?.name}</span>}
+                    <p className="message-text">{msg.text}</p>
+                    <span className="message-time">
+                      {formatTime(msg.time)}
+                      {isSent && (
+                        <span className={`read-receipt ${msg.read ? 'read' : ''}`}>
+                          {msg.read ? '✓✓' : '✓'}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </div>
+              );
+            });
+          })()}
           {otherTyping && (
             <div className="typing-indicator">
-              <div className="typing-dots">
-                <span /><span /><span />
-              </div>
+              <div className="typing-dots"><span /><span /><span /></div>
+              <span className="typing-name">{otherTyping.name} is typing…</span>
             </div>
           )}
           <div ref={messagesEndRef} />
+          {showScrollBtn && (
+            <button className="chat-scroll-btn" onClick={() => scrollToBottom()} aria-label="Scroll to latest">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
+            </button>
+          )}
         </div>
 
         <div className="message-input-bar">
-          <input
-            type="text"
+          <textarea
+            ref={inputRef}
+            rows={1}
             className="message-input"
-            placeholder="Type a message..."
+            placeholder="Type a message…"
             value={inputText}
             onChange={(e) => {
               setInputText(e.target.value);
+              autoResizeInput();
               handleTypingStart();
             }}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
           />
           <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>
             <SendIcon size={20} />
@@ -400,36 +478,63 @@ export default function Chat() {
             <p className="empty-text">Start chatting by contacting sellers on items you're interested in</p>
           </div>
         ) : (
-          conversations.map((conv, i) => {
-            const otherUserId = conv.participants.find((p) => p !== currentUserId);
-            const otherUser = getUser(otherUserId);
-            const item = items.find((item) => item.id === conv.itemId);
-            const isOtherOnline = onlineUserIds.includes(otherUserId);
+          <>
+            <div className="conv-search">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                placeholder="Search conversations…"
+                value={convSearch}
+                onChange={(e) => setConvSearch(e.target.value)}
+              />
+            </div>
+            {(() => {
+              const q = convSearch.trim().toLowerCase();
+              const filtered = conversations.filter((conv) => {
+                if (!q) return true;
+                const otherUserId = conv.participants.find((p) => p !== currentUserId);
+                const otherUser = getUser(otherUserId);
+                return (otherUser?.name || '').toLowerCase().includes(q)
+                  || (conv.lastMessage || '').toLowerCase().includes(q);
+              });
+              if (filtered.length === 0) {
+                return <div className="empty-state small"><p className="empty-text">No conversations match "{convSearch.trim()}"</p></div>;
+              }
+              return filtered.map((conv, i) => {
+                const otherUserId = conv.participants.find((p) => p !== currentUserId);
+                const otherUser = getUser(otherUserId);
+                const item = items.find((item) => item.id === conv.itemId);
+                const isOtherOnline = onlineUserIds.includes(otherUserId);
 
-            return (
-              <div
-                key={conv.id}
-                className="conv-item conv-item-appear"
-                style={{ animationDelay: `${i * 50}ms` }}
-                onClick={() => setSelectedConversation(conv.id)}
-              >
-                <div className="conv-avatar">
-                  <Avatar src={otherUser?.avatar} alt={otherUser?.name} size="md" verified={otherUser?.verified} />
-                  <span className={`online-dot ${isOtherOnline ? 'online' : ''}`} />
-                </div>
-                <div className="conv-content">
-                  <div className="conv-header">
-                    <span className="conv-name">{otherUser?.name}</span>
-                    <span className="conv-time">{formatDate(conv.lastMessageTime)}</span>
+                return (
+                  <div
+                    key={conv.id}
+                    className="conv-item conv-item-appear"
+                    style={{ animationDelay: `${i * 50}ms` }}
+                    onClick={() => setSelectedConversation(conv.id)}
+                  >
+                    <div className="conv-avatar">
+                      <Avatar src={otherUser?.avatar} alt={otherUser?.name} size="md" verified={otherUser?.verified} />
+                      <span className={`online-dot ${isOtherOnline ? 'online' : ''}`} />
+                    </div>
+                    <div className="conv-content">
+                      <div className="conv-header">
+                        <span className="conv-name">{otherUser?.name}</span>
+                        <span className="conv-time">{formatDate(conv.lastMessageTime)}</span>
+                      </div>
+                      <div className="conv-preview">
+                        <span className="conv-message">{item ? `${item.title}: ` : ''}{conv.lastMessage || 'No messages yet'}</span>
+                        {conv.unreadCount > 0 && <span className="unread-badge">{conv.unreadCount}</span>}
+                      </div>
+                    </div>
                   </div>
-                  <div className="conv-preview">
-                    <span className="conv-message">{item ? `${item.title}: ` : ''}{conv.lastMessage || 'No messages yet'}</span>
-                    {conv.unreadCount > 0 && <span className="unread-badge">{conv.unreadCount}</span>}
-                  </div>
-                </div>
-              </div>
-            );
-          })
+                );
+              });
+            })()}
+          </>
         )}
       </div>
     </div>

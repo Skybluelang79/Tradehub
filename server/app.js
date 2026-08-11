@@ -27,6 +27,7 @@ import subscriptionRoutes from './routes/subscriptions.js';
 import payoutRoutes from './routes/payouts.js';
 import settingsRoutes from './routes/settings.js';
 import followRoutes from './routes/follows.js';
+import searchRoutes from './routes/searches.js';
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, 'uploads');
 const USE_BLOB = process.env.NETLIFY === 'true' || process.env.DB_BLOB === 'true' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
@@ -85,6 +86,7 @@ app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/payouts', payoutRoutes);
 app.use('/api/follows', followRoutes);
+app.use('/api/searches', searchRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

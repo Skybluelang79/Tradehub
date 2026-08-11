@@ -162,6 +162,25 @@
   box-shadow: 0 2px 8px rgba(251, 191, 36, 0.3);
 }
 
+.item-auction-badge {
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #8B5CF6, #EC4899);
+  border-radius: var(--radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  color: white;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.35);
+}
+
+.item-price-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-right: 6px;
+}
+
 .item-qty-badge {
   padding: 4px 8px;
   background: rgba(59, 130, 246, 0.85);

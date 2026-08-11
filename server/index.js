@@ -40,6 +40,11 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(frontendDist)) {
 
 const onlineUsers = new Map();
 
+function isConversationMember(conversationId, userId) {
+  const conv = db.prepare('SELECT buyer_id, seller_id FROM conversations WHERE id = ?').get(conversationId);
+  return !!conv && (conv.buyer_id === userId || conv.seller_id === userId);
+}
+
 io.use((socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('Authentication required'));
@@ -61,6 +66,10 @@ io.on('connection', (socket) => {
   io.emit('online_users', Array.from(onlineUsers.keys()));
 
   socket.on('join_conversation', (conversationId) => {
+    if (!isConversationMember(conversationId, socket.user.id)) {
+      socket.emit('conversation_error', { error: 'Not authorized to join this conversation' });
+      return;
+    }
     socket.join(`conv:${conversationId}`);
   });
 
@@ -70,6 +79,20 @@ io.on('connection', (socket) => {
 
   socket.on('send_message', ({ conversationId, text, encrypted, ciphertext, iv }) => {
     if (!text?.trim()) return;
+
+    const conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversationId);
+    if (!conversation) {
+      socket.emit('conversation_error', { error: 'Conversation not found' });
+      return;
+    }
+    if (conversation.buyer_id !== socket.user.id && conversation.seller_id !== socket.user.id) {
+      socket.emit('conversation_error', { error: 'Not authorized to send messages here' });
+      return;
+    }
+    if (text.trim().length > 5000) {
+      socket.emit('conversation_error', { error: 'Message too long' });
+      return;
+    }
 
     const id = uuidv4();
 
@@ -89,20 +112,18 @@ io.on('connection', (socket) => {
 
     io.to(`conv:${conversationId}`).emit('new_message', message);
 
-    const conversation = db.prepare('SELECT * FROM conversations WHERE id = ?').get(conversationId);
-    if (conversation) {
-      const recipientId = conversation.buyer_id === socket.user.id ? conversation.seller_id : conversation.buyer_id;
-      const recipientSocket = onlineUsers.get(recipientId);
-      if (recipientSocket) {
-        io.to(recipientSocket).emit('message_notification', {
-          conversationId,
-          message,
-        });
-      }
+    const recipientId = conversation.buyer_id === socket.user.id ? conversation.seller_id : conversation.buyer_id;
+    const recipientSocket = onlineUsers.get(recipientId);
+    if (recipientSocket) {
+      io.to(recipientSocket).emit('message_notification', {
+        conversationId,
+        message,
+      });
     }
   });
 
   socket.on('typing_start', (conversationId) => {
+    if (!isConversationMember(conversationId, socket.user.id)) return;
     socket.to(`conv:${conversationId}`).emit('user_typing', {
       userId: socket.user.id,
       name: socket.user.name,
@@ -110,12 +131,14 @@ io.on('connection', (socket) => {
   });
 
   socket.on('typing_stop', (conversationId) => {
+    if (!isConversationMember(conversationId, socket.user.id)) return;
     socket.to(`conv:${conversationId}`).emit('user_stop_typing', {
       userId: socket.user.id,
     });
   });
 
   socket.on('mark_read', (conversationId) => {
+    if (!isConversationMember(conversationId, socket.user.id)) return;
     db.prepare(`
       UPDATE messages SET read = 1 WHERE conversation_id = ? AND sender_id != ? AND read = 0
     `).run(conversationId, socket.user.id);

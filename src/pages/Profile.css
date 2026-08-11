@@ -612,6 +612,26 @@
   min-width: 0;
 }
 
+.delete-search-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  background: var(--background);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.delete-search-btn:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 .setting-title {
   font-size: 14px;
   font-weight: 600;
@@ -704,6 +724,140 @@
 .listings-section-title svg {
   width: 16px;
   height: 16px;
+}
+
+.listings-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.listings-section-header .listings-section-title {
+  margin-bottom: 0;
+  padding: 0;
+}
+
+.bulk-toggle-btn {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.bulk-toggle-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.listing-card.bulk-mode {
+  cursor: pointer;
+  position: relative;
+}
+
+.listing-card.bulk-mode:hover {
+  border-color: var(--accent);
+}
+
+.listing-card.bulk-mode.selected {
+  border-color: var(--accent);
+  background: rgba(233, 69, 96, 0.06);
+}
+
+.bulk-checkbox {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--border-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  flex-shrink: 0;
+  margin-top: 24px;
+  transition: all var(--transition-fast);
+}
+
+.bulk-checkbox.checked {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.bulk-action-bar {
+  position: sticky;
+  bottom: 0;
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.bulk-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bulk-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.bulk-action-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.bulk-action-btn.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.bulk-action-btn.select-all:hover:not(:disabled) {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.bulk-action-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bulk-edit-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  margin: 0 0 14px;
 }
 
 .listings-list {

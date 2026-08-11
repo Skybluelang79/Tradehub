@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/client.js';
 import { useToast } from '../../components/ui/Toast.jsx';
-import { SearchIcon, DownloadIcon, DollarIcon } from './Icons.jsx';
+import Modal from '../../components/ui/Modal.jsx';
+import { SearchIcon, DownloadIcon, DollarIcon, RefreshIcon } from './Icons.jsx';
 import './AdminTransactions.css';
 
 const TX_FILTERS = ['all', 'completed', 'pending', 'refunded', 'failed'];
@@ -20,6 +21,8 @@ const AdminTransactions = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [loading, setLoading] = useState(false);
+  const [refundTarget, setRefundTarget] = useState(null);
+  const [refunding, setRefunding] = useState(false);
 
   const loadTransactions = useCallback(async () => {
     setLoading(true);
@@ -49,6 +52,23 @@ const AdminTransactions = () => {
     api.admin.exportCsv('transactions');
     addToast('Export started', 'info');
   };
+
+  const handleRefund = async () => {
+    if (!refundTarget) return;
+    setRefunding(true);
+    try {
+      await api.admin.refundTransaction(refundTarget.id);
+      addToast('Refund issued successfully', 'success');
+      setRefundTarget(null);
+      loadTransactions();
+    } catch (err) {
+      addToast(err.message || 'Refund failed', 'error');
+    } finally {
+      setRefunding(false);
+    }
+  };
+
+  const canRefund = (status) => ['completed', 'pending', 'awaiting_payment'].includes(status);
 
   const totalAmount = transactions.reduce((sum, tx) => sum + (Number(tx.amount) || 0), 0);
   const totalFees = transactions.reduce((sum, tx) => sum + (Number(tx.fee_amount) || 0), 0);
@@ -161,14 +181,15 @@ const AdminTransactions = () => {
               <th>Fee</th>
               <th>Status</th>
               <th>Date</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && transactions.length === 0 && (
-              <tr><td colSpan="8" className="table-empty">Loading transactions...</td></tr>
+              <tr><td colSpan="9" className="table-empty">Loading transactions...</td></tr>
             )}
             {!loading && transactions.length === 0 && (
-              <tr><td colSpan="8" className="table-empty">No transactions found</td></tr>
+              <tr><td colSpan="9" className="table-empty">No transactions found</td></tr>
             )}
             {transactions.map(tx => (
               <tr key={tx.id}>
@@ -192,6 +213,18 @@ const AdminTransactions = () => {
                   </span>
                 </td>
                 <td>{formatDate(tx.created_at)}</td>
+                <td>
+                  {canRefund(tx.status) && (
+                    <button
+                      className="tx-refund-btn"
+                      title="Issue refund"
+                      onClick={() => setRefundTarget(tx)}
+                    >
+                      <RefreshIcon size={14} />
+                      Refund
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -220,6 +253,30 @@ const AdminTransactions = () => {
           </button>
         </div>
       </div>
+
+      <Modal
+        isOpen={!!refundTarget}
+        onClose={() => setRefundTarget(null)}
+        title="Confirm Refund"
+      >
+        <div className="refund-modal">
+          <p>
+            Refund <strong>${Number(refundTarget?.amount).toLocaleString()}</strong> for{' '}
+            <strong>"{refundTarget?.item_title}"</strong> back to the buyer?
+          </p>
+          <p className="warning-text">
+            The refunded amount will be returned to the buyer and the transaction marked as refunded.
+          </p>
+          <div className="modal-actions">
+            <button className="btn-secondary" onClick={() => setRefundTarget(null)}>
+              Cancel
+            </button>
+            <button className="btn-danger" onClick={handleRefund} disabled={refunding}>
+              {refunding ? 'Refunding…' : 'Confirm Refund'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -8,6 +8,7 @@ import { exportDatabase, replaceDatabase } from '../db.js';
 import { adminLimiter } from '../src/rateLimiter.js';
 import { sendNotificationEmail } from '../src/email.js';
 import { refundTxn } from './payments.js';
+import { adminAuth } from '../middleware/adminAuth.js';
 import { requiredEnv } from '../src/env.js';
 import logger from '../src/logger.js';
 import pkg from '../package.json' with { type: 'json' };
@@ -21,20 +22,6 @@ const TX_STATUSES = ['pending', 'completed', 'refunded', 'awaiting_payment', 'fa
 
 if (process.env.ADMIN_PASSWORD === undefined || process.env.JWT_SECRET === undefined) {
   logger.warn('Admin using default credentials. Set ADMIN_PASSWORD and JWT_SECRET env vars in production.');
-}
-
-function adminAuth(req, res, next) {
-  const token = req.headers['authorization']?.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Admin token required' });
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    if (!decoded.isAdmin) return res.status(403).json({ error: 'Admin access required' });
-    req.adminId = decoded.userId;
-    req.user = { ...req.user, isAdmin: true };
-    next();
-  } catch {
-    res.status(403).json({ error: 'Invalid token' });
-  }
 }
 
 function logAudit(adminId, action, entityType, entityId, details = {}) {
@@ -86,9 +73,10 @@ router.post('/login', adminLimiter, (req, res) => {
   if (!admin) {
     const id = 'admin-1';
     const hashed = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-    db.prepare("INSERT INTO users (id, name, email, password, avatar, verified) VALUES (?, 'Admin', ?, ?, 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 1)").run(id, ADMIN_EMAIL, hashed);
+    db.prepare("INSERT INTO users (id, name, email, password, avatar, verified, is_admin) VALUES (?, 'Admin', ?, ?, 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 1, 1)").run(id, ADMIN_EMAIL, hashed);
     admin = { id };
   }
+  db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(admin.id);
   const token = jwt.sign(
     { userId: admin.id, isAdmin: true },
     JWT_SECRET,

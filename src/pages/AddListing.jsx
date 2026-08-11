@@ -71,6 +71,10 @@ function useEditItem(editItemId, items) {
     initialQuantity: item?.quantity || 1,
     initialSalePrice: item?.salePrice ? String(item.salePrice) : '',
     initialSaleEndsAt: item?.saleEndsAt || '',
+    initialIsAuction: item?.isAuction || false,
+    initialStartingBid: item?.startingBid ? String(item.startingBid) : '',
+    initialMinIncrement: item?.minIncrement ? String(item.minIncrement) : '',
+    initialAuctionEndsAt: item?.auctionEndsAt || '',
   };
 }
 
@@ -87,6 +91,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
     initialImages, initialTitle, initialDescription,
     initialPrice, initialCategory, initialCondition, initialLocation,
     initialQuantity, initialSalePrice, initialSaleEndsAt,
+    initialIsAuction, initialStartingBid, initialMinIncrement, initialAuctionEndsAt,
   } = useEditItem(editItemId, items);
 
   const [images, setImages] = useState(initialImages);
@@ -111,6 +116,11 @@ export default function AddListing({ editItemId, onEditComplete }) {
   const [saleEnabled, setSaleEnabled] = useState(!!initialSalePrice);
   const [saleEndsAt, setSaleEndsAt] = useState(initialSaleEndsAt);
   const [saleEndsEnabled, setSaleEndsEnabled] = useState(!!initialSaleEndsAt);
+
+  const [isAuction, setIsAuction] = useState(initialIsAuction);
+  const [startingBid, setStartingBid] = useState(initialStartingBid || initialPrice);
+  const [minIncrement, setMinIncrement] = useState(initialMinIncrement || '1');
+  const [auctionEndsAt, setAuctionEndsAt] = useState(initialAuctionEndsAt);
 
   const [showVariants, setShowVariants] = useState(false);
   const [showTemplatePicker, setShowTemplatePicker] = useState(false);
@@ -238,6 +248,15 @@ export default function AddListing({ editItemId, onEditComplete }) {
     boostExpiresAt: boostListing
       ? new Date(Date.now() + boostDuration * 86400000).toISOString()
       : null,
+    isAuction,
+    startingBid: isAuction ? parseFloat(startingBid || price || 0) : null,
+    minIncrement: isAuction ? (parseFloat(minIncrement) || 1) : null,
+    auctionEndsAt: isAuction
+      ? (auctionEndsAt ? new Date(auctionEndsAt).toISOString() : new Date(Date.now() + 7 * 86400000).toISOString())
+      : null,
+    auctionStatus: isAuction ? 'active' : 'pending',
+    currentBid: isAuction ? parseFloat(startingBid || price || 0) : null,
+    currentBidderId: null,
   });
 
   const handleSaveAsTemplate = () => {
@@ -343,6 +362,10 @@ export default function AddListing({ editItemId, onEditComplete }) {
       setSaleEnabled(false);
       setSaleEndsAt('');
       setSaleEndsEnabled(false);
+      setIsAuction(false);
+      setStartingBid('');
+      setMinIncrement('1');
+      setAuctionEndsAt('');
     }
   };
 
@@ -525,6 +548,40 @@ export default function AddListing({ editItemId, onEditComplete }) {
                   <input type="datetime-local" className="input" value={saleEndsAt} onChange={(e) => setSaleEndsAt(e.target.value)} style={{ marginTop: 8 }} />
                 )}
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className="input-group">
+          <div className="collapsible-header" onClick={() => setIsAuction(!isAuction)} style={{ cursor: 'pointer' }}>
+            <i className="bi bi-hammer" />
+            <span>Auction Listing</span>
+            <div className={`toggle-sm ${isAuction ? 'active' : ''}`} />
+          </div>
+          {isAuction && (
+            <div className="sale-panel">
+              <p className="auction-hint">Bidders place bids instead of buying instantly. The item sells to the highest bidder when the auction ends.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div className="input-group">
+                  <label className="input-label">Starting Bid</label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>$</span>
+                    <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="0" value={startingBid} onChange={(e) => setStartingBid(e.target.value)} />
+                  </div>
+                </div>
+                <div className="input-group">
+                  <label className="input-label">Min. Increment</label>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>$</span>
+                    <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="1" value={minIncrement} onChange={(e) => setMinIncrement(e.target.value)} />
+                  </div>
+                </div>
+              </div>
+              <div className="input-group" style={{ marginTop: 8 }}>
+                <label className="input-label">Auction End Date</label>
+                <input type="datetime-local" className="input" value={auctionEndsAt} onChange={(e) => setAuctionEndsAt(e.target.value)} />
+              </div>
+              <p className="auction-hint" style={{ marginTop: 8 }}>The buy-it-now price above is used as the fallback starting point and display value.</p>
             </div>
           )}
         </div>

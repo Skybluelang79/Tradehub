@@ -209,6 +209,64 @@
   font-weight: 500;
 }
 
+.tx-refund-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #3B82F6;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.tx-refund-btn:hover {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+.refund-modal {
+  text-align: center;
+}
+
+.refund-modal p {
+  font-size: 15px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.warning-text {
+  font-size: 13px;
+  color: var(--text-tertiary) !important;
+  margin-bottom: 24px !important;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.btn-danger {
+  background: #EF4444;
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: #DC2626;
+}
+
 @media (max-width: 1200px) {
   .tx-stats-grid {
     grid-template-columns: repeat(2, 1fr);

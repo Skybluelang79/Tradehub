@@ -21,6 +21,8 @@ import {
   AdminDisputes,
   AdminReports,
   AdminAuditLogs,
+  AdminPromotions,
+  AdminSystem,
   AdminSettings
 } from './pages/admin';
 import './styles/globals.css';
@@ -134,8 +136,12 @@ function AppContent() {
         return <AdminDisputes />;
       case '/admin/reports':
         return <AdminReports />;
+      case '/admin/promotions':
+        return <AdminPromotions />;
       case '/admin/audit-logs':
         return <AdminAuditLogs />;
+      case '/admin/system':
+        return <AdminSystem />;
       case '/admin/settings':
         return <AdminSettings />;
       default:

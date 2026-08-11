@@ -39,11 +39,33 @@ router.post('/', authenticateToken, validate(createReviewSchema), (req, res) => 
       return res.status(400).json({ error: 'Cannot review yourself' });
     }
 
+    // Reviews must follow a completed transaction so users can't farm reviews
+    // on accounts they've never actually traded with.
+    const completedTxn = db.prepare(`
+      SELECT id, item_id FROM transactions
+      WHERE status = 'completed'
+        AND ((buyer_id = ? AND seller_id = ?) OR (buyer_id = ? AND seller_id = ?))
+    `).get(req.user.id, revieweeId, revieweeId, req.user.id);
+    if (!completedTxn) {
+      return res.status(403).json({ error: 'You can only review a user after a completed transaction' });
+    }
+
+    // Only mark the review "verified" when it's tied to an actual purchase of
+    // that specific item, not merely asserted by the reviewer.
+    let verified = 0;
+    if (itemId) {
+      const itemTxn = db.prepare(`
+        SELECT id FROM transactions
+        WHERE status = 'completed' AND item_id = ? AND buyer_id = ? AND seller_id = ?
+      `).get(itemId, req.user.id, revieweeId);
+      verified = itemTxn ? 1 : 0;
+    }
+
     const id = uuidv4();
     db.prepare(`
       INSERT INTO reviews (id, reviewer_id, reviewee_id, item_id, rating, text, verified)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, req.user.id, revieweeId, itemId || null, rating, text || '', itemId ? 1 : 0);
+    `).run(id, req.user.id, revieweeId, itemId || null, rating, text || '', verified);
 
     const reviews = db.prepare('SELECT AVG(rating) as avg, COUNT(*) as count FROM reviews WHERE reviewee_id = ?').get(revieweeId);
     db.prepare('UPDATE users SET rating = ?, review_count = ? WHERE id = ?').run(

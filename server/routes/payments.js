@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
-import { validateAndApplyPromo } from './promotions.js';
+import { validateAndApplyPromo, consumePromo, releasePromo } from './promotions.js';
 import { sendNotificationEmail } from '../src/email.js';
 import logger from '../src/logger.js';
 
@@ -13,6 +13,33 @@ const router = Router();
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
 const stripe = STRIPE_KEY && !STRIPE_KEY.includes('placeholder') ? new Stripe(STRIPE_KEY) : null;
 const FEE_RATE = Number(process.env.PAYMENT_FEE_PERCENT || 0) / 100;
+
+// "Demo mode" payments (card purchases without Stripe) mint fake money and are
+// only allowed in non-production runs, or when explicitly opted in. A misconfigured
+// production deployment will refuse card payments instead of crediting sellers.
+const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production';
+
+const PLAN_FEES = { free: 0.03, premium: 0.02, pro: 0.015 };
+
+// Fee rate applied to a sale is the seller's subscription plan fee (e.g. 2% for
+// Premium), falling back to the PAYMENT_FEE_PERCENT env var, then 3%.
+export function getFeeRateForSeller(sellerId) {
+  try {
+    const sub = db.prepare("SELECT plan FROM subscriptions WHERE user_id = ? AND status != 'cancelled'").get(sellerId);
+    if (sub && PLAN_FEES[sub.plan] != null) return PLAN_FEES[sub.plan];
+  } catch {}
+  if (Number.isFinite(FEE_RATE) && FEE_RATE >= 0) return FEE_RATE;
+  return 0.03;
+}
+
+function platformFeePercent() {
+  try {
+    const row = db.prepare("SELECT value FROM platform_settings WHERE key = 'platform_fee_percent'").get();
+    const v = parseFloat(row?.value);
+    if (Number.isFinite(v) && v >= 0) return v;
+  } catch {}
+  return Number.isFinite(FEE_RATE) ? Math.round(FEE_RATE * 100) : 3;
+}
 
 const BANK_TRANSFER = {
   enabled: process.env.BANK_TRANSFER_ENABLED !== 'false',
@@ -246,13 +273,16 @@ export function finalizeCompleted(txn) {
   db.prepare("UPDATE items SET status = 'sold' WHERE id = ?").run(txn.item_id);
 
   const amountCents = Math.round(txn.amount * 100);
-  const feeCents = Math.round(amountCents * FEE_RATE);
+  const feeCents = Math.round(amountCents * getFeeRateForSeller(txn.seller_id));
   const netCents = amountCents - feeCents;
   db.prepare('UPDATE transactions SET fee_amount = ?, net_amount = ? WHERE id = ?').run(feeCents / 100, netCents / 100, txn.id);
 
   getWallet(txn.seller_id);
   db.prepare('UPDATE wallets SET available_cents = available_cents + ?, lifetime_cents = lifetime_cents + ?, updated_at = datetime(\'now\') WHERE user_id = ?')
     .run(netCents, netCents, txn.seller_id);
+
+  // A promo code only counts as used once the purchase is actually completed.
+  if (txn.promo_code) consumePromo(txn.promo_code);
 
   notify(txn.buyer_id, 'payment', 'Payment Released', `Payment of $${txn.amount} for "${txn.item_title}" has been released.`);
   notify(txn.seller_id, 'sale', 'Item Sold', `"${txn.item_title}" has been sold for $${txn.amount}!`);
@@ -289,13 +319,15 @@ export async function refundTxn(txn) {
     const w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(txn.seller_id);
     if (w && (w.lifetime_cents > 0 || w.available_cents > 0)) {
       const amountCents = Math.round(txn.amount * 100);
-      const feeCents = Math.round(amountCents * FEE_RATE);
+      const feeCents = Math.round(amountCents * getFeeRateForSeller(txn.seller_id));
       const netCents = amountCents - feeCents;
       const available = Math.max(0, w.available_cents - netCents);
       const lifetime = Math.max(0, w.lifetime_cents - netCents);
       db.prepare('UPDATE wallets SET available_cents = ?, lifetime_cents = ?, updated_at = datetime(\'now\') WHERE user_id = ?')
         .run(available, lifetime, txn.seller_id);
     }
+    // A consumed promo code is returned so refunded purchases don't stay counted.
+    if (txn.promo_code) releasePromo(txn.promo_code);
   }
 
   // 3. Issue a real Stripe refund for the card portion actually charged.
@@ -388,7 +420,7 @@ router.get('/options', authenticateToken, (req, res) => {
   try {
     const wallet = getWallet(req.user.id);
     res.json({
-      feePercent: Math.round(FEE_RATE * 100),
+      feePercent: platformFeePercent(),
       methods: [
         {
           id: 'card',
@@ -815,6 +847,9 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
 
     // Card / Stripe
     if (!stripe) {
+      if (!ALLOW_DEMO_PAYMENTS) {
+        return res.status(503).json({ error: 'Payments are not configured. Set STRIPE_SECRET_KEY or enable DEMO_MODE.' });
+      }
       applyCredit({ userId: req.user.id, giftCard, creditCents });
       insertTransaction({ txnId, item, amount, buyerId: req.user.id, sellerId: item.seller_id, method: 'card', status: 'pending', providerRef: `demo_${txnId}`, paymentMethodId, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
       return res.json({ clientSecret: 'demo_secret', transactionId: txnId, demo: true, status: 'pending', promo: promoInfo, creditCents });
@@ -1070,6 +1105,9 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
 
     // Card / Stripe
     if (!stripe) {
+      if (!ALLOW_DEMO_PAYMENTS) {
+        return res.status(503).json({ error: 'Payments are not configured. Set STRIPE_SECRET_KEY or enable DEMO_MODE.' });
+      }
       applyCredit({ userId: req.user.id, giftCard, creditCents });
       allocated.forEach((l, i) => insertLine(l, i, 'card', 'pending', `demo_${txnIds[i]}`));
       db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);

@@ -11,7 +11,9 @@ import {
   MenuIcon,
   XIcon,
   LogOutIcon,
-  EyeIcon
+  EyeIcon,
+  TagIcon,
+  ServerIcon
 } from '../../pages/admin/Icons.jsx';
 import './AdminLayout.css';
 
@@ -24,7 +26,9 @@ const navItems = [
   { path: '/admin/gift-cards', label: 'Gift Cards', icon: ChartIcon },
   { path: '/admin/disputes', label: 'Disputes', icon: ShieldIcon },
   { path: '/admin/reports', label: 'Reports', icon: ChartIcon },
+  { path: '/admin/promotions', label: 'Promotions', icon: TagIcon },
   { path: '/admin/audit-logs', label: 'Audit Logs', icon: EyeIcon },
+  { path: '/admin/system', label: 'System', icon: ServerIcon },
   { path: '/admin/settings', label: 'Settings', icon: SettingsIcon },
 ];
 

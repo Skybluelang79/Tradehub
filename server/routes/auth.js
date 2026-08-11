@@ -153,7 +153,7 @@ router.get('/search', (req, res) => {
     }
     const offset = (parseInt(page) - 1) * parseInt(limit);
     const users = db.prepare(`
-      SELECT id, name, email, avatar, bio, verified, rating, review_count
+      SELECT id, name, avatar, bio, verified, rating, review_count
       FROM users WHERE name LIKE ? ORDER BY rating DESC LIMIT ? OFFSET ?
     `).all(`%${q.trim()}%`, parseInt(limit), offset);
     const total = db.prepare('SELECT COUNT(*) as count FROM users WHERE name LIKE ?').get(`%${q.trim()}%`);
@@ -173,7 +173,7 @@ router.get('/batch', (req, res) => {
 
     const placeholders = idList.map(() => '?').join(',');
     const users = db.prepare(`
-      SELECT id, name, email, avatar, bio, verified, rating, review_count
+      SELECT id, name, avatar, bio, verified, rating, review_count
       FROM users WHERE id IN (${placeholders})
     `).all(...idList);
     res.json({ users });
@@ -185,7 +185,7 @@ router.get('/batch', (req, res) => {
 
 router.get('/:userId/profile', (req, res) => {
   try {
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, created_at FROM users WHERE id = ?').get(req.params.userId);
+    const user = db.prepare('SELECT id, name, avatar, bio, verified, rating, review_count, created_at FROM users WHERE id = ?').get(req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const stats = db.prepare(`
@@ -334,8 +334,11 @@ router.post('/verify-email', (req, res) => {
 router.delete('/me', authenticateToken, (req, res) => {
   try {
     const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ error: 'Password required to delete account' });
+    }
     const user = db.prepare('SELECT password FROM users WHERE id = ?').get(req.user.id);
-    if (password && !bcrypt.compareSync(password, user.password)) {
+    if (!bcrypt.compareSync(password, user.password)) {
       return res.status(401).json({ error: 'Invalid password' });
     }
 

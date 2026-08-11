@@ -223,6 +223,14 @@ function applySchema() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS bids (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      bidder_id TEXT NOT NULL,
+      amount REAL NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS item_images (
       id TEXT PRIMARY KEY,
       item_id TEXT NOT NULL,
@@ -266,6 +274,7 @@ function applySchema() {
     CREATE TABLE IF NOT EXISTS favorites (
       user_id TEXT NOT NULL,
       item_id TEXT NOT NULL,
+      price_at_add REAL,
       created_at TEXT DEFAULT (datetime('now')),
       PRIMARY KEY (user_id, item_id)
     );
@@ -305,6 +314,17 @@ function applySchema() {
       body TEXT DEFAULT '',
       read INTEGER DEFAULT 0,
       data TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS saved_searches (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      query TEXT DEFAULT '',
+      category TEXT DEFAULT '',
+      min_price REAL,
+      max_price REAL,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -546,6 +566,7 @@ function applySchema() {
     CREATE INDEX IF NOT EXISTS idx_items_seller ON items(seller_id);
     CREATE INDEX IF NOT EXISTS idx_items_created ON items(created_at);
     CREATE INDEX IF NOT EXISTS idx_items_price ON items(price);
+    CREATE INDEX IF NOT EXISTS idx_saved_searches_user ON saved_searches(user_id);
   `);
 
   migrate();
@@ -585,6 +606,14 @@ function migrate() {
   ensureColumn('transactions', 'discount_amount', 'REAL DEFAULT 0');
   ensureColumn('transactions', 'original_amount', 'REAL DEFAULT 0');
   ensureColumn('transactions', 'credit_cents', 'INTEGER DEFAULT 0');
+  ensureColumn('favorites', 'price_at_add', 'REAL');
+  ensureColumn('items', 'is_auction', 'INTEGER DEFAULT 0');
+  ensureColumn('items', 'starting_bid', 'REAL');
+  ensureColumn('items', 'min_increment', 'REAL DEFAULT 1');
+  ensureColumn('items', 'auction_ends_at', 'TEXT');
+  ensureColumn('items', 'auction_status', "TEXT DEFAULT 'pending'");
+  ensureColumn('items', 'current_bid', 'REAL');
+  ensureColumn('items', 'current_bidder_id', 'TEXT');
 
   seedPlatformSettings();
 }

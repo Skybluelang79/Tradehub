@@ -84,8 +84,12 @@ export const api = {
     update: (id, data) => request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id) => request(`/items/${id}`, { method: 'DELETE' }),
     favorite: (id) => request(`/items/${id}/favorite`, { method: 'POST' }),
+    bid: (id, amount) => request(`/items/${id}/bid`, { method: 'POST', body: JSON.stringify({ amount }) }),
+    bids: (id) => request(`/items/${id}/bids`),
     byUser: (userId) => request(`/items/user/${userId}`),
     drafts: (userId) => request(`/items/user/${userId}/drafts`),
+    bulkUpdate: (ids, updates) => request('/items/bulk/update', { method: 'PUT', body: JSON.stringify({ ids, updates }) }),
+    bulkDelete: (ids) => request('/items/bulk/delete', { method: 'POST', body: JSON.stringify({ ids }) }),
   },
 
   chat: {
@@ -163,6 +167,13 @@ export const api = {
     markAllRead: () => request('/notifications/read-all', { method: 'PUT' }),
   },
 
+  searches: {
+    list: () => request('/searches'),
+    create: (data) => request('/searches', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/searches/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    remove: (id) => request(`/searches/${id}`, { method: 'DELETE' }),
+  },
+
   templates: {
     list: () => request('/templates'),
     create: (data) => request('/templates', { method: 'POST', body: JSON.stringify(data) }),
@@ -192,6 +203,12 @@ export const api = {
     resolveReport: (id, action) => adminRequest(`/admin/reports/${id}/resolve`, { method: 'PUT', body: JSON.stringify({ action }) }),
     auditLogs: (params = {}) => adminRequest(`/admin/audit-logs?${new URLSearchParams(params).toString()}`),
     exportCsv: (kind) => adminDownload(`/admin/export/${kind}`, `${kind}-${Date.now()}.csv`),
+    refundTransaction: (id) => adminRequest(`/admin/transactions/${id}/refund`, { method: 'POST' }),
+    promotions: () => adminRequest('/admin/promotions'),
+    createPromotion: (data) => adminRequest('/admin/promotions', { method: 'POST', body: JSON.stringify(data) }),
+    updatePromotion: (id, data) => adminRequest(`/admin/promotions/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    deletePromotion: (id) => adminRequest(`/admin/promotions/${id}`, { method: 'DELETE' }),
+    systemInfo: () => adminRequest('/admin/system-info'),
     broadcast: (data) => adminRequest('/admin/broadcast', { method: 'POST', body: JSON.stringify(data) }),
     settingsGet: () => adminRequest('/admin/settings'),
     settingsUpdate: (data) => adminRequest('/admin/settings', { method: 'PUT', body: JSON.stringify(data) }),

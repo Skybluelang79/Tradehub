@@ -4,12 +4,10 @@ import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import validate, { createDisputeSchema } from '../src/validation.js';
-import { refundTxn } from './payments.js';
+import { refundTxn, getFeeRateForSeller } from './payments.js';
 import logger from '../src/logger.js';
 
 const router = Router();
-
-const FEE_RATE = Number(process.env.PAYMENT_FEE_PERCENT || 0) / 100;
 
 function notify(userId, type, title, body) {
   db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
@@ -130,7 +128,7 @@ router.put('/:id/resolve', adminAuth, async (req, res) => {
     if (!txn) return res.status(404).json({ error: 'Transaction not found' });
 
     const amountCents = Math.round(txn.amount * 100);
-    const feeCents = Math.round(amountCents * FEE_RATE);
+    const feeCents = Math.round(amountCents * getFeeRateForSeller(txn.seller_id));
     const netCents = amountCents - feeCents;
 
     if (action === 'refund_buyer') {

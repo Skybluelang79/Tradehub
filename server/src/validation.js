@@ -62,9 +62,17 @@ export const createItemSchema = z.object({
   variants: z.array(variantSchema).optional().default([]),
   boosted: z.boolean().optional().default(false),
   boost_expires_at: z.string().optional().nullable(),
+  is_auction: z.boolean().optional().default(false),
+  starting_bid: z.number().positive().optional().nullable(),
+  min_increment: z.number().positive().optional().nullable(),
+  auction_ends_at: z.string().optional().nullable(),
 });
 
 export const updateItemSchema = createItemSchema.partial();
+
+export const placeBidSchema = z.object({
+  amount: z.number().positive('Bid must be positive'),
+});
 
 export const createReviewSchema = z.object({
   revieweeId: z.string().min(1),

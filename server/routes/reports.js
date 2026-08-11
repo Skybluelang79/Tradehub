@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { adminAuth } from '../middleware/adminAuth.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -13,15 +14,17 @@ router.get('/', authenticateToken, (req, res) => {
       FROM reports r
       JOIN items i ON r.item_id = i.id
       JOIN users u ON r.reporter_id = u.id
+      WHERE r.reporter_id = ?
       ORDER BY r.created_at DESC
-    `).all();
+    `).all(req.user.id);
     const userReports = db.prepare(`
       SELECT ur.*, u.name as reporter_name, u2.name as reported_name
       FROM user_reports ur
       JOIN users u ON ur.reporter_id = u.id
       JOIN users u2 ON ur.reported_user_id = u2.id
+      WHERE ur.reporter_id = ?
       ORDER BY ur.created_at DESC
-    `).all();
+    `).all(req.user.id);
     res.json({ reports, userReports });
   } catch (err) {
     logger.error('Get reports error:', err);
@@ -94,7 +97,7 @@ router.post('/user', authenticateToken, (req, res) => {
   }
 });
 
-router.put('/:id/resolve', authenticateToken, (req, res) => {
+router.put('/:id/resolve', adminAuth, (req, res) => {
   try {
     const { action } = req.body;
 

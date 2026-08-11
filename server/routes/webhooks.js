@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import Stripe from 'stripe';
 import db from '../db.js';
+import { releasePromo } from './promotions.js';
 import logger from '../src/logger.js';
 
 const router = express.Router();
@@ -81,9 +82,33 @@ router.post('/stripe', express.raw({ type: 'application/json' }), async (req, re
             }
             db.prepare("UPDATE transactions SET status = 'refunded', completed_at = NULL WHERE id = ?").run(txn.id);
             db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
+            if (txn.promo_code) releasePromo(txn.promo_code);
           }
         }
         logger.info(`Charge refunded: ${charge.id}`);
+        break;
+      }
+
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const userId = session.metadata?.userId;
+        const plan = session.metadata?.plan;
+        if (userId && plan && (plan === 'premium' || plan === 'pro')) {
+          const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);
+          if (sub) {
+            db.prepare(`
+              UPDATE subscriptions SET plan = ?, status = 'active',
+                current_period_start = datetime('now'),
+                current_period_end = datetime('now', '+30 days'),
+                trial_end = NULL,
+                updated_at = datetime('now')
+              WHERE user_id = ?
+            `).run(plan, userId);
+          }
+          logger.info(`Subscription activated: user ${userId} plan ${plan}`);
+        } else {
+          logger.warn(`Checkout session completed without valid upgrade metadata: ${session.id}`);
+        }
         break;
       }
 

@@ -57,6 +57,13 @@ export default function Notifications({ onClose }) {
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </svg>
         );
+      case 'price_drop':
+        return (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" />
+            <polyline points="17 18 23 18 23 12" />
+          </svg>
+        );
       default:
         return (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -73,6 +80,7 @@ export default function Notifications({ onClose }) {
       case 'sale': return '#10b981';
       case 'offer': return '#f59e0b';
       case 'review': return '#8b5cf6';
+      case 'price_drop': return '#3b82f6';
       default: return '#ef4444';
     }
   };
@@ -180,7 +188,7 @@ export default function Notifications({ onClose }) {
 
       <div className="notifications-content">
         <div className="notifications-filters">
-          {['all', 'unread', 'message', 'sale'].map((f) => (
+          {['all', 'unread', 'message', 'sale', 'price_drop'].map((f) => (
             <button
               key={f}
               className={`filter-chip ${filter === f ? 'active' : ''}`}
@@ -190,6 +198,7 @@ export default function Notifications({ onClose }) {
               {f === 'unread' && 'Unread'}
               {f === 'message' && 'Messages'}
               {f === 'sale' && 'Sales'}
+              {f === 'price_drop' && 'Price drops'}
             </button>
           ))}
         </div>

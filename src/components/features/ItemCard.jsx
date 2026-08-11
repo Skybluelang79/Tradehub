@@ -17,6 +17,8 @@ export default function ItemCard({ item, distance, onClick, variant = 'grid' }) 
   const hasSale = item.salePrice && item.salePrice > 0 && item.salePrice < item.price;
   const saleEnded = item.saleEndsAt && new Date(item.saleEndsAt) < new Date();
   const showSale = hasSale && !saleEnded;
+  const isAuction = !!item.isAuction;
+  const currentBid = item.currentBid ?? item.startingBid ?? item.price;
 
   const handleFavorite = (e) => {
     e.stopPropagation();
@@ -45,6 +47,9 @@ export default function ItemCard({ item, distance, onClick, variant = 'grid' }) 
           {item.boosted && (
             <span className="item-boosted-badge">Boosted</span>
           )}
+          {isAuction && (
+            <span className="item-auction-badge">Auction</span>
+          )}
           {showSale && (
             <span className="item-sale-badge">
               {Math.round((1 - item.salePrice / item.price) * 100)}% OFF
@@ -64,13 +69,16 @@ export default function ItemCard({ item, distance, onClick, variant = 'grid' }) 
         <h3 className="item-title">{item.title}</h3>
         <div className="item-footer">
           <div className="item-price-row">
-            {showSale ? (
+            {showSale && !isAuction ? (
               <>
                 <span className="item-price item-price--sale">{formatPrice(item.salePrice)}</span>
                 <span className="item-price--original">{formatPrice(item.price)}</span>
               </>
             ) : (
-              <span className="item-price">{formatPrice(item.price)}</span>
+              <>
+                {isAuction && <span className="item-price-label">Current bid</span>}
+                <span className="item-price">{formatPrice(currentBid)}</span>
+              </>
             )}
           </div>
           {distance != null && (

@@ -3,6 +3,9 @@ import { Header } from '../components/layout';
 import { ItemsGrid, AdBanner, AdCard, AdPush, BrandSponsor, SafeTrading, ListForFree, PremiumSeller, SearchSuggestions, PullToRefresh } from '../components/features';
 import { SearchIcon, GridIcon, ListIcon, ChevronDownIcon, XIcon, FilterIcon, ShieldIcon } from '../components/ui/Icons';
 import { useApp } from '../context';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../components/ui/Toast';
+import { api } from '../services/client';
 import { categories, distanceOptions, sortOptions, conditionOptions } from '../services/api';
 import { useDebounce } from '../hooks';
 import { formatPrice } from '../utils/helpers';
@@ -27,8 +30,14 @@ export default function Home() {
   const [showSearch, setShowSearch] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showSaveSearch, setShowSaveSearch] = useState(false);
+  const [saveName, setSaveName] = useState('');
+  const [saving, setSaving] = useState(false);
   const loadingTimerRef = useRef(null);
   const debouncedSearch = useDebounce(searchInput, 300);
+
+  const { isAuthenticated } = useAuth();
+  const { addToast } = useToast();
 
   const trendingItems = useMemo(() => {
     return [...items]
@@ -90,6 +99,39 @@ export default function Home() {
 
   const currentSort = sortOptions.find((s) => s.value === filters.sort);
 
+  const handleSaveSearch = async () => {
+    if (!isAuthenticated) {
+      window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }));
+      return;
+    }
+    setShowSaveSearch(true);
+    setSaveName(searchInput.trim() || categories.find((c) => c.id === filters.category)?.name || 'My search');
+  };
+
+  const confirmSaveSearch = async () => {
+    if (!saveName.trim()) {
+      addToast({ type: 'error', message: 'Give your search a name' });
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.searches.create({
+        name: saveName,
+        query: searchInput,
+        category: filters.category || '',
+        min_price: filters.minPrice || null,
+        max_price: filters.maxPrice || null,
+      });
+      addToast({ type: 'success', message: 'Search saved — we\'ll alert you on new matches' });
+      setShowSaveSearch(false);
+    } catch (err) {
+      addToast({ type: 'error', message: err.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+
   const activeExtraFilterCount =
     (filters.minPrice ? 1 : 0) + (filters.maxPrice ? 1 : 0) + (filters.condition && filters.condition !== 'all' ? 1 : 0);
 
@@ -123,6 +165,16 @@ export default function Home() {
                 <XIcon size={16} />
               </button>
             )}
+            <button
+              className={`save-search-btn ${(searchInput || filters.category || filters.minPrice || filters.maxPrice) ? 'enabled' : ''}`}
+              onClick={handleSaveSearch}
+              title="Save this search to get alerts on new matches"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+              Save
+            </button>
           </div>
           <SearchSuggestions
             query={searchInput}
@@ -363,6 +415,43 @@ export default function Home() {
           Admin Login
         </button>
       </footer>
+
+      {showSaveSearch && (
+        <div className="save-search-overlay" onClick={() => !saving && setShowSaveSearch(false)}>
+          <div className="save-search-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="save-search-header">
+              <h3>Save this search</h3>
+              <p>We'll notify you when new items match.</p>
+            </div>
+            <label className="save-search-label">Name</label>
+            <input
+              className="save-search-input"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              placeholder="e.g. PS5 under $400"
+              autoFocus
+            />
+            <div className="save-search-summary">
+              {(searchInput || filters.category) && (
+                <span className="save-search-chip">{(filters.category && categories.find((c) => c.id === filters.category)?.name) || `"${searchInput}"`}</span>
+              )}
+              {(filters.minPrice || filters.maxPrice) && (
+                <span className="save-search-chip">
+                  ${filters.minPrice || 0} – ${filters.maxPrice || '∞'}
+                </span>
+              )}
+            </div>
+            <div className="save-search-actions">
+              <button className="save-search-cancel" onClick={() => setShowSaveSearch(false)} disabled={saving}>
+                Cancel
+              </button>
+              <button className="save-search-confirm" onClick={confirmSaveSearch} disabled={saving}>
+                {saving ? 'Saving…' : 'Save Search'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

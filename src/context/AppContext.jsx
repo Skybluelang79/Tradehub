@@ -117,6 +117,13 @@ export function AppProvider({ children }) {
             createdAt: item.created_at,
             updatedAt: item.updated_at,
             images: item.images || [],
+            isAuction: !!item.is_auction,
+            startingBid: item.starting_bid,
+            minIncrement: item.min_increment,
+            auctionEndsAt: item.auction_ends_at,
+            auctionStatus: item.auction_status,
+            currentBid: item.current_bid,
+            currentBidderId: item.current_bidder_id,
           }));
           setItems(normalized);
         }

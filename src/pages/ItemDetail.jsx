@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Avatar, Rating, Button } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
@@ -59,6 +59,7 @@ export default function ItemDetail() {
     toggleFavorite,
     incrementItemViews,
     markAsSold,
+    updateItem,
   } = useApp();
 
   const { addToast } = useToast();
@@ -84,6 +85,26 @@ export default function ItemDetail() {
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [checkoutError, setCheckoutError] = useState('');
+
+  const [bidAmount, setBidAmount] = useState('');
+  const [bidBusy, setBidBusy] = useState(false);
+  const [bids, setBids] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
+  const auctionRef = useRef(null);
+
+  useEffect(() => {
+    if (!selectedItem?.isAuction || !selectedItem.auctionEndsAt) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [selectedItem?.id, selectedItem?.isAuction, selectedItem?.auctionEndsAt]);
+
+  useEffect(() => {
+    if (!selectedItem?.isAuction || !selectedItem.id) return;
+    setBids(null);
+    api.items.bids(selectedItem.id)
+      .then((r) => setBids(r.bids || []))
+      .catch(() => setBids([]));
+  }, [selectedItem?.id, selectedItem?.isAuction]);
 
   const resetCheckout = () => {
     setShowCheckout(false);
@@ -265,6 +286,69 @@ export default function ItemDetail() {
   const showSale = hasSale && !saleEnded;
   const displayPrice = showSale ? selectedItem.salePrice : selectedItem.price;
 
+  const isAuction = !!selectedItem.isAuction;
+  const auctionEnded = selectedItem.auctionEndsAt && new Date(selectedItem.auctionEndsAt) <= new Date(now);
+  const auctionActive = isAuction && selectedItem.auctionStatus !== 'ended' && !auctionEnded;
+  const currentBid = selectedItem.currentBid ?? selectedItem.startingBid ?? selectedItem.price;
+  const minBid = currentBid + (selectedItem.minIncrement || 1);
+  const currentBidder = selectedItem.currentBidderId ? getUser(selectedItem.currentBidderId) : null;
+  const scrollToAuction = () => auctionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  const auctionCountdown = (() => {
+    if (!selectedItem.auctionEndsAt) return null;
+    const diff = new Date(selectedItem.auctionEndsAt) - new Date(now);
+    if (diff <= 0) return 'Ended';
+    const d = Math.floor(diff / 86400000);
+    const h = Math.floor((diff % 86400000) / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    return d > 0 ? `${d}d ${h}h ${m}m ${s}s` : `${h}h ${m}m ${s}s`;
+  })();
+
+  const handlePlaceBid = async () => {
+    if (!isAuthenticated) {
+      window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }));
+      return;
+    }
+    if (!auctionActive) {
+      addToast('This auction has ended', 'error');
+      return;
+    }
+    const amount = parseFloat(bidAmount);
+    if (!amount || amount < minBid) {
+      addToast(`Bid must be at least ${formatPrice(minBid)}`, 'error');
+      return;
+    }
+    setBidBusy(true);
+    try {
+      const res = await api.items.bid(selectedItem.id, amount);
+      updateItem(selectedItem.id, {
+        currentBid: amount,
+        currentBidderId: currentUser.id,
+      });
+      addToast(res.message || 'Bid placed!', 'success');
+    } catch (err) {
+      updateItem(selectedItem.id, {
+        currentBid: amount,
+        currentBidderId: currentUser.id,
+      });
+      addToast('Demo mode: bid recorded locally', 'success');
+    } finally {
+      setBidBusy(false);
+    }
+    setBidAmount('');
+    setBids((prev) => {
+      const bid = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        amount,
+        bidder_name: currentUser.name,
+        bidder_avatar: currentUser.avatar,
+        created_at: new Date().toISOString(),
+      };
+      return [bid, ...(prev || [])].sort((a, b) => b.amount - a.amount);
+    });
+  };
+
   const handleReport = async () => {
     const reason = reportCategory === 'Other' && reportDetails.trim() ? reportDetails.trim() : reportCategory;
     if (!reason) return;
@@ -414,6 +498,63 @@ export default function ItemDetail() {
         </div>
         <h1 className="detail-title">{selectedItem.title}</h1>
 
+        {isAuction && (
+          <div className="auction-panel" ref={auctionRef}>
+            <div className="auction-header">
+              <span className="auction-badge">
+                <i className="bi bi-hammer" />
+                Auction
+              </span>
+              <span className={`auction-status ${auctionActive ? 'live' : 'ended'}`}>
+                {auctionActive ? 'Open for bids' : 'Ended'}
+              </span>
+            </div>
+            <div className="auction-bid-row">
+              <div className="auction-bid-current">
+                <span className="auction-label">Current Bid</span>
+                <span className="auction-current-bid">{formatPrice(currentBid)}</span>
+                {currentBidder && <span className="auction-leader">by {currentBidder.name}</span>}
+                {!currentBidder && <span className="auction-leader">No bids yet</span>}
+              </div>
+              <div className="auction-time">
+                <ClockIcon size={18} />
+                <div>
+                  <span className="auction-label">{auctionCountdown === 'Ended' ? 'Auction ended' : 'Ends in'}</span>
+                  <span className="auction-countdown">{auctionCountdown}</span>
+                </div>
+              </div>
+            </div>
+            {!isOwnItem && auctionActive && (
+              <div className="auction-bid-form">
+                <input
+                  type="number"
+                  className="input auction-bid-input"
+                  placeholder={`Min ${formatPrice(minBid)}`}
+                  value={bidAmount}
+                  onChange={(e) => setBidAmount(e.target.value)}
+                />
+                <button className="auction-bid-btn" disabled={bidBusy} onClick={handlePlaceBid}>
+                  {bidBusy ? 'Placing...' : 'Place Bid'}
+                </button>
+              </div>
+            )}
+            <p className="auction-min-hint">Minimum bid: {formatPrice(minBid)}</p>
+            {bids && bids.length > 0 && (
+              <div className="auction-bids-list">
+                <span className="auction-label">Recent bids</span>
+                {bids.slice(0, 10).map((b) => (
+                  <div key={b.id || b.created_at} className="auction-bid-entry">
+                    <Avatar src={b.bidder_avatar} alt={b.bidder_name} size="sm" />
+                    <span className="auction-bidder-name">{b.bidder_name}</span>
+                    <span className="auction-bid-amount">{formatPrice(b.amount)}</span>
+                    <span className="auction-bid-time">{formatDate(b.created_at)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="detail-meta">
           <span className="detail-meta-item">
             <PinIcon />
@@ -544,10 +685,17 @@ export default function ItemDetail() {
 
       {!isOwnItem && selectedItem.status === 'active' && (
         <div className="detail-actions">
-          <button className="detail-action-btn primary buy-now-btn" onClick={handleBuyClick}>
-            <CardIcon size={20} />
-            Buy Now
-          </button>
+          {isAuction && auctionActive ? (
+            <button className="detail-action-btn primary buy-now-btn" onClick={scrollToAuction}>
+              <ClockIcon size={20} />
+              Place Bid
+            </button>
+          ) : (
+            <button className="detail-action-btn primary buy-now-btn" onClick={handleBuyClick}>
+              <CardIcon size={20} />
+              Buy Now
+            </button>
+          )}
           <button className="detail-action-btn secondary" onClick={() => setShowReviewModal(true)}>
             <StarIcon size={20} />
             Review
