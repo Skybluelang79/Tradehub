@@ -137,9 +137,9 @@ export default function Profile() {
     try {
       await api.searches.remove(id);
       setSavedSearches((prev) => prev.filter((s) => s.id !== id));
-      addToast({ type: 'success', message: 'Search removed' });
+      addToast('Search removed', 'success');
     } catch (err) {
-      addToast({ type: 'error', message: err.message });
+      addToast(err.message, 'error');
     }
   };
 
@@ -233,12 +233,12 @@ export default function Profile() {
     try {
       await api.items.bulkDelete(selectedIds);
       selectedIds.forEach((id) => deleteItem(id));
-      addToast({ type: 'success', message: `${selectedIds.length} listing${selectedIds.length > 1 ? 's' : ''} deleted` });
+      addToast(`${selectedIds.length} listing${selectedIds.length > 1 ? 's' : ''} deleted`, 'success');
       setShowBulkDeleteConfirm(false);
       setSelectedIds([]);
       setBulkMode(false);
     } catch (err) {
-      addToast({ type: 'error', message: err.message });
+      addToast(err.message, 'error');
     } finally {
       setBulkBusy(false);
     }
@@ -255,13 +255,13 @@ export default function Profile() {
     try {
       const res = await api.items.bulkUpdate(selectedIds, updates);
       selectedIds.forEach((id) => updateItem(id, updates));
-      addToast({ type: 'success', message: `${res.updated} listing${res.updated > 1 ? 's' : ''} updated` });
+      addToast(`${res.updated} listing${res.updated > 1 ? 's' : ''} updated`, 'success');
       setShowBulkEditModal(false);
       setBulkForm({ price: '', category: '', condition: '', quantity: '' });
       setSelectedIds([]);
       setBulkMode(false);
     } catch (err) {
-      addToast({ type: 'error', message: err.message });
+      addToast(err.message, 'error');
     } finally {
       setBulkBusy(false);
     }

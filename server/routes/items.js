@@ -25,6 +25,42 @@ router.get('/', optionalAuth, (req, res) => {
       page = 1, limit = 20, seller_id,
     } = req.query;
 
+    const where = [];
+    const params = [];
+    const whereClause = () => (where.length ? ` WHERE ${where.join(' AND ')}` : '');
+
+    where.push("i.status = 'active'");
+
+    if (search) {
+      where.push('(i.title LIKE ? OR i.description LIKE ?)');
+      params.push(`%${search}%`, `%${search}%`);
+    }
+
+    if (category && category !== 'all') {
+      where.push('LOWER(i.category) = LOWER(?)');
+      params.push(category);
+    }
+
+    if (seller_id) {
+      where.push('i.seller_id = ?');
+      params.push(seller_id);
+    }
+
+    if (min_price) {
+      where.push('i.price >= ?');
+      params.push(parseFloat(min_price));
+    }
+
+    if (max_price) {
+      where.push('i.price <= ?');
+      params.push(parseFloat(max_price));
+    }
+
+    if (itemCondition) {
+      where.push('LOWER(i.condition) = LOWER(?)');
+      params.push(itemCondition);
+    }
+
     let query = `
       SELECT i.*, u.name as seller_name, u.avatar as seller_avatar,
              u.rating as seller_rating, u.verified as seller_verified,
@@ -32,39 +68,8 @@ router.get('/', optionalAuth, (req, res) => {
       FROM items i
       JOIN users u ON i.seller_id = u.id
       LEFT JOIN subscriptions s ON s.user_id = u.id
-      WHERE i.status = 'active'
-    `;
-    const params = [];
-
-    if (search) {
-      query += ' AND (i.title LIKE ? OR i.description LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
-    }
-
-    if (category && category !== 'all') {
-      query += ' AND LOWER(i.category) = LOWER(?)';
-      params.push(category);
-    }
-
-    if (seller_id) {
-      query += ' AND i.seller_id = ?';
-      params.push(seller_id);
-    }
-
-    if (min_price) {
-      query += ' AND i.price >= ?';
-      params.push(parseFloat(min_price));
-    }
-
-    if (max_price) {
-      query += ' AND i.price <= ?';
-      params.push(parseFloat(max_price));
-    }
-
-    if (itemCondition) {
-      query += ' AND LOWER(i.condition) = LOWER(?)';
-      params.push(itemCondition);
-    }
+    ` + whereClause();
+    const countParams = [...params];
 
     switch (sort) {
       case 'newest': query += ' ORDER BY i.created_at DESC'; break;
@@ -129,7 +134,7 @@ router.get('/', optionalAuth, (req, res) => {
       });
     }
 
-    const total = db.prepare('SELECT COUNT(*) as count FROM items WHERE status = ?').get('active');
+    const total = db.prepare('SELECT COUNT(*) as count FROM items i' + whereClause()).get(...countParams);
     const pageNum = parseInt(page);
     const limitNum = parseInt(limit);
     res.json({

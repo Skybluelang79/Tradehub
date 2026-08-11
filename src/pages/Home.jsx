@@ -110,7 +110,7 @@ export default function Home() {
 
   const confirmSaveSearch = async () => {
     if (!saveName.trim()) {
-      addToast({ type: 'error', message: 'Give your search a name' });
+      addToast('Give your search a name', 'error');
       return;
     }
     setSaving(true);
@@ -122,10 +122,10 @@ export default function Home() {
         min_price: filters.minPrice || null,
         max_price: filters.maxPrice || null,
       });
-      addToast({ type: 'success', message: 'Search saved — we\'ll alert you on new matches' });
+      addToast('Search saved — we\'ll alert you on new matches', 'success');
       setShowSaveSearch(false);
     } catch (err) {
-      addToast({ type: 'error', message: err.message });
+      addToast(err.message, 'error');
     } finally {
       setSaving(false);
     }

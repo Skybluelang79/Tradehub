@@ -228,9 +228,9 @@ export default function Chat() {
   const copyMessage = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      addToast({ type: 'success', message: 'Message copied' });
+      addToast('Message copied', 'success');
     } catch {
-      addToast({ type: 'error', message: 'Could not copy message' });
+      addToast('Could not copy message', 'error');
     }
   };
 
@@ -317,7 +317,7 @@ export default function Chat() {
           trusted={isKeyTrusted(selectedConversation)}
           onTrust={() => {
             trustKey(selectedConversation);
-            addToast({ type: 'success', message: 'Contact verified! Fingerprint marked as trusted.' });
+            addToast('Contact verified! Fingerprint marked as trusted.', 'success');
           }}
         />
 
