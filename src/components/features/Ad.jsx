@@ -1,5 +1,38 @@
 import { useState, useEffect } from 'react';
+import { useApp } from '../../context';
+import { useToast } from '../ui/Toast';
 import './Ad.css';
+
+function useAdNavigation() {
+  const { setFilters, setActiveTab, filters } = useApp();
+  const { addToast } = useToast();
+
+  const goHome = (category) => {
+    setFilters({ ...filters, search: '', category: category || '' });
+    setActiveTab('home');
+    setTimeout(() => {
+      const el = document.querySelector('.items-grid');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  };
+
+  const goToAdd = () => setActiveTab('add');
+  const goToPayments = () => setActiveTab('payments');
+
+  const inviteFriend = () => {
+    const url = 'https://tradehub-app-928.netlify.app';
+    const text = 'Join me on TradeHub to buy and sell near you!';
+    if (navigator.share) {
+      navigator.share({ title: 'TradeHub', text, url }).catch(() => {});
+    } else {
+      navigator.clipboard?.writeText(`${text} ${url}`)
+        .then(() => addToast('Referral link copied', 'success'))
+        .catch(() => addToast('Could not copy link', 'error'));
+    }
+  };
+
+  return { goHome, goToAdd, goToPayments, inviteFriend };
+}
 
 const banners = [
   {
@@ -11,6 +44,7 @@ const banners = [
     title: 'Upgrade Your Tech Today!',
     desc: 'Get 20% off on all electronics',
     cta: 'Shop Now',
+    category: 'electronics',
   },
   {
     images: [
@@ -21,6 +55,7 @@ const banners = [
     title: 'Streetwear Drop',
     desc: 'Limited edition sneakers — up to 40% off',
     cta: 'Explore',
+    category: 'fashion',
   },
   {
     images: [
@@ -31,20 +66,22 @@ const banners = [
     title: 'Premium Finds',
     desc: 'Curated luxury items starting at $49',
     cta: 'Browse',
+    category: '',
   },
 ];
 
 const pushes = [
-  { title: 'Premium Seller?', desc: 'Get verified and appear first!', btn: 'Upgrade' },
-  { title: 'List for Free!', desc: 'Zero fees on your first 10 listings', btn: 'Start Selling' },
-  { title: 'Safe Trading', desc: 'Escrow protection for every transaction', btn: 'Learn More' },
-  { title: 'Refer a Friend', desc: 'Earn $10 credit for each referral', btn: 'Invite' },
+  { title: 'Premium Seller?', desc: 'Get verified and appear first!', btn: 'Upgrade', action: 'upgrade' },
+  { title: 'List for Free!', desc: 'Zero fees on your first 10 listings', btn: 'Start Selling', action: 'add' },
+  { title: 'Safe Trading', desc: 'Escrow protection for every transaction', btn: 'Learn More', action: 'learn' },
+  { title: 'Refer a Friend', desc: 'Earn $10 credit for each referral', btn: 'Invite', action: 'invite' },
 ];
 
 export function AdBanner({ className = '' }) {
   const [currentAd, setCurrentAd] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [banner] = useState(() => banners[Math.floor(Math.random() * banners.length)]);
+  const { goHome } = useAdNavigation();
 
   if (dismissed) return null;
 
@@ -62,7 +99,7 @@ export function AdBanner({ className = '' }) {
           <span className="ad-label">Sponsored</span>
           <h4 className="ad-title">{banner.title}</h4>
           <p className="ad-description">{banner.desc}</p>
-          <button className="ad-cta">{banner.cta}</button>
+          <button className="ad-cta" onClick={() => goHome(banner.category)}>{banner.cta}</button>
         </div>
       </div>
       <div className="ad-dots">
@@ -82,12 +119,13 @@ export function AdCard({ title, subtitle, className = '' }) {
   const [dismissed, setDismissed] = useState(false);
   const [card] = useState(() => {
     const cards = [
-      { title: 'Featured Deal', subtitle: 'Limited time offer', icon: 'star' },
-      { title: 'Flash Sale', subtitle: 'Prices dropping fast! ⚡', icon: 'clock' },
-      { title: 'New Arrivals', subtitle: 'Fresh inventory daily', icon: 'package' },
+      { title: 'Featured Deal', subtitle: 'Limited time offer', icon: 'star', category: '' },
+      { title: 'Flash Sale', subtitle: 'Prices dropping fast! ⚡', icon: 'clock', category: 'gaming' },
+      { title: 'New Arrivals', subtitle: 'Fresh inventory daily', icon: 'package', category: '' },
     ];
     return cards[Math.floor(Math.random() * cards.length)];
   });
+  const { goHome } = useAdNavigation();
 
   if (dismissed) return null;
 
@@ -108,7 +146,7 @@ export function AdCard({ title, subtitle, className = '' }) {
       </div>
       <h4 className="ad-card-title">{title || card.title}</h4>
       <p className="ad-card-subtitle">{subtitle || card.subtitle}</p>
-      <button className="ad-card-btn">Learn More</button>
+      <button className="ad-card-btn" onClick={() => goHome(card.category)}>Learn More</button>
       <span className="ad-card-sponsored">Sponsored</span>
     </div>
   );
@@ -126,8 +164,18 @@ export function AdInline({ className = '', text = 'Promoted Content' }) {
 export function AdPush({ className = '' }) {
   const [dismissed, setDismissed] = useState(false);
   const [push] = useState(() => pushes[Math.floor(Math.random() * pushes.length)]);
+  const { goHome, goToAdd, goToPayments, inviteFriend } = useAdNavigation();
 
   if (dismissed) return null;
+
+  const runAction = () => {
+    switch (push.action) {
+      case 'upgrade': goToPayments(); break;
+      case 'add': goToAdd(); break;
+      case 'invite': inviteFriend(); break;
+      default: goHome('');
+    }
+  };
 
   return (
     <div className={`ad-push ${className}`}>
@@ -147,7 +195,7 @@ export function AdPush({ className = '' }) {
           <strong>{push.title}</strong>
           <span>{push.desc}</span>
         </div>
-        <button className="ad-push-btn">{push.btn}</button>
+        <button className="ad-push-btn" onClick={runAction}>{push.btn}</button>
       </div>
     </div>
   );
@@ -158,6 +206,7 @@ const brandAds = [
     brand: 'Apple',
     tagline: 'iPhone 16 Pro. Built for Apple Intelligence.',
     offer: 'Up to $600 trade-in credit',
+    category: 'electronics',
     gradient: 'linear-gradient(135deg, #1a1a2e 0%, #2d2d44 40%, #0a0a14 100%)',
     accentColor: '#007AFF',
     logoSvg: (
@@ -171,6 +220,7 @@ const brandAds = [
     brand: 'Samsung',
     tagline: 'Galaxy S25 Ultra. The next era of mobile AI.',
     offer: 'Free Galaxy Buds with pre-order',
+    category: 'electronics',
     gradient: 'linear-gradient(135deg, #0c0c1d 0%, #1a1a3e 40%, #0d0d2b 100%)',
     accentColor: '#1428A0',
     logoSvg: (
@@ -184,6 +234,7 @@ const brandAds = [
     brand: 'Nike',
     tagline: 'Air Max Dn. Feel the rush of Dynamic Air.',
     offer: 'Exclusive early access for TradeHub members',
+    category: 'fashion',
     gradient: 'linear-gradient(135deg, #111 0%, #1a1a1a 40%, #0a0a0a 100%)',
     accentColor: '#FA5400',
     logoSvg: (
@@ -198,6 +249,7 @@ const brandAds = [
 export function BrandSponsor({ className = '' }) {
   const [dismissed, setDismissed] = useState(false);
   const [current, setCurrent] = useState(0);
+  const { goHome } = useAdNavigation();
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -231,7 +283,7 @@ export function BrandSponsor({ className = '' }) {
           <h3 className="brand-sponsor-name">{ad.brand}</h3>
           <p className="brand-sponsor-tagline">{ad.tagline}</p>
           <p className="brand-sponsor-offer" style={{ color: ad.accentColor }}>{ad.offer}</p>
-          <button className="brand-sponsor-cta" style={{ background: ad.accentColor }}>
+          <button className="brand-sponsor-cta" style={{ background: ad.accentColor }} onClick={() => goHome(ad.category)}>
             Shop Now
           </button>
         </div>
