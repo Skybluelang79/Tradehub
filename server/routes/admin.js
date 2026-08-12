@@ -64,25 +64,31 @@ function sendCsv(res, filename, headers, rows) {
   res.send('\uFEFF' + lines.join('\r\n'));
 }
 
+function ensureAdminRow() {
+  const ADMIN_ID = 'admin-1';
+  let admin = db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL);
+  if (admin) {
+    db.prepare('UPDATE users SET is_admin = 1, status = CASE WHEN status IS NULL OR status = "" THEN "active" ELSE status END WHERE id = ?').run(admin.id);
+    return admin.id;
+  }
+  const hashed = bcrypt.hashSync(ADMIN_PASSWORD, 10);
+  db.prepare("INSERT OR IGNORE INTO users (id, name, email, password, avatar, verified, is_admin) VALUES (?, 'Admin', ?, ?, 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 1, 1)").run(ADMIN_ID, ADMIN_EMAIL, hashed);
+  db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(ADMIN_ID);
+  return ADMIN_ID;
+}
+
 router.post('/login', adminLimiter, (req, res) => {
   const { email, password } = req.body;
   if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: 'Invalid admin credentials' });
   }
-  let admin = db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL);
-  if (!admin) {
-    const id = 'admin-1';
-    const hashed = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-    db.prepare("INSERT INTO users (id, name, email, password, avatar, verified, is_admin) VALUES (?, 'Admin', ?, ?, 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 1, 1)").run(id, ADMIN_EMAIL, hashed);
-    admin = { id };
-  }
-  db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(admin.id);
+  const adminId = ensureAdminRow();
   const token = jwt.sign(
-    { userId: admin.id, isAdmin: true },
+    { userId: adminId, isAdmin: true },
     JWT_SECRET,
-    { expiresIn: '24h' }
+    { expiresIn: '30d' }
   );
-  logAudit(admin.id, 'admin_login', 'user', admin.id);
+  logAudit(adminId, 'admin_login', 'user', adminId);
   res.json({ token });
 });
 
