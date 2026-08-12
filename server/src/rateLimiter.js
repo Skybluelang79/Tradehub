@@ -45,7 +45,7 @@ export const adminLimiter = RATE_LIMIT_ENABLED
   ? rateLimit({
       ...base,
       windowMs: 15 * 60 * 1000,
-      max: 5,
+      max: 15,
       message: { error: 'Too many login attempts. Try again in 15 minutes.' },
     })
   : passThrough();
