@@ -14,7 +14,7 @@ export function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, created_at FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -44,7 +44,7 @@ export function optionalAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, created_at FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
     req.user = user && user.status === 'active' ? user : null;
   } catch (err) {
     req.user = null;

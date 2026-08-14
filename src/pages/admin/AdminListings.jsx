@@ -5,7 +5,7 @@ import { SearchIcon, CheckIcon, XIcon, EyeIcon, FlagIcon } from './Icons.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import './AdminListings.css';
 
-const LISTING_FILTERS = ['all', 'active', 'flagged', 'sold', 'removed'];
+const LISTING_FILTERS = ['all', 'pending', 'active', 'flagged', 'sold', 'removed'];
 
 const formatDate = (value) => {
   if (!value) return '—';
@@ -172,7 +172,7 @@ const AdminListings = () => {
                 </span>
               </div>
               <div className="listing-actions">
-                {listing.status === 'flagged' && (
+                {(listing.status === 'flagged' || listing.status === 'pending') && (
                   <>
                     <button
                       className="action-btn approve"
@@ -284,7 +284,7 @@ const AdminListings = () => {
               </div>
             </div>
             <div className="detail-actions">
-              {selectedListing.status === 'flagged' && (
+              {(selectedListing.status === 'flagged' || selectedListing.status === 'pending') && (
                 <>
                   <button
                     className="btn-success"
@@ -313,7 +313,7 @@ const AdminListings = () => {
                 value={newStatus}
                 onChange={(e) => setNewStatus(e.target.value)}
               >
-                {['active', 'sold', 'flagged', 'removed'].map((s) => (
+                {['active', 'sold', 'flagged', 'pending', 'removed'].map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
               </select>

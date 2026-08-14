@@ -36,7 +36,7 @@ export default function AdminPayouts() {
     }
     setLoading(true);
     try {
-      const [p, t] = await Promise.all([api.payouts.all(), api.admin.transactions()]);
+      const [p, t] = await Promise.all([api.payouts.all(), api.admin.transactions({ page: 1, limit: 100 })]);
       setPayouts(p.payouts || []);
       setAwaiting((t.transactions || []).filter((tx) => tx.status === 'awaiting_payment'));
     } catch (err) {
@@ -248,7 +248,10 @@ export default function AdminPayouts() {
                   const detailText = Object.entries(details).map(([k, v]) => `${k}: ${v}`).join(' · ');
                   return (
                     <tr key={p.id}>
-                      <td><span className="tx-id">{p.user_id.slice(0, 12)}</span></td>
+                      <td>
+                        <span className="tx-id">{p.user_name || p.user_id.slice(0, 12)}</span>
+                        {p.user_email && <span className="tx-fee" style={{ display: 'block', fontSize: 12 }}>{p.user_email}</span>}
+                      </td>
                       <td><span className="tx-amount">{fmt(p.amount_cents)}</span></td>
                       <td><span className="tx-fee">{p.method}</span></td>
                       <td className="payout-details-cell">{detailText || '-'}</td>

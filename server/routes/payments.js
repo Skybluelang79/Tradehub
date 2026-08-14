@@ -22,12 +22,15 @@ const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE
 const PLAN_FEES = { free: 0.03, premium: 0.02, pro: 0.015 };
 
 // Fee rate applied to a sale is the seller's subscription plan fee (e.g. 2% for
-// Premium), falling back to the PAYMENT_FEE_PERCENT env var, then 3%.
+// Premium), falling back to the admin-configurable platform_fee_percent setting,
+// then the PAYMENT_FEE_PERCENT env var, then 3%.
 export function getFeeRateForSeller(sellerId) {
   try {
     const sub = db.prepare("SELECT plan FROM subscriptions WHERE user_id = ? AND status != 'cancelled'").get(sellerId);
     if (sub && PLAN_FEES[sub.plan] != null) return PLAN_FEES[sub.plan];
   } catch {}
+  const adminFee = platformFeePercent();
+  if (Number.isFinite(adminFee) && adminFee >= 0) return adminFee / 100;
   if (Number.isFinite(FEE_RATE) && FEE_RATE >= 0) return FEE_RATE;
   return 0.03;
 }

@@ -211,3 +211,58 @@ describe('Disputes', () => {
     expect(response.status).toBe(403);
   });
 });
+
+describe('Maintenance Mode', () => {
+  let adminToken;
+
+  beforeAll(async () => {
+    const login = await supertest(app)
+      .post('/api/admin/login')
+      .send({ email: 'admin@tradehub.com', password: process.env.ADMIN_PASSWORD || 'admin123' });
+    adminToken = login.body.token;
+  });
+
+  it('allows normal traffic when maintenance is off', async () => {
+    const response = await supertest(app).get('/api/items');
+    expect(response.status).toBe(200);
+  });
+
+  it('blocks non-admin API calls with 503 when maintenance is on', async () => {
+    const db = await import('../db.js');
+    db.default.prepare("UPDATE platform_settings SET value = '1' WHERE key = 'maintenance_mode'").run();
+
+    const items = await supertest(app).get('/api/items');
+    expect(items.status).toBe(503);
+    expect(items.body.maintenance).toBe(true);
+
+    const health = await supertest(app).get('/api/health');
+    expect(health.status).toBe(200);
+
+    const admin = await supertest(app)
+      .get('/api/admin/dashboard')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(admin.status).toBe(200);
+
+    db.default.prepare("UPDATE platform_settings SET value = '0' WHERE key = 'maintenance_mode'").run();
+  });
+
+  it('serves traffic again after maintenance is turned off', async () => {
+    const response = await supertest(app).get('/api/items');
+    expect(response.status).toBe(200);
+  });
+});
+
+describe('Platform Fee Setting', () => {
+  it('getFeeRateForSeller honors the admin platform_fee_percent setting', async () => {
+    const db = await import('../db.js');
+    const { getFeeRateForSeller } = await import('../routes/payments.js');
+
+    db.default.prepare("UPDATE platform_settings SET value = '7.5' WHERE key = 'platform_fee_percent'").run();
+    const rate = getFeeRateForSeller('no-such-user');
+    expect(rate).toBeCloseTo(0.075, 5);
+
+    db.default.prepare("UPDATE platform_settings SET value = '10' WHERE key = 'platform_fee_percent'").run();
+    const reset = getFeeRateForSeller('no-such-user');
+    expect(reset).toBeCloseTo(0.1, 5);
+  });
+});

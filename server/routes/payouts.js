@@ -117,7 +117,12 @@ router.put('/:id/status', adminAuth, (req, res) => {
 
 router.get('/all', adminAuth, (req, res) => {
   try {
-    const payouts = db.prepare('SELECT * FROM payouts ORDER BY created_at DESC').all();
+    const payouts = db.prepare(`
+      SELECT p.*, u.name as user_name, u.email as user_email
+      FROM payouts p
+      LEFT JOIN users u ON u.id = p.user_id
+      ORDER BY p.created_at DESC
+    `).all();
     res.json({ payouts });
   } catch (err) {
     logger.error('List all payouts error:', err);

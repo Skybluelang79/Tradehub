@@ -130,8 +130,9 @@ const AdminUsers = () => {
   };
 
   const rowStatus = (user) => {
+    if (user.status && user.status !== 'active') return user.status;
     if (!user.verified) return 'pending';
-    return user.status;
+    return 'active';
   };
 
   return (

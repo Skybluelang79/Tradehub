@@ -7,6 +7,7 @@ import fs from 'fs';
 import { __dirname } from './src/paths.js';
 import { errorHandler, notFound } from './src/errorHandler.js';
 import { apiLimiter } from './src/rateLimiter.js';
+import { maintenanceMode } from './middleware/maintenance.js';
 import { allowedOrigins } from './src/env.js';
 
 import authRoutes from './routes/auth.js';
@@ -67,6 +68,7 @@ if (USE_BLOB) {
 }
 
 app.use('/api', apiLimiter);
+app.use(maintenanceMode);
 
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);
