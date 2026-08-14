@@ -275,6 +275,8 @@ export default function Payments() {
     <div className="page">
       <Header title="Payments" subtitle="Manage your payments, wallet and payouts" />
 
+      <div className="payments-content">
+
       <div className="buyer-protection-card" onClick={() => setShowEscrowInfo(true)} style={{ cursor: 'pointer' }}>
         <div className="protection-icon"><ShieldIcon size={24} /></div>
         <div className="protection-content">
@@ -285,6 +287,7 @@ export default function Payments() {
       </div>
 
       {wallet && (
+        <>
         <div className="pay-hero">
           <div className="pay-hero-glow" aria-hidden="true" />
           <div className="pay-hero-top">
@@ -312,9 +315,8 @@ export default function Payments() {
             </button>
           </div>
         </div>
-      )}
 
-      {wallet && (
+        {wallet && (
         <div className="section">
           <div className="wallet-grid">
             <div className="wallet-cell">
@@ -336,7 +338,11 @@ export default function Payments() {
           </div>
         </div>
       )}
+        </>
+      )}
 
+      <div className="payments-layout">
+        <div className="payments-col">
       <div className="section">
         <div className="section-header">
           <h2 className="section-title">Payment Methods</h2>
@@ -373,23 +379,27 @@ export default function Payments() {
           Your card details are stored securely and never shared with sellers.
         </p>
       </div>
-
-      <div className="section">
-        <div className="section-header">
-          <h2 className="section-title">Gift Cards &amp; Store Credit</h2>
-          <button className="wallet-redeem-btn" onClick={() => setShowRedeemModal(true)}>Redeem</button>
         </div>
-        <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
-          Redeem a gift card to add store credit, or browse our gift card brands and the Gift Mall.
-        </p>
-        <button className="wallet-redeem-btn wallet-browse-btn" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
-          <GiftIcon size={16} />
-          Browse Gift Mall
-        </button>
-        <button className="wallet-redeem-btn wallet-browse-btn" onClick={() => setShowGiftCardModal(true)} style={{ marginTop: 8 }}>
-          View sample brand designs
-        </button>
-      </div>
+
+        <div className="payments-col payments-col-stack">
+          <div className="section">
+            <div className="section-header">
+              <h2 className="section-title">Gift Cards &amp; Store Credit</h2>
+              <button className="wallet-redeem-btn" onClick={() => setShowRedeemModal(true)}>Redeem</button>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
+              Redeem a gift card to add store credit, or browse our gift card brands and the Gift Mall.
+            </p>
+            <div className="gc-actions">
+              <button className="wallet-redeem-btn wallet-browse-btn" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
+                <GiftIcon size={16} />
+                Browse Gift Mall
+              </button>
+              <button className="wallet-redeem-btn wallet-browse-btn" onClick={() => setShowGiftCardModal(true)}>
+                View sample designs
+              </button>
+            </div>
+          </div>
 
       <div className="section">
         <div className="section-header">
@@ -430,6 +440,8 @@ export default function Payments() {
           </>
         )}
       </div>
+        </div>
+        </div>
 
       <div className="section">
         <div className="section-header">
@@ -538,6 +550,7 @@ export default function Payments() {
             );
           })
         )}
+      </div>
       </div>
 
       <Modal isOpen={showEscrowInfo} onClose={() => setShowEscrowInfo(false)} title="How Escrow Works">
