@@ -65,3 +65,82 @@
 @keyframes social-auth-spin {
   to { transform: rotate(360deg); }
 }
+
+.social-more-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px auto 0;
+  padding: 6px 10px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.social-more-btn:hover:not(:disabled) {
+  color: var(--accent);
+}
+
+.social-more-caret {
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 5px solid currentColor;
+  transition: transform var(--transition-fast);
+}
+
+.social-more-caret.open {
+  transform: rotate(180deg);
+}
+
+.social-options-panel {
+  margin-top: 12px;
+  padding: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: social-options-in 0.18s ease;
+}
+
+@keyframes social-options-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.social-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.social-option:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.social-option-name {
+  flex: 1;
+}
+
+.social-option-hint {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
