@@ -215,6 +215,23 @@
   color: var(--text-primary);
 }
 
+.admin-header-logout-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e53935;
+}
+
+.admin-header-logout-btn:hover {
+  background: rgba(229, 57, 53, 0.15);
+  color: #e53935;
+}
+
+.admin-header-logout-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .admin-content {
   flex: 1;
   padding: 24px;
@@ -253,5 +270,9 @@
 
   .admin-header {
     padding: 12px 16px;
+  }
+
+  .admin-header-logout-label {
+    display: none;
   }
 }
