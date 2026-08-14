@@ -53,11 +53,11 @@
   --surface: #FFFFFF;
   --surface-hover: #F2F5F1;
   --surface-active: #E0E5DF;
-  --text-primary: #161A18;
-  --text-secondary: #5E6A64;
-  --text-tertiary: #8B958E;
+  --text-primary: #111513;
+  --text-secondary: #3F4B45;
+  --text-tertiary: #5C6761;
   --border: #DFE5DF;
-  --border-light: #CDD5CD;
+  --border-light: #C6CFC6;
   --overlay: rgba(0, 0, 0, 0.4);
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
