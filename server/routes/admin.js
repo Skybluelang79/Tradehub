@@ -325,7 +325,7 @@ router.delete('/users/:id', adminAuth, (req, res) => {
     db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM user_reports WHERE reported_user_id = ? OR reporter_id = ?').run(uid, uid);
     db.prepare('DELETE FROM reports WHERE reporter_id = ?').run(uid);
-    db.prepare('DELETE FROM disputes WHERE buyer_id = ? OR seller_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM disputes WHERE opened_by = ? OR transaction_id IN (SELECT id FROM transactions WHERE buyer_id = ? OR seller_id = ?)').run(uid, uid, uid);
     db.prepare('DELETE FROM subscriptions WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM wallets WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM payouts WHERE user_id = ?').run(uid);
