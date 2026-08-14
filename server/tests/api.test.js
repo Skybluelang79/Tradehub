@@ -270,7 +270,6 @@ describe('Platform Fee Setting', () => {
 describe('Admin Listing Approval', () => {
   let adminToken;
   let sellerToken;
-  let sellerId;
   let itemId;
 
   beforeAll(async () => {
@@ -283,11 +282,6 @@ describe('Admin Listing Approval', () => {
       .post('/api/auth/login')
       .send({ email: 'analyst@test.com', password: 'password123' });
     sellerToken = sellerLogin.body.token;
-
-    const me = await supertest(app)
-      .get('/api/auth/me')
-      .set('Authorization', `Bearer ${sellerToken}`);
-    sellerId = me.body.user?.id || me.body.id;
 
     const item = await supertest(app)
       .post('/api/items')
