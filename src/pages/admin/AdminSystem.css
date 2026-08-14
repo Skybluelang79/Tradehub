@@ -218,7 +218,7 @@
   border-radius: 6px;
   border: none;
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
   cursor: pointer;
   display: flex;
   align-items: center;

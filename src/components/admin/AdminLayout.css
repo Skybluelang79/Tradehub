@@ -282,3 +282,15 @@
     display: none;
   }
 }
+
+[data-theme="light"] .admin-sidebar {
+  background: linear-gradient(180deg, #131521 0%, #1A1D2C 100%);
+}
+
+[data-theme="light"] .admin-sidebar-header {
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .admin-sidebar-footer {
+  border-top-color: rgba(255, 255, 255, 0.1);
+}

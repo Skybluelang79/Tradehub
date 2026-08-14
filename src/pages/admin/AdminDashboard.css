@@ -36,7 +36,7 @@
   gap: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #4ADE80;
+  color: var(--status-success);
   background: rgba(74, 222, 128, 0.1);
   padding: 6px 14px;
   border-radius: 20px;
@@ -168,12 +168,12 @@
 
 .stat-change.positive {
   background: rgba(74, 222, 128, 0.12);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .stat-change.negative {
   background: rgba(239, 68, 68, 0.12);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .dashboard-grid {
@@ -425,17 +425,17 @@
 
 .transaction-status.completed {
   background: rgba(74, 222, 128, 0.12);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .transaction-status.pending {
   background: rgba(251, 191, 36, 0.12);
-  color: #F59E0B;
+  color: var(--status-warning);
 }
 
 .transaction-status.refunded {
   background: rgba(239, 68, 68, 0.12);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .top-items-list {
@@ -657,7 +657,7 @@
 
 .moderation-btn.approve {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .moderation-btn.approve:hover {
@@ -666,7 +666,7 @@
 
 .moderation-btn.remove {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .moderation-btn.remove:hover {
@@ -675,7 +675,7 @@
 
 .moderation-btn.clear {
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
   flex-shrink: 0;
 }
 
@@ -686,7 +686,7 @@
 .moderation-open {
   font-size: 12px;
   font-weight: 600;
-  color: #F59E0B;
+  color: var(--status-warning);
   background: rgba(251, 191, 36, 0.12);
   padding: 4px 10px;
   border-radius: 6px;

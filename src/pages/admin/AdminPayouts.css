@@ -71,12 +71,12 @@
 
 .status-approved {
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
 }
 
 .status-cancelled {
   background: rgba(148, 163, 184, 0.15);
-  color: #94A3B8;
+  color: var(--status-muted);
 }
 
 .gift-modal-overlay {

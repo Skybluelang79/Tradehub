@@ -31,17 +31,17 @@
 
 .tx-stat-icon.success {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .tx-stat-icon.blue {
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
 }
 
 .tx-stat-icon.warning {
   background: rgba(251, 191, 36, 0.15);
-  color: #FBBF24;
+  color: var(--status-warning);
 }
 
 .tx-stat-info {
@@ -132,32 +132,32 @@
 
 .status-completed {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .status-pending {
   background: rgba(251, 191, 36, 0.15);
-  color: #FBBF24;
+  color: var(--status-warning);
 }
 
 .status-refunded {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .status-failed {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .status-cancelled {
   background: rgba(148, 163, 184, 0.2);
-  color: #94A3B8;
+  color: var(--status-muted);
 }
 
 .status-awaiting-payment {
   background: rgba(168, 85, 247, 0.15);
-  color: #A855F7;
+  color: var(--status-purple);
 }
 
 .table-empty {
@@ -214,7 +214,7 @@
   align-items: center;
   gap: 6px;
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
   border: none;
   padding: 6px 10px;
   border-radius: 8px;

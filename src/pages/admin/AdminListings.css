@@ -235,7 +235,7 @@
 
 .listing-actions .action-btn.approve {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .listing-actions .action-btn.approve:hover {
@@ -244,7 +244,7 @@
 
 .listing-actions .action-btn.reject {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .listing-actions .action-btn.reject:hover {
@@ -253,7 +253,7 @@
 
 .listing-actions .action-btn.view {
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
 }
 
 .listing-actions .action-btn.view:hover {
@@ -262,7 +262,7 @@
 
 .listing-actions .action-btn.delete {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .listing-actions .action-btn.delete:hover {
@@ -377,7 +377,7 @@
 
 .btn-danger-outline {
   background: transparent;
-  color: #EF4444;
+  color: var(--status-error);
   border: 1px solid #EF4444;
 }
 

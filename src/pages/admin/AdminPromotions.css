@@ -83,12 +83,12 @@
 
 .status-active {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .status-suspended {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .promo-tabs {
@@ -231,7 +231,7 @@
 
 .action-btn.edit {
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
 }
 
 .action-btn.edit:hover {
@@ -240,7 +240,7 @@
 
 .action-btn.activate {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .action-btn.activate:hover {
@@ -249,7 +249,7 @@
 
 .action-btn.suspend {
   background: rgba(251, 191, 36, 0.15);
-  color: #FBBF24;
+  color: var(--status-warning);
 }
 
 .action-btn.suspend:hover {
@@ -258,7 +258,7 @@
 
 .action-btn.delete {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .action-btn.delete:hover {

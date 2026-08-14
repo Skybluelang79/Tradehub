@@ -226,22 +226,22 @@
 
 .status-active {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .status-pending {
   background: rgba(251, 191, 36, 0.15);
-  color: #FBBF24;
+  color: var(--status-warning);
 }
 
 .status-suspended {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .status-banned {
   background: rgba(239, 68, 68, 0.2);
-  color: #DC2626;
+  color: var(--status-danger);
 }
 
 .rating-cell {
@@ -269,7 +269,7 @@
 
 .action-btn.view {
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
 }
 
 .action-btn.view:hover {
@@ -278,7 +278,7 @@
 
 .action-btn.suspend {
   background: rgba(251, 191, 36, 0.15);
-  color: #FBBF24;
+  color: var(--status-warning);
 }
 
 .action-btn.suspend:hover {
@@ -287,7 +287,7 @@
 
 .action-btn.activate {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .action-btn.activate:hover {
@@ -296,7 +296,7 @@
 
 .action-btn.delete {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .action-btn.delete:hover {
@@ -431,7 +431,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   background: rgba(168, 85, 247, 0.15);
-  color: #A855F7;
+  color: var(--status-purple);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -440,7 +440,7 @@
   display: block;
   margin-top: 4px;
   font-size: 11px;
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .table-empty {
@@ -494,7 +494,7 @@
 
 .action-btn.verify {
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
 }
 
 .action-btn.verify:hover {
@@ -503,7 +503,7 @@
 
 .action-btn.promote {
   background: rgba(168, 85, 247, 0.15);
-  color: #A855F7;
+  color: var(--status-purple);
 }
 
 .action-btn.promote:hover {
@@ -512,7 +512,7 @@
 
 .action-btn.demote {
   background: rgba(148, 163, 184, 0.2);
-  color: #94A3B8;
+  color: var(--status-muted);
 }
 
 .action-btn.demote:hover {
@@ -645,7 +645,7 @@
 }
 
 .mini-rating {
-  color: #FBBF24;
+  color: var(--status-warning);
   font-size: 12px;
 }
 

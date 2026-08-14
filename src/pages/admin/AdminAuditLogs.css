@@ -51,22 +51,22 @@
 
 .log-action-default {
   background: rgba(148, 163, 184, 0.2);
-  color: #94A3B8;
+  color: var(--status-muted);
 }
 
 .log-action-info {
   background: rgba(59, 130, 246, 0.15);
-  color: #3B82F6;
+  color: var(--status-info);
 }
 
 .log-action-success {
   background: rgba(74, 222, 128, 0.15);
-  color: #4ADE80;
+  color: var(--status-success);
 }
 
 .log-action-danger {
   background: rgba(239, 68, 68, 0.15);
-  color: #EF4444;
+  color: var(--status-error);
 }
 
 .log-target {
