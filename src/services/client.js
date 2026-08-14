@@ -161,6 +161,13 @@ export const api = {
     create: (data) => request('/reviews', { method: 'POST', body: JSON.stringify(data) }),
   },
 
+  follows: {
+    storefront: (userId) => request(`/follows/storefront/${userId}`),
+    status: (userId) => request(`/follows/status/${userId}`),
+    follow: (userId) => request(`/follows/${userId}/follow`, { method: 'POST' }),
+    unfollow: (userId) => request(`/follows/${userId}/follow`, { method: 'DELETE' }),
+  },
+
   notifications: {
     list: () => request('/notifications'),
     unreadCount: () => request('/notifications/unread/count'),

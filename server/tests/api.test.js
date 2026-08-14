@@ -266,3 +266,112 @@ describe('Platform Fee Setting', () => {
     expect(reset).toBeCloseTo(0.1, 5);
   });
 });
+
+describe('Admin Listing Approval', () => {
+  let adminToken;
+  let sellerToken;
+  let sellerId;
+  let itemId;
+
+  beforeAll(async () => {
+    const login = await supertest(app)
+      .post('/api/admin/login')
+      .send({ email: 'admin@tradehub.com', password: process.env.ADMIN_PASSWORD || 'admin123' });
+    adminToken = login.body.token;
+
+    const sellerLogin = await supertest(app)
+      .post('/api/auth/login')
+      .send({ email: 'analyst@test.com', password: 'password123' });
+    sellerToken = sellerLogin.body.token;
+
+    const me = await supertest(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${sellerToken}`);
+    sellerId = me.body.user?.id || me.body.id;
+
+    const item = await supertest(app)
+      .post('/api/items')
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({
+        title: 'Pending Approval Item',
+        description: 'Item that starts pending for moderation',
+        price: 25,
+        category: 'electronics',
+        condition: 'new',
+      });
+    itemId = item.body.item?.id || item.body.id;
+    expect(itemId).toBeTruthy();
+  });
+
+  it('new listings are created active', async () => {
+    const response = await supertest(app).get(`/api/items/${itemId}`);
+    expect(response.status).toBe(200);
+    expect(response.body.item.status).toBe('active');
+  });
+
+  it('admin can move a listing to pending, hiding it from the public feed', async () => {
+    const response = await supertest(app)
+      .put(`/api/admin/listings/${itemId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'pending' });
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+
+    const detail = await supertest(app).get(`/api/items/${itemId}`);
+    expect(detail.body.item.status).toBe('pending');
+
+    const feed = await supertest(app).get('/api/items?search=pending');
+    const found = (feed.body.items || []).some((i) => i.id === itemId);
+    expect(found).toBe(false);
+  });
+
+  it('admin can approve a pending listing back to active', async () => {
+    const response = await supertest(app)
+      .put(`/api/admin/listings/${itemId}/status`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ status: 'active' });
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+
+    const detail = await supertest(app).get(`/api/items/${itemId}`);
+    expect(detail.body.item.status).toBe('active');
+  });
+
+  it('approved listings appear in the public feed', async () => {
+    const response = await supertest(app).get('/api/items?search=pending');
+    const found = (response.body.items || []).some((i) => i.id === itemId);
+    expect(found).toBe(true);
+  });
+});
+
+describe('Seller Storefront', () => {
+  it('returns seller info, listings and follow counts', async () => {
+    const db = await import('../db.js');
+    const seller = db.default.prepare("SELECT id FROM users WHERE email = 'analyst@test.com'").get();
+    expect(seller).toBeTruthy();
+
+    const response = await supertest(app).get(`/api/follows/storefront/${seller.id}`);
+    expect(response.status).toBe(200);
+    expect(response.body.user).toHaveProperty('name');
+    expect(response.body).toHaveProperty('listings');
+    expect(Array.isArray(response.body.listings)).toBe(true);
+    expect(response.body).toHaveProperty('stats');
+    expect(response.body).toHaveProperty('followerCount');
+    expect(response.body).toHaveProperty('followingCount');
+    expect(response.body).toHaveProperty('isFollowing');
+  });
+
+  it('returns 404 for an unknown seller', async () => {
+    const response = await supertest(app).get('/api/follows/storefront/no-such-user');
+    expect(response.status).toBe(404);
+  });
+
+  it('returns public reviews for a seller', async () => {
+    const db = await import('../db.js');
+    const seller = db.default.prepare("SELECT id FROM users WHERE email = 'analyst@test.com'").get();
+    const response = await supertest(app).get(`/api/reviews/user/${seller.id}`);
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveProperty('reviews');
+    expect(Array.isArray(response.body.reviews)).toBe(true);
+  });
+});

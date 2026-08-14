@@ -649,7 +649,7 @@ export default function ItemDetail() {
               </span>
             </div>
           </div>
-          <button className="seller-view-btn" onClick={() => { setSelectedItem(null); setActiveTab('profile'); }}>View</button>
+          <button className="seller-view-btn" onClick={() => window.dispatchEvent(new CustomEvent('openSellerProfile', { detail: seller.id }))}>View</button>
         </div>
 
         {!isOwnItem && sellerReviews.length > 0 && (

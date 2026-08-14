@@ -7,7 +7,7 @@ import { BottomNav } from './components/layout';
 import { OfflineIndicator } from './components/features';
 
 
-import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, Favorites, Notifications, GiftMall } from './pages';
+import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, Favorites, Notifications, GiftMall, SellerProfile } from './pages';
 import { AdminProvider, useAdmin } from './context/AdminContext.jsx';
 import AdminLayout from './components/admin/AdminLayout.jsx';
 import AdminLogin from './components/admin/AdminLogin.jsx';
@@ -75,6 +75,7 @@ function AppContent() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showGiftMall, setShowGiftMall] = useState(false);
+  const [sellerProfileId, setSellerProfileId] = useState(null);
   const [authRedirectTab, setAuthRedirectTab] = useState(null);
   const [authInitialView, setAuthInitialView] = useState('login');
 
@@ -83,6 +84,7 @@ function AppContent() {
     const onNotifs = () => setShowNotifications(true);
     const onFavs = () => setShowFavorites(true);
     const onMall = () => setShowGiftMall(true);
+    const onSellerProfile = (e) => setSellerProfileId(e.detail || null);
     const onHome = () => {
       setShowFavorites(false);
       setShowNotifications(false);
@@ -102,6 +104,7 @@ function AppContent() {
     window.addEventListener('openNotifications', onNotifs);
     window.addEventListener('openFavorites', onFavs);
     window.addEventListener('openGiftMall', onMall);
+    window.addEventListener('openSellerProfile', onSellerProfile);
     window.addEventListener('goHome', onHome);
     window.addEventListener('openAdminLogin', onAdminLogin);
     window.addEventListener('adminSessionExpired', onAdminSessionExpired);
@@ -110,6 +113,7 @@ function AppContent() {
       window.removeEventListener('openNotifications', onNotifs);
       window.removeEventListener('openFavorites', onFavs);
       window.removeEventListener('openGiftMall', onMall);
+      window.removeEventListener('openSellerProfile', onSellerProfile);
       window.removeEventListener('goHome', onHome);
       window.removeEventListener('openAdminLogin', onAdminLogin);
       window.removeEventListener('adminSessionExpired', onAdminSessionExpired);
@@ -205,6 +209,19 @@ function AppContent() {
   if (showGiftMall) {
     return (
       <GiftMall onClose={() => setShowGiftMall(false)} />
+    );
+  }
+
+  if (sellerProfileId) {
+    return (
+      <SellerProfile
+        userId={sellerProfileId}
+        onClose={() => setSellerProfileId(null)}
+        onItemOpen={(item) => {
+          setSelectedItem(item);
+          setSellerProfileId(null);
+        }}
+      />
     );
   }
 

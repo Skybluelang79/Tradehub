@@ -25,6 +25,14 @@ export default function ItemCard({ item, distance, onClick, variant = 'grid' }) 
     toggleFavorite(item.id);
   };
 
+  const handleSellerClick = (e) => {
+    e.stopPropagation();
+    if (!item.sellerId) return;
+    window.dispatchEvent(new CustomEvent('openSellerProfile', { detail: item.sellerId }));
+  };
+
+  const sellerName = item.sellerName || item.seller_name;
+
   return (
     <article
       className={`item-card ${variant === 'list' ? 'item-card--list' : ''}`}
@@ -67,6 +75,16 @@ export default function ItemCard({ item, distance, onClick, variant = 'grid' }) 
       </div>
       <div className="item-content">
         <h3 className="item-title">{item.title}</h3>
+        {sellerName && (
+          <button className="item-seller" onClick={handleSellerClick}>
+            <span className="item-seller-name">{sellerName}</span>
+            {item.sellerVerified && (
+              <svg className="item-seller-verified" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            )}
+          </button>
+        )}
         <div className="item-footer">
           <div className="item-price-row">
             {showSale && !isAuction ? (
