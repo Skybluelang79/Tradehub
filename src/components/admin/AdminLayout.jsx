@@ -92,16 +92,16 @@ const AdminLayout = ({ children, currentPath, onNavigate, onExit }) => {
           <button className="admin-menu-toggle" onClick={() => setSidebarOpen(true)}>
             <MenuIcon size={24} />
           </button>
+          <button className="admin-header-logout-btn" onClick={handleExit} title="Logout">
+            <LogOutIcon size={20} />
+            <span className="admin-header-logout-label">Logout</span>
+          </button>
           <div className="admin-header-title">
             {navItems.find(item => item.path === currentPath)?.label || 'Dashboard'}
           </div>
           <div className="admin-header-actions">
             <button className="admin-header-btn" title="Admin tools">
               <ShieldIcon size={20} />
-            </button>
-            <button className="admin-header-btn admin-header-logout-btn" onClick={handleExit} title="Logout">
-              <LogOutIcon size={20} />
-              <span className="admin-header-logout-label">Logout</span>
             </button>
           </div>
         </header>

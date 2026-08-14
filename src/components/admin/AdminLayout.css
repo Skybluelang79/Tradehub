@@ -219,12 +219,18 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #e53935;
+  background: #e53935;
+  border: none;
+  color: white;
+  padding: 10px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s;
 }
 
 .admin-header-logout-btn:hover {
-  background: rgba(229, 57, 53, 0.15);
-  color: #e53935;
+  background: #c62828;
 }
 
 .admin-header-logout-label {
