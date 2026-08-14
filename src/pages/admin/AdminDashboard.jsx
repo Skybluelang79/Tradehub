@@ -18,6 +18,8 @@ const AdminDashboard = ({ onNavigate }) => {
   const { addToast } = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(() => !adminToken);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState(null);
 
   const load = useCallback(() => {
     if (!adminToken) {
@@ -26,13 +28,33 @@ const AdminDashboard = ({ onNavigate }) => {
     }
     let cancelled = false;
     api.admin.dashboard()
-      .then((r) => { if (!cancelled) setData(r); })
+      .then((r) => {
+        if (!cancelled) {
+          setData(r);
+          setLastUpdated(new Date());
+        }
+      })
       .catch((err) => { if (!cancelled) addToast(err.message || 'Failed to load dashboard', 'error'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [adminToken, addToast]);
 
+  const refresh = useCallback(() => {
+    setRefreshing(true);
+    load();
+  }, [load]);
+
   useEffect(load, [load]);
+
+  useEffect(() => {
+    const interval = setInterval(refresh, 60000);
+    return () => clearInterval(interval);
+  }, [refresh]);
 
   const moderationAction = async (fn, message) => {
     try {
@@ -86,6 +108,24 @@ const AdminDashboard = ({ onNavigate }) => {
             <span className="live-dot" />
             Live
           </span>
+          <button
+            type="button"
+            className="dashboard-refresh-btn"
+            onClick={refresh}
+            disabled={refreshing}
+            title="Refresh dashboard"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={refreshing ? 'spin' : ''}>
+              <polyline points="23 4 23 10 17 10" />
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            Refresh
+          </button>
+          {lastUpdated && (
+            <span className="last-updated">
+              Updated {lastUpdated.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit' })}
+            </span>
+          )}
         </div>
       </div>
 

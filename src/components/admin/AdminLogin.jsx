@@ -23,7 +23,7 @@ export default function AdminLogin({ onClose, onSuccess }) {
   return (
     <div className="admin-login-overlay" onClick={onClose}>
       <div className="admin-login-card" onClick={(e) => e.stopPropagation()}>
-        <button className="admin-login-close" onClick={onClose}>
+        <button type="button" className="admin-login-close" onClick={onClose}>
           <XIcon size={20} />
         </button>
         <div className="admin-login-icon">

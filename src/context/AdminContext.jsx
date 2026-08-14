@@ -5,8 +5,6 @@ const AdminContext = createContext();
 
 const ADMIN_STORAGE_KEY = 'tradehub_admin_auth';
 
-const ADMIN_PASSWORD = 'admin123';
-
 export const useAdmin = () => {
   const context = useContext(AdminContext);
   if (!context) {
@@ -33,12 +31,17 @@ export const AdminProvider = ({ children }) => {
   const adminLogin = useCallback(async (password) => {
     try {
       const result = await api.admin.login({ email: 'admin@tradehub.com', password });
-      setIsAdminAuth(true);
-      setAdminToken(result.token);
-      setAdminLoginError('');
-      return true;
+      if (result?.token) {
+        localStorage.setItem('tradehub_admin_token', result.token);
+        setAdminToken(result.token);
+        setIsAdminAuth(true);
+        setAdminLoginError('');
+        return true;
+      }
+      throw new Error('No token returned');
     } catch (err) {
-      setAdminLoginError('Invalid admin credentials');
+      const isNetworkError = err instanceof TypeError || err?.message?.toLowerCase().includes('fetch') || err?.message?.toLowerCase().includes('failed to fetch');
+      setAdminLoginError(isNetworkError ? 'Cannot reach the server. Make sure the backend is running.' : 'Invalid admin credentials');
       return false;
     }
   }, []);
@@ -48,6 +51,16 @@ export const AdminProvider = ({ children }) => {
     setAdminToken('');
     setAdminLoginError('');
     localStorage.removeItem('tradehub_admin_token');
+  }, []);
+
+  useEffect(() => {
+    const onExpired = () => {
+      setIsAdminAuth(false);
+      setAdminToken('');
+      localStorage.removeItem('tradehub_admin_token');
+    };
+    window.addEventListener('adminSessionExpired', onExpired);
+    return () => window.removeEventListener('adminSessionExpired', onExpired);
   }, []);
 
   const [adminStats, setAdminStats] = useState({
