@@ -20,6 +20,7 @@ export default function Signup({ onSwitchToLogin, onClose }) {
   const [showPassword, setShowPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [devVerifyToken, setDevVerifyToken] = useState('');
 
   const getPasswordStrength = (password) => {
     let strength = 0;
@@ -87,7 +88,11 @@ export default function Signup({ onSwitchToLogin, onClose }) {
     
     if (result.success) {
       addToast('Account created successfully!', 'success');
-      if (onClose) onClose();
+      if (result.devVerifyToken) {
+        setDevVerifyToken(result.devVerifyToken);
+      } else if (onClose) {
+        onClose();
+      }
     } else {
       addToast(result.error || 'Signup failed', 'error');
     }
@@ -304,6 +309,17 @@ export default function Signup({ onSwitchToLogin, onClose }) {
             )}
           </button>
         </form>
+
+        {devVerifyToken && (
+          <div className="dev-token-box">
+            <p className="dev-token-label">No SMTP configured — dev verification token:</p>
+            <code className="dev-token-value" onClick={() => {
+              const base = `${window.location.origin}${window.location.pathname}`;
+              window.location.href = `${base}verify-email?token=${devVerifyToken}`;
+            }}>{devVerifyToken}</code>
+            <p className="dev-token-hint">Click to verify this email. You can also sign in and use "Resend verification".</p>
+          </div>
+        )}
 
         <SocialAuthButtons onClose={onClose} />
 

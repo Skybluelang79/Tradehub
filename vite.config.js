@@ -1,8 +1,9 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const base = process.env.VITE_BASE || '/Tradehub/'
-const outDir = base === '/' ? 'dist' : 'dist/Tradehub'
+const isCloudflare = process.env.CF_PAGES === 'true' || process.env.WRANGLER === 'true';
+const base = process.env.VITE_BASE || (isCloudflare ? '/' : '/Tradehub/')
+const outDir = (base === '/' || isCloudflare) ? 'dist' : 'dist/Tradehub'
 
 export default defineConfig({
   plugins: [react()],

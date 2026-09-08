@@ -62,10 +62,14 @@ export const api = {
     signup: (data) => request('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
     login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
     social: (data) => request('/auth/social', { method: 'POST', body: JSON.stringify(data) }),
+    firebaseSignup: (data) => request('/firebase/signup', { method: 'POST', body: JSON.stringify(data) }),
+    firebaseLink: (data) => request('/firebase/link', { method: 'POST', body: JSON.stringify(data) }),
     me: () => request('/auth/me'),
     updateProfile: (data) => request('/auth/me', { method: 'PUT', body: JSON.stringify(data) }),
     changePassword: (data) => request('/auth/change-password', { method: 'PUT', body: JSON.stringify(data) }),
     forgotPassword: (data) => request('/auth/forgot-password', { method: 'POST', body: JSON.stringify(data) }),
+    resetPassword: (data) => request('/auth/reset-password', { method: 'POST', body: JSON.stringify(data) }),
+    verifyEmail: (token) => request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) }),
     resendVerification: () => request('/auth/resend-verification', { method: 'POST' }),
     deleteAccount: (data) => request('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
   },
@@ -222,6 +226,16 @@ export const api = {
     settingsUpdate: (data) => adminRequest('/admin/settings', { method: 'PUT', body: JSON.stringify(data) }),
     backup: () => adminDownload('/admin/backup', `tradehub-backup-${Date.now()}.db`),
     restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.stringify(data) }),
+  },
+
+  fcm: {
+    saveToken: (token) => request('/fcm/fcm-token', { method: 'POST', body: JSON.stringify({ token }) }),
+    removeToken: () => request('/fcm/fcm-token', { method: 'DELETE' }),
+  },
+
+  firebase: {
+    sendEmail: (data) => request('/firebase/firebase/send-email', { method: 'POST', body: JSON.stringify(data) }),
+    sendPush: (data) => request('/firebase/firebase/push', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   upload: {

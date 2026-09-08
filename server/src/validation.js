@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const signupSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
+  username: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores').min(3, 'Username must be at least 3 characters').max(30).optional().or(z.literal('')),
   email: z.string().email('Invalid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters').max(128),
 });
@@ -13,6 +14,7 @@ export const loginSchema = z.object({
 
 export const updateProfileSchema = z.object({
   name: z.string().min(1).max(100).optional(),
+  username: z.string().regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores').min(3, 'Username must be at least 3 characters').max(30).optional().or(z.literal('')),
   bio: z.string().max(500).optional(),
   phone: z.string().max(20).optional(),
   avatar: z.string().url().optional().or(z.literal('')),

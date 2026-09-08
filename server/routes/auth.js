@@ -9,7 +9,7 @@ import validate, {
 } from '../src/validation.js';
 import { authLimiter } from '../src/rateLimiter.js';
 import { requiredEnv } from '../src/env.js';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../src/email.js';
+import { sendVerificationEmail, sendPasswordResetEmail, isEmailConfigured } from '../src/email.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -29,7 +29,7 @@ function generateRefreshToken(userId) {
 
 router.post('/signup', authLimiter, validate(signupSchema), (req, res) => {
   try {
-    const { name, email, password } = req.validatedBody;
+    const { name, email, password, username } = req.validatedBody;
 
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (existing) {
@@ -39,11 +39,12 @@ router.post('/signup', authLimiter, validate(signupSchema), (req, res) => {
     const hashedPassword = bcrypt.hashSync(password, 10);
     const id = uuidv4();
     const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`;
+    const normalizedUsername = (username || '').trim();
 
     db.prepare(`
-      INSERT INTO users (id, name, email, password, avatar)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, name, email, hashedPassword, avatar);
+      INSERT INTO users (id, name, username, email, password, avatar)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, name, normalizedUsername, email, hashedPassword, avatar);
 
     const verifyToken = uuidv4();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
@@ -52,13 +53,15 @@ router.post('/signup', authLimiter, validate(signupSchema), (req, res) => {
       VALUES (?, ?, ?, ?)
     `).run(uuidv4(), id, verifyToken, expiresAt);
 
+    const isDev = process.env.NODE_ENV !== 'production';
+    const sendFailed = !isEmailConfigured();
     sendVerificationEmail(email, verifyToken).catch(err => {
       logger.warn(`Verification email failed for ${email}: ${err.message}`);
     });
 
     const token = generateToken(id);
     const refreshToken = generateRefreshToken(id);
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, created_at FROM users WHERE id = ?').get(id);
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, created_at FROM users WHERE id = ?').get(id);
 
     db.prepare('INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)').run(id);
     db.prepare(`
@@ -66,7 +69,11 @@ router.post('/signup', authLimiter, validate(signupSchema), (req, res) => {
       VALUES (?, ?, 'premium', 'trial', datetime('now', '+90 days'))
     `).run(uuidv4(), id);
 
-    res.status(201).json({ token, refreshToken, user });
+    const payload = { token, refreshToken, user };
+    if (isDev && sendFailed) {
+      payload.devVerifyToken = verifyToken;
+    }
+    res.status(201).json(payload);
   } catch (err) {
     logger.error('Signup error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -284,11 +291,12 @@ router.get('/me', authenticateToken, (req, res) => {
 
 router.put('/me', authenticateToken, validate(updateProfileSchema), (req, res) => {
   try {
-    const { name, bio, phone, avatar, location } = req.validatedBody;
+    const { name, username, bio, phone, avatar, location } = req.validatedBody;
     const updates = [];
     const params = [];
 
     if (name !== undefined) { updates.push('name = ?'); params.push(name); }
+    if (username !== undefined) { updates.push('username = ?'); params.push((username || '').trim()); }
     if (bio !== undefined) { updates.push('bio = ?'); params.push(bio); }
     if (phone !== undefined) { updates.push('phone = ?'); params.push(phone); }
     if (avatar !== undefined) { updates.push('avatar = ?'); params.push(avatar); }
@@ -307,7 +315,7 @@ router.put('/me', authenticateToken, validate(updateProfileSchema), (req, res) =
 
     db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, created_at FROM users WHERE id = ?').get(req.user.id);
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, created_at FROM users WHERE id = ?').get(req.user.id);
     res.json({ user });
   } catch (err) {
     logger.error('Update profile error:', err);
@@ -340,6 +348,7 @@ router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), (re
     const { email } = req.validatedBody;
     const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
 
+    let devResetToken = null;
     if (user) {
       const token = uuidv4();
       const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -351,9 +360,15 @@ router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), (re
       sendPasswordResetEmail(email, token).catch(err => {
         logger.warn(`Password reset email failed for ${email}: ${err.message}`);
       });
+
+      if (process.env.NODE_ENV !== 'production' && !isEmailConfigured()) {
+        devResetToken = token;
+      }
     }
 
-    res.json({ message: 'If an account exists with this email, you will receive reset instructions' });
+    const body = { message: 'If an account exists with this email, you will receive reset instructions' };
+    if (devResetToken) body.devResetToken = devResetToken;
+    res.json(body);
   } catch (err) {
     logger.error('Forgot password error:', err);
     res.status(500).json({ error: 'Internal server error' });

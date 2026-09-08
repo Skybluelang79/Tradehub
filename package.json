@@ -11,7 +11,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "preview": "vite preview",
-    "deploy": "gh-pages -d dist/Tradehub"
+    "deploy": "gh-pages -d dist/Tradehub",
+    "cf:build": "VITE_BASE=/ npm run build",
+    "cf:dev": "wrangler pages dev dist",
+    "cf:deploy": "wrangler pages deploy dist --project-name=tradehub"
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0",
@@ -46,6 +49,7 @@
     "gh-pages": "^6.3.0",
     "globals": "^17.4.0",
     "vite": "^8.0.4",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.124.0"
   }
 }

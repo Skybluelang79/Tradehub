@@ -602,6 +602,7 @@ function migrate() {
   ensureColumn('gift_cards', 'voided_at', 'TEXT');
   ensureColumn('gift_cards', 'voided_by', 'TEXT');
   ensureColumn('users', 'status', "TEXT DEFAULT 'active'");
+  ensureColumn('users', 'username', "TEXT DEFAULT ''");
   ensureColumn('users', 'banned_reason', "TEXT DEFAULT ''");
   ensureColumn('transactions', 'promo_code', "TEXT DEFAULT ''");
   ensureColumn('transactions', 'discount_amount', 'REAL DEFAULT 0');
@@ -615,6 +616,10 @@ function migrate() {
   ensureColumn('items', 'auction_status', "TEXT DEFAULT 'pending'");
   ensureColumn('items', 'current_bid', 'REAL');
   ensureColumn('items', 'current_bidder_id', 'TEXT');
+
+  ensureColumn('users', 'firebase_uid', "TEXT DEFAULT ''");
+  ensureColumn('users', 'auth_provider', "TEXT DEFAULT 'local'");
+  ensureColumn('user_settings', 'fcm_token', "TEXT DEFAULT ''");
 
   seedPlatformSettings();
 }

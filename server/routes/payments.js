@@ -106,15 +106,17 @@ const DEFAULT_BRANDS = [
   { name: 'American Express & Visa Gift Cards', category: 'finance', description: 'Prepaid cards accepted anywhere American Express or Visa cards are.', frontImage: '/uploads/amex-visa-gift-card.jpg' },
   { name: 'Google Play Gift Card', category: 'digital', description: 'Apps, games, movies and books on Google Play.', frontImage: '/uploads/google-play-gift-card.jpg' },
   { name: 'Sephora Gift Card', category: 'retail', description: 'Beauty, makeup and skincare at Sephora.', frontImage: '/uploads/sephora-gift-card.jpg' },
-  { name: 'TradeHub Gift Card', category: 'general', description: 'TradeHub store credit — redeemable for credit on any listing, boost or subscription.', frontImage: '/uploads/tradehub-gift-card.svg', backImage: '/uploads/tradehub-gift-card-back.svg' },
+  { name: 'TradeHub Gift Card', category: 'general', description: "TradeHub's all-purpose gift card. Redeem for store credit to use on any listing, listing boost or subscription on the marketplace.", frontImage: '/uploads/tradehub-gift-card.svg', backImage: '/uploads/tradehub-gift-card-back.svg' },
 ];
 
 const BRAND_MERGES = [
   { from: 'Apple Gift Card', to: 'Apple Gift Card / iTunes Gift Card', description: 'Apps, music, movies and more from Apple and iTunes.' },
   { from: 'American Express Gift Card', to: 'American Express & Visa Gift Cards', description: 'Prepaid cards accepted anywhere American Express or Visa cards are.' },
+  { from: 'Amazon', to: 'Amazon Gift Card', description: 'Shop anything on Amazon with this balance.' },
+  { from: 'Starbucks', to: 'Starbucks Gift Card', description: 'Coffee, snacks and more at Starbucks.' },
 ];
 
-const RETIRED_BRANDS = ['Steam', 'Netflix', 'iTunes Gift Card', 'Visa Gift Card'];
+const RETIRED_BRANDS = ['Steam', 'Netflix', 'iTunes Gift Card', 'Visa Gift Card', 'Amazon', 'Starbucks', 'Smoke Brand'];
 
 function seedDefaultBrands() {
   const find = (name) => db.prepare('SELECT * FROM gift_card_brands WHERE name = ?').get(name);

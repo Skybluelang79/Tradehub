@@ -11,6 +11,7 @@ export default function ForgotPassword({ onBackToLogin }) {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [devResetToken, setDevResetToken] = useState('');
 
   const validateEmail = () => {
     if (!email) {
@@ -34,6 +35,7 @@ export default function ForgotPassword({ onBackToLogin }) {
     
     if (result.success) {
       setSubmitted(true);
+      if (result.devResetToken) setDevResetToken(result.devResetToken);
       addToast('Password reset instructions sent!', 'success');
     } else {
       addToast(result.error || 'Failed to send reset instructions', 'error');
@@ -64,6 +66,17 @@ export default function ForgotPassword({ onBackToLogin }) {
           <div className="success-message">
             <p>If you don't see the email, check your spam folder or try again.</p>
           </div>
+
+          {devResetToken && (
+            <div className="dev-token-box">
+              <p className="dev-token-label">No SMTP configured — dev reset token:</p>
+              <code className="dev-token-value" onClick={() => {
+                const base = `${window.location.origin}${window.location.pathname}`;
+                window.location.href = `${base}reset-password?token=${devResetToken}`;
+              }}>{devResetToken}</code>
+              <p className="dev-token-hint">Click to open the reset screen.</p>
+            </div>
+          )}
 
           <button
             type="button"

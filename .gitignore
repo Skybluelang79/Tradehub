@@ -38,3 +38,7 @@ server/uploads/*
 
 # Local backups
 backups/
+
+# Firebase config
+.env.firebase
+server/.env.firebase

@@ -5,10 +5,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { authenticateToken } from '../middleware/auth.js';
 import { uploadLimiter } from '../src/rateLimiter.js';
 import { __dirname } from '../src/paths.js';
+import { uploadToFirebaseStorage } from '../src/firebase.js';
 
 const USE_BLOB = process.env.NETLIFY === 'true' || process.env.DB_BLOB === 'true' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const USE_FIREBASE_STORAGE = process.env.FIREBASE_STORAGE === 'true';
 
-const storage = USE_BLOB
+const storage = (USE_BLOB || USE_FIREBASE_STORAGE)
   ? multer.memoryStorage()
   : multer.diskStorage({
       destination: join(__dirname, '..', 'uploads'),
@@ -47,7 +49,12 @@ router.post('/', authenticateToken, uploadLimiter, upload.array('images', 6), as
   try {
     const files = [];
     for (const f of req.files) {
-      if (USE_BLOB) {
+      if (USE_FIREBASE_STORAGE) {
+        const ext = extname(f.originalname);
+        const path = `tradehub/uploads/${uuidv4()}${ext}`;
+        const url = await uploadToFirebaseStorage(f.buffer, path, f.mimetype);
+        files.push({ url, filename: path });
+      } else if (USE_BLOB) {
         const filename = await saveBlobFile(f.buffer, extname(f.originalname));
         files.push({ url: `/uploads/${filename}`, filename });
       } else {
@@ -64,6 +71,12 @@ router.post('/', authenticateToken, uploadLimiter, upload.array('images', 6), as
 router.post('/single', authenticateToken, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    if (USE_FIREBASE_STORAGE) {
+      const ext = extname(req.file.originalname);
+      const path = `tradehub/uploads/${uuidv4()}${ext}`;
+      const url = await uploadToFirebaseStorage(req.file.buffer, path, req.file.mimetype);
+      return res.json({ file: { url, filename: path } });
+    }
     if (USE_BLOB) {
       const filename = await saveBlobFile(req.file.buffer, extname(req.file.originalname));
       return res.json({ file: { url: `/uploads/${filename}`, filename } });

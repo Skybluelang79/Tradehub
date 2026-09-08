@@ -14,6 +14,10 @@ const transporter = nodemailer.createTransport({
 const FROM_NAME = process.env.EMAIL_FROM_NAME || 'TradeHub';
 const FROM_EMAIL = process.env.EMAIL_FROM || 'noreply@tradehub.app';
 
+export function isEmailConfigured() {
+  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS && process.env.SMTP_HOST);
+}
+
 async function sendMail({ to, subject, html }) {
   try {
     const info = await transporter.sendMail({

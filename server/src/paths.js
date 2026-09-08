@@ -3,15 +3,19 @@ import { dirname, join } from 'path';
 
 let _dirname;
 try {
-  if (typeof __dirname === 'string') {
-    _dirname = __dirname;
+  if (typeof import.meta.dirname === 'string') {
+    _dirname = import.meta.dirname;
   } else if (typeof import.meta.url === 'string') {
     _dirname = dirname(fileURLToPath(import.meta.url));
   } else {
     _dirname = process.cwd();
   }
 } catch {
-  _dirname = process.cwd();
+  try {
+    _dirname = dirname(fileURLToPath(import.meta.url));
+  } catch {
+    _dirname = process.cwd();
+  }
 }
 
 export const __dirname = _dirname;

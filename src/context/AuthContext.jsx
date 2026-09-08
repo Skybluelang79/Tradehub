@@ -1,5 +1,8 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { api, setToken } from '../services/client';
+import { auth as firebaseAuth } from '../config/firebase';
+import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile as fbUpdateProfile, sendPasswordResetEmail as fbSendPasswordReset } from 'firebase/auth';
+import { initializeFCM, cleanupFCM } from '../services/fcm';
 
 const AuthContext = createContext();
 
@@ -73,7 +76,7 @@ export function AuthProvider({ children }) {
       localStorage.setItem('tradehub_token', data.token);
       setUser(data.user);
       setIsAuthenticated(true);
-      return { success: true };
+      return { success: true, devVerifyToken: data.devVerifyToken };
     } catch (err) {
       setError(err.message || 'Signup failed');
       return { success: false, error: err.message };
@@ -87,6 +90,8 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('tradehub_token');
     setUser(null);
     setIsAuthenticated(false);
+    cleanupFCM();
+    try { firebaseAuth.signOut(); } catch {}
   }, []);
 
   const updateProfile = useCallback(async (updates) => {
@@ -135,10 +140,75 @@ export function AuthProvider({ children }) {
     setIsLoading(true);
     setError(null);
     try {
-      await api.auth.forgotPassword({ email });
-      return { success: true, message: 'If an account exists with this email, you will receive reset instructions' };
+      const data = await api.auth.forgotPassword({ email });
+      return { success: true, message: 'If an account exists with this email, you will receive reset instructions', devResetToken: data.devResetToken };
     } catch (err) {
       return { success: true, message: 'If an account exists with this email, you will receive reset instructions' };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const signInWithGoogle = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(firebaseAuth, provider);
+      const idToken = await result.user.getIdToken();
+      const data = await api.auth.firebaseSignup({ idToken, name: result.user.displayName });
+      setToken(data.token);
+      localStorage.setItem('tradehub_token', data.token);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      initializeFCM().catch(() => {});
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Google sign-in failed');
+      return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const firebaseEmailSignup = useCallback(async (email, password, name) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      if (name) await fbUpdateProfile(cred.user, { displayName: name });
+      const idToken = await cred.user.getIdToken();
+      const data = await api.auth.firebaseSignup({ idToken, name });
+      setToken(data.token);
+      localStorage.setItem('tradehub_token', data.token);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      initializeFCM().catch(() => {});
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Signup failed');
+      return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const firebaseEmailLogin = useCallback(async (email, password) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
+      const idToken = await cred.user.getIdToken();
+      const data = await api.auth.firebaseSignup({ idToken });
+      setToken(data.token);
+      localStorage.setItem('tradehub_token', data.token);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      initializeFCM().catch(() => {});
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Login failed');
+      return { success: false, error: err.message };
     } finally {
       setIsLoading(false);
     }
@@ -158,6 +228,9 @@ export function AuthProvider({ children }) {
     deleteAccount,
     resendVerification,
     forgotPassword,
+    signInWithGoogle,
+    firebaseEmailSignup,
+    firebaseEmailLogin,
     clearError: () => setError(null),
   };
 

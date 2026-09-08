@@ -259,6 +259,12 @@
   margin-bottom: 4px;
 }
 
+.profile-username {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
 .profile-location {
   display: flex;
   align-items: center;

@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import db from '../db.js';
 import { requiredEnv } from '../src/env.js';
+import { verifyFirebaseToken } from '../src/firebase.js';
 
 const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
 
@@ -14,7 +15,7 @@ export function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -34,6 +35,38 @@ export function authenticateToken(req, res, next) {
   }
 }
 
+export async function authenticateFirebaseToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Access token required' });
+  }
+
+  try {
+    const decoded = await verifyFirebaseToken(token);
+    if (!decoded) {
+      return res.status(401).json({ error: 'Invalid Firebase token' });
+    }
+
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE firebase_uid = ? OR email = ?').get(decoded.uid, decoded.email);
+
+    if (!user) {
+      return res.status(401).json({ error: 'User not found. Please sign up first.' });
+    }
+
+    if (user.status === 'banned') {
+      return res.status(403).json({ error: 'Your account has been banned' });
+    }
+
+    req.user = user;
+    req.firebaseUser = decoded;
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: 'Invalid or expired Firebase token' });
+  }
+}
+
 export function optionalAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -44,7 +77,7 @@ export function optionalAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
     req.user = user && user.status === 'active' ? user : null;
   } catch (err) {
     req.user = null;

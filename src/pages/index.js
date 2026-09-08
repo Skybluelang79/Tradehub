@@ -7,6 +7,7 @@ export { default as ItemDetail } from './ItemDetail';
 export { default as Login } from './Login';
 export { default as Signup } from './Signup';
 export { default as ForgotPassword } from './ForgotPassword';
+export { default as ResetPassword } from './ResetPassword';
 export { default as Favorites } from './Favorites';
 export { default as Notifications } from './Notifications';
 export { default as GiftMall } from './GiftMall';

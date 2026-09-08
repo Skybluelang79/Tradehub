@@ -97,7 +97,7 @@ export default function Profile() {
 
   const [activeTab, setActiveTabState] = useState('listings');
   const [showEditModal, setShowEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', bio: '', phone: '', locationAddress: '' });
+  const [editForm, setEditForm] = useState({ name: '', username: '', bio: '', phone: '', locationAddress: '' });
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
@@ -233,12 +233,13 @@ export default function Profile() {
     if (showEditModal) {
       setEditForm({
         name: currentUser.name || '',
+        username: currentUser.username || '',
         bio: currentUser.bio || '',
         phone: currentUser.phone || '',
         locationAddress: currentUser.location?.address || '',
       });
     }
-  }, [showEditModal, currentUser.name, currentUser.bio, currentUser.phone, currentUser.location]);
+  }, [showEditModal, currentUser.name, currentUser.username, currentUser.bio, currentUser.phone, currentUser.location]);
 
   const handleDeleteItem = (itemId) => {
     deleteItem(itemId);
@@ -306,6 +307,7 @@ export default function Profile() {
       case 'edit':
         setEditForm({
           name: currentUser.name,
+          username: currentUser.username || '',
           bio: currentUser.bio,
           phone: currentUser.phone,
           locationAddress: currentUser.location?.address || '',
@@ -331,7 +333,7 @@ export default function Profile() {
 
   const handleEditSave = async () => {
     if (authUser) {
-      const payload = { name: editForm.name, bio: editForm.bio, phone: editForm.phone };
+      const payload = { name: editForm.name, username: editForm.username, bio: editForm.bio, phone: editForm.phone };
       const currentAddress = currentUser.location?.address || '';
       if (editForm.locationAddress !== currentAddress) {
         payload.location = {
@@ -532,6 +534,9 @@ export default function Profile() {
             )}
           </div>
           <h1 className="profile-name">{currentUser.name}</h1>
+          {currentUser.username ? (
+            <div className="profile-username">@{currentUser.username}</div>
+          ) : null}
           {currentUser.location?.address && currentUser.location.address !== 'Not set' && (
             <div className="profile-location">
               <PinIcon size={16} />
@@ -968,6 +973,10 @@ export default function Profile() {
           <div className="input-group">
             <label className="input-label">Name</label>
             <input type="text" className="input" value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} />
+          </div>
+          <div className="input-group">
+            <label className="input-label">Username</label>
+            <input type="text" className="input" value={editForm.username} onChange={(e) => setEditForm({ ...editForm, username: e.target.value })} placeholder="letters, numbers, underscores" />
           </div>
           <div className="input-group">
             <label className="input-label">Bio</label>

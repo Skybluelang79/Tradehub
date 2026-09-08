@@ -382,3 +382,39 @@
 .auth-modal-close:hover {
   background: var(--background);
 }
+
+.dev-token-box {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.dev-token-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.dev-token-value {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--background);
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dev-token-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 8px;
+}
