@@ -91,7 +91,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setIsAuthenticated(false);
     cleanupFCM();
-    try { firebaseAuth.signOut(); } catch {}
+    try { if (firebaseAuth) firebaseAuth.signOut(); } catch {}
   }, []);
 
   const updateProfile = useCallback(async (updates) => {
@@ -152,6 +152,11 @@ export function AuthProvider({ children }) {
   const signInWithGoogle = useCallback(async () => {
     setIsLoading(true);
     setError(null);
+    if (!firebaseAuth) {
+      setError('Google sign-in is not configured');
+      setIsLoading(false);
+      return { success: false, error: 'Google sign-in is not configured' };
+    }
     try {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(firebaseAuth, provider);
@@ -174,6 +179,11 @@ export function AuthProvider({ children }) {
   const firebaseEmailSignup = useCallback(async (email, password, name) => {
     setIsLoading(true);
     setError(null);
+    if (!firebaseAuth) {
+      setError('Email sign-up is not configured');
+      setIsLoading(false);
+      return { success: false, error: 'Email sign-up is not configured' };
+    }
     try {
       const cred = await createUserWithEmailAndPassword(firebaseAuth, email, password);
       if (name) await fbUpdateProfile(cred.user, { displayName: name });
@@ -196,6 +206,11 @@ export function AuthProvider({ children }) {
   const firebaseEmailLogin = useCallback(async (email, password) => {
     setIsLoading(true);
     setError(null);
+    if (!firebaseAuth) {
+      setError('Email login is not configured');
+      setIsLoading(false);
+      return { success: false, error: 'Email login is not configured' };
+    }
     try {
       const cred = await signInWithEmailAndPassword(firebaseAuth, email, password);
       const idToken = await cred.user.getIdToken();

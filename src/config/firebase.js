@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { getStorage } from 'firebase/storage';
 
@@ -12,18 +12,36 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const storage = getStorage(app);
+const hasFirebaseConfig = Boolean(
+  firebaseConfig.apiKey && firebaseConfig.projectId && firebaseConfig.authDomain
+);
+
+let app = null;
+let auth = null;
+let storage = null;
 let messaging = null;
 
-try {
-  if (typeof window !== 'undefined' && 'Notification' in window) {
-    messaging = getMessaging(app);
+if (hasFirebaseConfig) {
+  try {
+    app = initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    storage = getStorage(app);
+  } catch (err) {
+    console.warn('Firebase init skipped:', err?.message || err);
   }
-} catch {}
+}
 
-export { messaging };
+if (auth && typeof window !== 'undefined' && 'Notification' in window) {
+  try {
+    messaging = getMessaging(app);
+  } catch {}
+}
+
+export { app, auth, storage, messaging };
+
+export function isFirebaseConfigured() {
+  return Boolean(auth);
+}
 
 export async function requestFCMPermission() {
   if (!messaging) return null;
