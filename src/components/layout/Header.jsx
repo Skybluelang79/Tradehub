@@ -1,4 +1,4 @@
-import { SearchIcon, BellIcon, HeartIcon, ArrowLeftIcon, MoonIcon, HomeIcon } from '../ui/Icons';
+import { SearchIcon, BellIcon, HeartIcon, ArrowLeftIcon, MoonIcon, HomeIcon, PackageIcon } from '../ui/Icons';
 import { TradeHubBrand } from '../ui/Logo';
 import { useApp } from '../../context';
 import { useAuth } from '../../context/AuthContext';
@@ -17,7 +17,7 @@ export default function Header({
   brand = false,
 }) {
   const variantClass = transparent ? 'header--transparent' : '';
-  const { unreadNotificationsCount, activeTab, selectedItem } = useApp();
+  const { unreadNotificationsCount, activeTab, selectedItem, cartCount } = useApp();
   const { isAuthenticated } = useAuth();
   const { isDark, toggleTheme } = useTheme();
 
@@ -69,6 +69,16 @@ export default function Header({
           <button className="header-btn" onClick={() => window.dispatchEvent(new CustomEvent('openFavorites'))}>
             <HeartIcon size={20} />
           </button>
+          {isAuthenticated && (
+            <button className="header-btn" onClick={() => window.dispatchEvent(new CustomEvent('openCart'))} title="Cart">
+              <span style={{ position: 'relative', display: 'inline-flex' }}>
+                <PackageIcon size={20} />
+                {cartCount > 0 && (
+                  <span className="bell-badge">{cartCount > 99 ? '99+' : cartCount}</span>
+                )}
+              </span>
+            </button>
+          )}
           {rightComponent}
         </div>
       </div>

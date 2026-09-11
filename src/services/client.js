@@ -106,6 +106,14 @@ export const api = {
   },
 
   payments: {
+    cart: {
+      get: () => request('/payments/cart'),
+      add: (itemId, quantity = 1) => request('/payments/cart', { method: 'POST', body: JSON.stringify({ itemId, quantity }) }),
+      update: (itemId, quantity) => request(`/payments/cart/${itemId}`, { method: 'PUT', body: JSON.stringify({ quantity }) }),
+      remove: (itemId) => request(`/payments/cart/${itemId}`, { method: 'DELETE' }),
+      clear: () => request('/payments/cart', { method: 'DELETE' }),
+      checkout: (data) => request('/payments/cart/checkout', { method: 'POST', body: JSON.stringify(data) }),
+    },
     methods: () => request('/payments/methods'),
     addMethod: (data) => request('/payments/methods', { method: 'POST', body: JSON.stringify(data) }),
     setDefault: (id) => request(`/payments/methods/${id}/default`, { method: 'PUT' }),
@@ -198,6 +206,17 @@ export const api = {
     create: (data) => request('/reports', { method: 'POST', body: JSON.stringify(data) }),
     list: () => request('/reports'),
     resolve: (id, action) => request(`/reports/${id}/resolve`, { method: 'PUT', body: JSON.stringify({ action }) }),
+  },
+
+  offers: {
+    create: (data) => request('/offers', { method: 'POST', body: JSON.stringify(data) }),
+    incoming: () => request('/offers/incoming'),
+    outgoing: () => request('/offers/outgoing'),
+    byItem: (itemId) => request(`/offers/item/${itemId}`),
+    accept: (id) => request(`/offers/${id}/accept`, { method: 'POST' }),
+    decline: (id, note = '') => request(`/offers/${id}/decline`, { method: 'POST', body: JSON.stringify({ note }) }),
+    counter: (id, data) => request(`/offers/${id}/counter`, { method: 'POST', body: JSON.stringify(data) }),
+    cancel: (id) => request(`/offers/${id}/cancel`, { method: 'POST' }),
   },
 
   admin: {

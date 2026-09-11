@@ -20,6 +20,7 @@ export function AppProvider({ children }) {
   const [reviews, setReviews] = useState(() => storage.get('reviews', mockReviews));
   const [paymentMethods, setPaymentMethods] = useState(() => storage.get('paymentMethods', mockPaymentMethods));
   const [favorites, setFavorites] = useState(() => storage.get('favorites', []));
+  const [cart, setCart] = useState([]);
   const [notifications, setNotifications] = useState(() => storage.get('notifications', []));
   const [users, setUsers] = useState(() => storage.get('users', []));
   const [templates, setTemplates] = useState(() => storage.get('templates', []));
@@ -53,6 +54,18 @@ export function AppProvider({ children }) {
   useEffect(() => {
     storage.set('favorites', favorites);
   }, [favorites]);
+
+  useEffect(() => {
+    if (!authUser) {
+      queueMicrotask(() => setCart([]));
+      return;
+    }
+    let cancelled = false;
+    api.payments.cart.get()
+      .then((r) => { if (!cancelled && Array.isArray(r.items)) setCart(r.items); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [authUser]);
 
   useEffect(() => {
     storage.set('notifications', notifications);
@@ -453,6 +466,22 @@ export function AppProvider({ children }) {
     return favorites.includes(itemId);
   }, [favorites]);
 
+  const refreshCart = useCallback(async () => {
+    try {
+      const r = await api.payments.cart.get();
+      if (Array.isArray(r.items)) setCart(r.items);
+    } catch {}
+  }, []);
+
+  const addToCart = useCallback(async (itemId, quantity = 1) => {
+    const r = await api.payments.cart.add(itemId, quantity);
+    if (Array.isArray(r.items)) setCart(r.items);
+    return r;
+  }, []);
+
+  const cartCount = cart.length;
+  const cartSubtotalCents = cart.reduce((sum, it) => sum + Math.round((it.sale_price || it.price) * it.quantity * 100), 0);
+
   const addPaymentMethod = useCallback((method) => {
     const newMethod = {
       ...method,
@@ -622,6 +651,11 @@ export function AppProvider({ children }) {
     deleteTemplate,
     getTemplates,
     templates,
+    cart,
+    cartCount,
+    cartSubtotalCents,
+    refreshCart,
+    addToCart,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

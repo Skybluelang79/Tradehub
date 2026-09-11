@@ -11,4 +11,6 @@ export { default as ResetPassword } from './ResetPassword';
 export { default as Favorites } from './Favorites';
 export { default as Notifications } from './Notifications';
 export { default as GiftMall } from './GiftMall';
+export { default as Cart } from './Cart';
+export { default as Offers } from './Offers';
 export { default as SellerProfile } from './SellerProfile';

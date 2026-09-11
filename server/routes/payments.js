@@ -257,16 +257,24 @@ router.get('/options', authenticateToken, (req, res) => {
 // Builds the common parts of a checkout: item validation, promo discount and
 // store-credit allocation. Returns the items passed validation plus totals.
 function buildCheckout(req) {
-  const { itemId, giftCardCode, promoCode, useCredit, currency } = req.body;
-  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(itemId);
+  const { itemId, offerId, giftCardCode, promoCode, useCredit, currency } = req.body;
+  const offer = offerId ? db.prepare('SELECT * FROM offers WHERE id = ?').get(offerId) : null;
+  const actualItemId = offer ? offer.item_id : itemId;
+  const item = db.prepare('SELECT * FROM items WHERE id = ?').get(actualItemId);
   if (!item) { const err = new Error('Item not found'); err.status = 404; throw err; }
   if (item.seller_id === req.user.id) { const err = new Error('Cannot buy your own item'); err.status = 400; throw err; }
-  if (item.status === 'sold') { const err = new Error('Item is already sold'); err.status = 400; throw err; }
+  if (offer) {
+    if (offer.buyer_id !== req.user.id) { const err = new Error('Not authorized to purchase with this offer'); err.status = 403; throw err; }
+    if (offer.status !== 'accepted') { const err = new Error('Offer has not been accepted yet'); err.status = 400; throw err; }
+    if (offer.item_id !== item.id) { const err = new Error('Offer does not match this item'); err.status = 400; throw err; }
+  } else {
+    if (item.status === 'sold') { const err = new Error('Item is already sold'); err.status = 400; throw err; }
+  }
 
-  const curr = currency || DEFAULT_CURRENCY;
+  const curr = currency || offer?.currency || DEFAULT_CURRENCY;
   if (!isValidCurrency(curr)) { const err = new Error('Unsupported currency'); err.status = 400; throw err; }
 
-  const baseAmount = item.sale_price || item.price;
+  const baseAmount = offer ? (offer.amount_cents / 100) : (item.sale_price || item.price);
   let promoDiscount = 0;
   let promoCodeUsed = null;
   if (promoCode) {
@@ -295,7 +303,7 @@ function buildCheckout(req) {
     }
   }
   const chargeCents = amountCents - creditCents;
-  return { item, amount, amountCents, currency: curr, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents };
+  return { item, amount, amountCents, currency: curr, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents, offerId: offer?.id || null };
 }
 
 router.post('/create-intent', authenticateToken, async (req, res) => {

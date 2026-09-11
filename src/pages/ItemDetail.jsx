@@ -20,6 +20,7 @@ import {
   CopyIcon,
   ClockIcon,
   CheckIcon,
+  PackageIcon,
 } from '../components/ui/Icons';
 import { AdBanner } from '../components/features';
 import { useApp } from '../context';
@@ -58,6 +59,7 @@ export default function ItemDetail() {
     getDistanceFromUser,
     isFavorite,
     toggleFavorite,
+    addToCart,
     incrementItemViews,
     markAsSold,
     updateItem,
@@ -85,6 +87,10 @@ export default function ItemDetail() {
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [checkoutError, setCheckoutError] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [offerAmount, setOfferAmount] = useState('');
+  const [offerMessage, setOfferMessage] = useState('');
+  const [offerBusy, setOfferBusy] = useState(false);
 
   const [bidAmount, setBidAmount] = useState('');
   const [bidBusy, setBidBusy] = useState(false);
@@ -115,6 +121,45 @@ export default function ItemDetail() {
     setCheckoutBusy(false);
     setCheckoutResult(null);
     setCheckoutError('');
+  };
+
+  const handleAddToCart = async () => {
+    if (!selectedItem) return;
+    if (!isAuthenticated) {
+      window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }));
+      return;
+    }
+    try {
+      await addToCart(selectedItem.id);
+      addToast('Added to cart', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not add to cart', 'error');
+    }
+  };
+
+  const openOfferModal = () => {
+    if (!isAuthenticated) {
+      window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }));
+      return;
+    }
+    setOfferAmount(selectedItem?.salePrice || selectedItem?.price || '');
+    setOfferMessage('');
+    setShowOfferModal(true);
+  };
+
+  const handleMakeOffer = async () => {
+    const cents = Math.round(Number(offerAmount) * 100);
+    if (!cents || cents <= 0) { addToast('Enter a valid offer amount', 'error'); return; }
+    setOfferBusy(true);
+    try {
+      await api.offers.create({ itemId: selectedItem.id, amountCents: cents, message: offerMessage.trim() });
+      addToast('Offer sent to seller!', 'success');
+      setShowOfferModal(false);
+    } catch (err) {
+      addToast(err.message || 'Could not send offer', 'error');
+    } finally {
+      setOfferBusy(false);
+    }
   };
 
   const handleBuyClick = () => {
@@ -749,6 +794,18 @@ export default function ItemDetail() {
               Buy Now
             </button>
           )}
+          {!isAuction && (
+            <button className="detail-action-btn secondary" onClick={handleAddToCart}>
+              <PackageIcon size={20} />
+              Add to Cart
+            </button>
+          )}
+          {!isAuction && (
+            <button className="detail-action-btn secondary" onClick={openOfferModal}>
+              <ShieldIcon size={20} />
+              Make Offer
+            </button>
+          )}
           <button className="detail-action-btn secondary" onClick={() => setShowReviewModal(true)}>
             <StarIcon size={20} />
             Review
@@ -969,6 +1026,48 @@ export default function ItemDetail() {
             {checkoutError && <p className="checkout-error">{checkoutError}</p>}
           </div>
         )}
+      </Modal>
+
+      <Modal isOpen={showOfferModal} onClose={() => setShowOfferModal(false)} title="Make an Offer">
+        <div>
+          <p className="checkout-price-line">
+            Listed at <strong>{formatPrice(selectedItem?.price || 0)}</strong>
+          </p>
+          <div className="input-group" style={{ marginTop: 12 }}>
+            <label className="input-label">Your offer ({selectedItem?.currency || 'USD'})</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              className="input"
+              placeholder="0.00"
+              value={offerAmount}
+              onChange={(e) => setOfferAmount(e.target.value)}
+            />
+          </div>
+          <div className="input-group" style={{ marginTop: 12 }}>
+            <label className="input-label">Message to seller (optional)</label>
+            <textarea
+              className="input"
+              rows={3}
+              maxLength={500}
+              placeholder="e.g. willing to pay within your budget"
+              value={offerMessage}
+              onChange={(e) => setOfferMessage(e.target.value)}
+            />
+          </div>
+          <Button
+            block
+            style={{ marginTop: 16 }}
+            onClick={handleMakeOffer}
+            disabled={offerBusy || !offerAmount}
+          >
+            {offerBusy ? 'Sending...' : 'Send Offer'}
+          </Button>
+          <p className="checkout-sub" style={{ marginTop: 10 }}>
+            The seller can accept, decline, or counter your offer. Accepted offers are paid directly via escrow.
+          </p>
+        </div>
       </Modal>
     </div>
   );

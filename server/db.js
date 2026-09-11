@@ -563,6 +563,22 @@ function applySchema() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS offers (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      buyer_id TEXT NOT NULL,
+      seller_id TEXT NOT NULL,
+      amount_cents INTEGER NOT NULL,
+      currency TEXT DEFAULT 'USD',
+      message TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      offered_by TEXT NOT NULL DEFAULT 'buyer',
+      parent_offer_id TEXT,
+      responder_note TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
   `);
 
   db.exec(`
@@ -572,6 +588,9 @@ function applySchema() {
     CREATE INDEX IF NOT EXISTS idx_items_created ON items(created_at);
     CREATE INDEX IF NOT EXISTS idx_items_price ON items(price);
     CREATE INDEX IF NOT EXISTS idx_saved_searches_user ON saved_searches(user_id);
+    CREATE INDEX IF NOT EXISTS idx_offers_item ON offers(item_id);
+    CREATE INDEX IF NOT EXISTS idx_offers_buyer ON offers(buyer_id);
+    CREATE INDEX IF NOT EXISTS idx_offers_seller ON offers(seller_id);
   `);
 
   migrate();
@@ -637,6 +656,7 @@ function migrate() {
   ensureColumn('subscriptions', 'paystack_reference', 'TEXT');
   ensureColumn('subscriptions', 'pending_plan', 'TEXT');
   ensureColumn('user_settings', 'fcm_token', "TEXT DEFAULT ''");
+  ensureColumn('items', 'sold_to', 'TEXT');
 
   seedPlatformSettings();
 }

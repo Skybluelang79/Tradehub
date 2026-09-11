@@ -17,6 +17,7 @@ import { useTranslation } from '../context/LanguageContext';
 import { formatDate, formatPrice } from '../utils/helpers';
 import { categories } from '../services/api';
 import AddListing from './AddListing';
+import Offers from './Offers';
 import '../styles/globals.css';
 import './Profile.css';
 
@@ -219,6 +220,11 @@ export default function Profile() {
   ).length;
 
   const [sellerStats, setSellerStats] = useState(null);
+  const [wallet, setWallet] = useState(null);
+  const [payouts, setPayouts] = useState([]);
+  const [showPayoutForm, setShowPayoutForm] = useState(false);
+  const [payoutForm, setPayoutForm] = useState({ amountCents: '', method: 'bank', bankName: '', accountNumber: '', accountName: '' });
+  const [payoutBusy, setPayoutBusy] = useState(false);
 
   useEffect(() => {
     if (!authUser || (activeTab !== 'analytics' && activeTab !== 'dashboard')) return;
@@ -228,6 +234,52 @@ export default function Profile() {
       .catch((err) => console.error('Failed to load seller analytics:', err));
     return () => { cancelled = true; };
   }, [authUser, activeTab, items]);
+
+  useEffect(() => {
+    if (!authUser || activeTab !== 'dashboard') return;
+    api.payouts.balance().then((r) => setWallet(r.wallet)).catch(() => {});
+    api.payouts.list().then((r) => setPayouts(r.payouts || [])).catch(() => {});
+  }, [authUser, activeTab]);
+
+  const submitPayout = async () => {
+    const cents = Math.round(Number(payoutForm.amountCents));
+    if (!cents || cents < 100) { addToast('Minimum payout is $1.00', 'error'); return; }
+    if (!wallet || cents > wallet.available_cents) { addToast('Insufficient available balance', 'error'); return; }
+    const details = {};
+    if (payoutForm.method === 'bank') {
+      details.bankName = payoutForm.bankName.trim();
+      details.accountNumber = payoutForm.accountNumber.trim();
+      details.accountName = payoutForm.accountName.trim();
+      if (!details.bankName || !details.accountNumber) { addToast('Bank details required', 'error'); return; }
+    } else {
+      details.email = payoutForm.email?.trim() || authUser?.email;
+    }
+    setPayoutBusy(true);
+    try {
+      const r = await api.payouts.request({ amountCents: cents, method: payoutForm.method, details });
+      setPayouts((prev) => [r.payout, ...prev]);
+      setWallet((prev) => prev ? { ...prev, available_cents: prev.available_cents - cents, pending_cents: prev.pending_cents + cents } : prev);
+      setShowPayoutForm(false);
+      setPayoutForm({ amountCents: '', method: 'bank', bankName: '', accountNumber: '', accountName: '' });
+      addToast('Payout requested! Admin will review shortly.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Payout request failed', 'error');
+    } finally {
+      setPayoutBusy(false);
+    }
+  };
+
+  const cancelPayout = async (id) => {
+    try {
+      const payout = payouts.find((p) => p.id === id);
+      await api.payouts.cancel(id);
+      setPayouts((prev) => prev.map((p) => p.id === id ? { ...p, status: 'cancelled' } : p));
+      if (payout) setWallet((prev) => prev ? { ...prev, available_cents: prev.available_cents + payout.amount_cents, pending_cents: prev.pending_cents - payout.amount_cents } : prev);
+      addToast('Payout cancelled', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not cancel', 'error');
+    }
+  };
 
   useEffect(() => {
     if (showEditModal) {
@@ -584,6 +636,9 @@ export default function Profile() {
           <button className={`profile-tab ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTabState('dashboard')}>
             Dashboard
           </button>
+          <button className={`profile-tab ${activeTab === 'offers' ? 'active' : ''}`} onClick={() => setActiveTabState('offers')}>
+            Offers
+          </button>
           <button className={`profile-tab ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTabState('analytics')}>
             Analytics
           </button>
@@ -596,6 +651,10 @@ export default function Profile() {
         </div>
 
         <div className="profile-tab-content">
+          {activeTab === 'offers' && (
+            <Offers onClose={() => setActiveTabState('listings')} />
+          )}
+
           {activeTab === 'listings' && (
             <>
               {userDrafts.length > 0 && (
@@ -797,8 +856,35 @@ export default function Profile() {
 
           {activeTab === 'dashboard' && (
             <div className="seller-dashboard">
+              {wallet && (
+                <div className="dashboard-section wallet-section">
+                  <h4 className="analytics-section-title">Your Wallet</h4>
+                  <div className="wallet-grid">
+                    <div className="wallet-card wallet-available">
+                      <span className="wallet-label">Available Balance</span>
+                      <span className="wallet-value">{formatPrice((wallet.available_cents || 0) / 100)}</span>
+                      <button
+                        className="wallet-payout-btn"
+                        disabled={!wallet.available_cents || wallet.available_cents < 100}
+                        onClick={() => { setPayoutForm((f) => ({ ...f, amountCents: String(Math.floor(wallet.available_cents / 100)) })); setShowPayoutForm(true); }}
+                      >
+                        Request Payout
+                      </button>
+                    </div>
+                    <div className="wallet-card wallet-pending">
+                      <span className="wallet-label">Pending</span>
+                      <span className="wallet-value">{formatPrice((wallet.pending_cents || 0) / 100)}</span>
+                    </div>
+                    <div className="wallet-card wallet-lifetime">
+                      <span className="wallet-label">Lifetime Earnings</span>
+                      <span className="wallet-value">{formatPrice((wallet.lifetime_cents || 0) / 100)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="dashboard-summary">
-                <h4 className="analytics-section-title">Seller Dashboard</h4>
+                <h4 className="analytics-section-title">Sales Overview</h4>
                 <div className="dashboard-grid">
                   <div className="dashboard-card dashboard-card--revenue">
                     <span className="dashboard-card-icon">
@@ -861,6 +947,29 @@ export default function Profile() {
                 </div>
               )}
 
+              {payouts.length > 0 && (
+                <div className="dashboard-section">
+                  <h4 className="analytics-section-title">Payout History</h4>
+                  <div className="payouts-list">
+                    {payouts.map((p) => (
+                      <div key={p.id} className="payout-card">
+                        <div className="payout-info">
+                          <span className="payout-amount">{formatPrice(p.amount_cents / 100)}</span>
+                          <span className="payout-method">{p.method}</span>
+                          <span className="payout-date">{new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                        </div>
+                        <div className="payout-right">
+                          <span className={`payout-status payout-status--${p.status}`}>{p.status}</span>
+                          {p.status === 'pending' && (
+                            <button className="payout-cancel-btn" onClick={() => cancelPayout(p.id)}>Cancel</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {templates.length > 0 && (
                 <div className="dashboard-section">
                   <h4 className="analytics-section-title">Saved Templates</h4>
@@ -890,7 +999,51 @@ export default function Profile() {
                 </div>
               )}
 
-              {!sellerStats?.sales?.length && templates.length === 0 && (
+              {showPayoutForm && (
+                <div className="payout-form-card">
+                  <h4 className="analytics-section-title">Request Payout</h4>
+                  <div className="payout-form">
+                    <label className="payout-label">
+                      Amount ($)
+                      <input
+                        className="input"
+                        type="number"
+                        min="1"
+                        step="0.01"
+                        value={payoutForm.amountCents}
+                        onChange={(e) => setPayoutForm((f) => ({ ...f, amountCents: e.target.value }))}
+                        placeholder="0.00"
+                      />
+                    </label>
+                    <label className="payout-label">
+                      Method
+                      <select
+                        className="input"
+                        value={payoutForm.method}
+                        onChange={(e) => setPayoutForm((f) => ({ ...f, method: e.target.value }))}
+                      >
+                        <option value="bank">Bank Transfer</option>
+                        <option value="paypal">PayPal</option>
+                      </select>
+                    </label>
+                    {payoutForm.method === 'bank' && (
+                      <>
+                        <input className="input" placeholder="Bank name" value={payoutForm.bankName} onChange={(e) => setPayoutForm((f) => ({ ...f, bankName: e.target.value }))} />
+                        <input className="input" placeholder="Account number" value={payoutForm.accountNumber} onChange={(e) => setPayoutForm((f) => ({ ...f, accountNumber: e.target.value }))} />
+                        <input className="input" placeholder="Account holder name" value={payoutForm.accountName} onChange={(e) => setPayoutForm((f) => ({ ...f, accountName: e.target.value }))} />
+                      </>
+                    )}
+                    <div className="payout-form-actions">
+                      <button className="payout-cancel" onClick={() => setShowPayoutForm(false)}>Cancel</button>
+                      <button className="payout-submit" onClick={submitPayout} disabled={payoutBusy}>
+                        {payoutBusy ? 'Submitting…' : 'Submit Request'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {!sellerStats?.sales?.length && templates.length === 0 && !wallet && (
                 <div className="empty-state" style={{ marginTop: 20 }}>
                   <h3 className="empty-title">No sales yet</h3>
                   <p className="empty-text">Your sold items and revenue will appear here</p>
