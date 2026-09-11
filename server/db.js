@@ -593,6 +593,17 @@ function applySchema() {
       reviewed_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS referrals (
+      id TEXT PRIMARY KEY,
+      referrer_id TEXT NOT NULL,
+      referred_id TEXT NOT NULL,
+      code TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      reward_cents INTEGER NOT NULL DEFAULT 1000,
+      created_at TEXT DEFAULT (datetime('now')),
+      credited_at TEXT
+    );
+
   `);
 
   db.exec(`
@@ -607,6 +618,8 @@ function applySchema() {
     CREATE INDEX IF NOT EXISTS idx_offers_seller ON offers(seller_id);
     CREATE INDEX IF NOT EXISTS idx_verifications_user ON verification_requests(user_id);
     CREATE INDEX IF NOT EXISTS idx_verifications_status ON verification_requests(status);
+    CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
+    CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id);
   `);
 
   migrate();
@@ -672,8 +685,9 @@ function migrate() {
   ensureColumn('subscriptions', 'paystack_reference', 'TEXT');
   ensureColumn('subscriptions', 'pending_plan', 'TEXT');
   ensureColumn('user_settings', 'fcm_token', "TEXT DEFAULT ''");
-  ensureColumn('items', 'sold_to', 'TEXT');
-  ensureColumn('users', 'identity_verified', 'INTEGER DEFAULT 0');
+ensureColumn('items', 'sold_to', 'TEXT');
+ensureColumn('users', 'identity_verified', 'INTEGER DEFAULT 0');
+ensureColumn('users', 'referral_code', "TEXT DEFAULT ''");
 
   seedPlatformSettings();
 }

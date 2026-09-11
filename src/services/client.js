@@ -262,24 +262,37 @@ export const api = {
     removeToken: () => request('/fcm/fcm-token', { method: 'DELETE' }),
   },
 
+  referrals: {
+    my: () => request('/referrals/my'),
+    generateCode: () => request('/referrals/code', { method: 'POST' }),
+  },
+
   firebase: {
     sendEmail: (data) => request('/firebase/firebase/send-email', { method: 'POST', body: JSON.stringify(data) }),
     sendPush: (data) => request('/firebase/firebase/push', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   upload: {
-    images: (files) => {
+    images: async (files) => {
+      const { compressImage } = await import('../utils/imageCompression');
       const formData = new FormData();
-      files.forEach(f => formData.append('images', f));
+      for (const f of files) {
+        let file = f;
+        try { file = await compressImage(f, { maxWidth: 1280, maxHeight: 1280, quality: 0.82 }); } catch {}
+        formData.append('images', file);
+      }
       return fetch(`${API_BASE}/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },
         body: formData,
       }).then(r => r.json());
     },
-    single: (file) => {
+    single: async (file) => {
+      const { compressImage } = await import('../utils/imageCompression');
       const formData = new FormData();
-      formData.append('image', file);
+      let out = file;
+      try { out = await compressImage(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.82 }); } catch {}
+      formData.append('image', out);
       return fetch(`${API_BASE}/upload/single`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },

@@ -19,6 +19,7 @@ import { categories } from '../services/api';
 import AddListing from './AddListing';
 import Offers from './Offers';
 import SellerVerification from '../components/verification/SellerVerification';
+import Referrals from '../components/profile/Referrals';
 import '../styles/globals.css';
 import './Profile.css';
 
@@ -648,6 +649,9 @@ export default function Profile() {
           <button className={`profile-tab ${activeTab === 'offers' ? 'active' : ''}`} onClick={() => setActiveTabState('offers')}>
             Offers
           </button>
+          <button className={`profile-tab ${activeTab === 'referrals' ? 'active' : ''}`} onClick={() => setActiveTabState('referrals')}>
+            Referrals
+          </button>
           <button className={`profile-tab ${activeTab === 'analytics' ? 'active' : ''}`} onClick={() => setActiveTabState('analytics')}>
             Analytics
           </button>
@@ -662,6 +666,10 @@ export default function Profile() {
         <div className="profile-tab-content">
           {activeTab === 'offers' && (
             <Offers onClose={() => setActiveTabState('listings')} />
+          )}
+
+          {activeTab === 'referrals' && (
+            <Referrals />
           )}
 
           {activeTab === 'listings' && (

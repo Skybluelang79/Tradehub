@@ -5,6 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import validate, { createDisputeSchema } from '../src/validation.js';
 import { refundTxn, getFeeRateForSeller } from './payments.js';
+import { creditFirstPurchase } from './referrals.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -142,6 +143,7 @@ router.put('/:id/resolve', adminAuth, async (req, res) => {
           .run(netCents, netCents, txn.seller_id);
         db.prepare("UPDATE transactions SET status = 'completed', completed_at = datetime('now'), fee_amount = ?, net_amount = ? WHERE id = ?")
           .run(feeCents / 100, netCents / 100, dispute.transaction_id);
+        creditFirstPurchase(txn.buyer_id);
       }
       notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved in the seller's favor.`);
       notify(txn.seller_id, 'system', 'Dispute Resolved', `The dispute for "${txn.item_title}" was resolved in your favor. Payment released.`);

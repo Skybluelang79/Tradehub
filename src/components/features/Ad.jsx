@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../../context';
 import { useToast } from '../ui/Toast';
+import { api } from '../../services/client';
 import './Ad.css';
 
 function useAdNavigation() {
-  const { setFilters, setActiveTab, filters } = useApp();
+  const { setFilters, setActiveTab, filters, currentUserId } = useApp();
   const { addToast } = useToast();
 
   const goHome = (category) => {
@@ -19,9 +20,18 @@ function useAdNavigation() {
   const goToAdd = () => setActiveTab('add');
   const goToPayments = () => setActiveTab('payments');
 
-  const inviteFriend = () => {
-    const url = 'https://tradehub-app-928.netlify.app';
-    const text = 'Join me on TradeHub to buy and sell near you!';
+  const inviteFriend = async () => {
+    let url = 'https://tradehub-app-928.netlify.app';
+    let text = 'Join me on TradeHub to buy and sell near you!';
+    if (currentUserId) {
+      try {
+        const res = await api.referrals.code();
+        if (res && res.code) {
+          url = `https://tradehub-app-928.netlify.app/?ref=${res.code}`;
+          text = `Join me on TradeHub and we both get $10 credit! Use my code: ${res.code}`;
+        }
+      } catch {}
+    }
     if (navigator.share) {
       navigator.share({ title: 'TradeHub', text, url }).catch(() => {});
     } else {

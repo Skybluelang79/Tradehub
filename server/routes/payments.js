@@ -4,6 +4,7 @@ import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import { validateAndApplyPromo, consumePromo, releasePromo } from './promotions.js';
+import { creditFirstPurchase } from './referrals.js';
 import { sendNotificationEmail } from '../src/email.js';
 import logger from '../src/logger.js';
 import {
@@ -695,6 +696,8 @@ export function finalizeCompleted(txn) {
     .run(netCents, netCents, txn.seller_id);
 
   if (txn.promo_code) consumePromo(txn.promo_code);
+
+  creditFirstPurchase(txn.buyer_id);
 
   notify(txn.buyer_id, 'payment', 'Payment Released', `Payment of ${txn.amount} ${txn.currency} for "${txn.item_title}" has been released.`);
   notify(txn.seller_id, 'sale', 'Item Sold', `"${txn.item_title}" has been sold for ${txn.amount} ${txn.currency}!`);

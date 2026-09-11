@@ -5,6 +5,7 @@ import { useToast } from '../components/ui/Toast';
 import { useApp } from '../context';
 import { LivePreview } from '../components/features';
 import { categories } from '../services/api';
+import { compressToDataUrl } from '../utils/imageCompression';
 import '../styles/globals.css';
 import './AddListing.css';
 
@@ -148,19 +149,20 @@ export default function AddListing({ editItemId, onEditComplete }) {
     addToast(`Price set to $${value.toLocaleString()}`, 'success');
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (images.length + files.length > 6) {
       addToast('Maximum 6 images allowed', 'error');
       return;
     }
-    files.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setImages((prev) => [...prev, event.target.result]);
-      };
-      reader.readAsDataURL(file);
-    });
+    for (const file of files) {
+      try {
+        const dataUrl = await compressToDataUrl(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.82 });
+        setImages((prev) => [...prev, dataUrl]);
+      } catch (err) {
+        addToast(err.message || 'Could not compress image', 'error');
+      }
+    }
   };
 
   const handleCameraCapture = () => {

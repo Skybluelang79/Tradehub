@@ -80,6 +80,11 @@
   color: var(--text-primary);
 }
 
+.optional-label {
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
 .input-wrapper {
   position: relative;
   display: flex;

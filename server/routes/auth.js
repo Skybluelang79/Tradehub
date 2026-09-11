@@ -11,6 +11,7 @@ import { authLimiter } from '../src/rateLimiter.js';
 import { requiredEnv } from '../src/env.js';
 import { sendVerificationEmail, sendPasswordResetEmail, isEmailConfigured } from '../src/email.js';
 import logger from '../src/logger.js';
+import { applyReferral } from './referrals.js';
 
 const router = Router();
 
@@ -29,7 +30,7 @@ function generateRefreshToken(userId) {
 
 router.post('/signup', authLimiter, validate(signupSchema), (req, res) => {
   try {
-    const { name, email, password, username } = req.validatedBody;
+    const { name, email, password, username, referralCode } = req.validatedBody;
 
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (existing) {
@@ -45,6 +46,10 @@ router.post('/signup', authLimiter, validate(signupSchema), (req, res) => {
       INSERT INTO users (id, name, username, email, password, avatar)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(id, name, normalizedUsername, email, hashedPassword, avatar);
+
+    if (referralCode) {
+      try { applyReferral(id, referralCode); } catch (err) { logger.warn(`Referral apply failed: ${err.message}`); }
+    }
 
     const verifyToken = uuidv4();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();

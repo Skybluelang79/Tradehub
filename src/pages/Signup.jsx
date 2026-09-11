@@ -15,6 +15,7 @@ export default function Signup({ onSwitchToLogin, onClose }) {
     email: '',
     password: '',
     confirmPassword: '',
+    referralCode: new URLSearchParams(window.location.search).get('ref') || '',
     acceptTerms: false,
   });
   const [showPassword, setShowPassword] = useState(false);
@@ -84,6 +85,7 @@ export default function Signup({ onSwitchToLogin, onClose }) {
       username: formData.username,
       email: formData.email,
       password: formData.password,
+      referralCode: formData.referralCode.trim(),
     });
     
     if (result.success) {
@@ -281,6 +283,24 @@ export default function Signup({ onSwitchToLogin, onClose }) {
             {validationErrors.confirmPassword && (
               <span className="field-error">{validationErrors.confirmPassword}</span>
             )}
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="referralCode">Referral Code <span className="optional-label">(optional)</span></label>
+            <div className="input-wrapper">
+              <svg className="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M22 12h-6l-2 3h-4l-2-3H2" />
+                <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+              </svg>
+              <input
+                type="text"
+                id="referralCode"
+                name="referralCode"
+                placeholder="Enter a friend's referral code"
+                value={formData.referralCode}
+                onChange={handleChange}
+              />
+            </div>
           </div>
 
           <label className="checkbox-label terms-label">
