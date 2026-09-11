@@ -4,6 +4,7 @@ import { useToast } from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
 import { ImageLightbox, PriceChart } from '../components/features';
 import { api } from '../services/client';
+import { payWithCard } from '../services/paystack';
 import { useAuth } from '../context/AuthContext';
 import {
   ArrowLeftIcon,
@@ -63,7 +64,7 @@ export default function ItemDetail() {
   } = useApp();
 
   const { addToast } = useToast();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user: authUser } = useAuth();
 
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
@@ -80,8 +81,6 @@ export default function ItemDetail() {
   const [availableMethods, setAvailableMethods] = useState(null);
   const [walletCredit, setWalletCredit] = useState(0);
   const [giftCode, setGiftCode] = useState('');
-  const [cryptoNetworks, setCryptoNetworks] = useState([]);
-  const [cryptoNetwork, setCryptoNetwork] = useState('');
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [checkoutError, setCheckoutError] = useState('');
@@ -113,8 +112,6 @@ export default function ItemDetail() {
     setAvailableMethods(null);
     setWalletCredit(0);
     setGiftCode('');
-    setCryptoNetworks([]);
-    setCryptoNetwork('');
     setCheckoutBusy(false);
     setCheckoutResult(null);
     setCheckoutError('');
@@ -128,22 +125,17 @@ export default function ItemDetail() {
     setCheckoutResult(null);
     setCheckoutError('');
     setCheckoutMethod('card');
-    setCryptoNetwork('');
     api.payments.options().then((r) => {
       const methods = (r.methods || []).filter((m) => m.enabled !== false);
       setAvailableMethods(methods);
       if (methods.length) {
-        const preferred = ['card', 'gift_card', 'bank', 'crypto'].filter((id) => methods.some((m) => m.id === id));
+        const preferred = ['card', 'paystack_bank', 'gift_card'].filter((id) => methods.some((m) => m.id === id));
         setCheckoutMethod(preferred[0]);
       }
       setWalletCredit(r.creditCents ?? methods.find((m) => m.id === 'gift_card')?.creditCents ?? 0);
-      const crypto = methods.find((m) => m.id === 'crypto');
-      const networks = crypto?.details?.networks || [];
-      setCryptoNetworks(networks);
-      setCryptoNetwork(networks[0]?.id || '');
     }).catch(() => {
       setAvailableMethods([
-        { id: 'card', name: 'Card / Stripe', enabled: true },
+        { id: 'card', name: 'Card / Paystack', enabled: true },
         { id: 'gift_card', name: 'Gift Card / Store Credit', enabled: true },
       ]);
     });
@@ -159,32 +151,62 @@ export default function ItemDetail() {
       if (checkoutMethod === 'gift_card') {
         payload.giftCardCode = giftCode.trim();
       }
-      if (checkoutMethod === 'crypto') {
-        payload.network = cryptoNetwork;
-      }
       const res = await api.payments.createIntent(payload);
 
-      if (checkoutMethod === 'bank' || checkoutMethod === 'crypto') {
-        setCheckoutResult(res);
-        setCheckoutBusy(false);
+      // Demo mode / store credit: the charge is already recorded.
+      if (checkoutMethod === 'gift_card') {
+        if (res.paid) {
+          await api.payments.confirm(res.transactionId);
+          markAsSold(selectedItem.id);
+          addToast('Purchase complete! Payment is in escrow.', 'success');
+          resetCheckout();
+        } else if (res.demo) {
+          await api.payments.confirm(res.transactionId);
+          markAsSold(selectedItem.id);
+          addToast('Purchase complete! Payment is in escrow.', 'success');
+          resetCheckout();
+        } else {
+          setCheckoutResult(res);
+        }
         return;
       }
 
-      if (checkoutMethod === 'card' && res.demo) {
+      if (res.demo) {
         await api.payments.confirm(res.transactionId);
-      }
-
-      if ((checkoutMethod === 'card' && res.demo) || (checkoutMethod === 'gift_card' && res.paid)) {
-        if (checkoutMethod === 'gift_card') {
-          await api.payments.confirm(res.transactionId);
-        }
         markAsSold(selectedItem.id);
         addToast('Purchase complete! Payment is in escrow.', 'success');
         resetCheckout();
+        return;
       }
+
+      // Real Paystack charge - open the Paystack Pop checkout.
+      await payWithCard({
+        publicKey: res.publicKey,
+        email: authUser?.email || '',
+        amountCents: res.chargeCents || res.amountCents,
+        currency: res.currency,
+        reference: res.reference || res.transactionId,
+        accessCode: res.accessCode,
+        authorizationUrl: res.authorizationUrl,
+        onSuccess: async () => {
+          const verified = await api.payments.verify(res.reference || res.transactionId);
+          if (verified?.status === 'pending') {
+            markAsSold(selectedItem.id);
+            addToast('Purchase complete! Payment is in escrow.', 'success');
+            resetCheckout();
+          }
+        },
+        onClose: () => {
+          addToast('Payment cancelled. You can retry any time.', 'info');
+          setCheckoutBusy(false);
+        },
+        onError: (err) => {
+          setCheckoutError(err.message || 'Payment failed');
+          setCheckoutBusy(false);
+        },
+      });
     } catch (err) {
       setCheckoutError(err.message || 'Payment failed');
-    } finally {
       setCheckoutBusy(false);
     }
   };
@@ -414,7 +436,7 @@ export default function ItemDetail() {
   };
 
   const displayMethods = availableMethods ?? [
-    { id: 'card', name: 'Card / Stripe', enabled: true },
+    { id: 'card', name: 'Card / Paystack', enabled: true },
     { id: 'gift_card', name: 'Gift Card / Store Credit', enabled: true },
   ];
 
@@ -440,6 +462,7 @@ export default function ItemDetail() {
           </span>
         );
       case 'bank':
+      case 'paystack_bank':
         return (
           <span className="checkout-method-icon bank">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -454,12 +477,10 @@ export default function ItemDetail() {
         );
       default:
         return (
-          <span className="checkout-method-icon crypto">
+          <span className="checkout-method-icon card">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M9.5 8.5h4.2a2.3 2.3 0 0 1 0 4.6H9.5z" />
-              <path d="M9.5 13.2h4.8a2.3 2.3 0 0 1 0 4.6H9.5z" />
-              <line x1="10.5" y1="8.5" x2="10.5" y2="17.8" />
+              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+              <line x1="1" y1="10" x2="23" y2="10" />
             </svg>
           </span>
         );
@@ -887,7 +908,7 @@ export default function ItemDetail() {
       <Modal
         isOpen={showCheckout}
         onClose={resetCheckout}
-        title={checkoutResult ? 'Payment Instructions' : 'Checkout'}
+        title={checkoutResult ? 'Payment Complete' : 'Checkout'}
         footer={
           checkoutResult ? (
             <Button block onClick={resetCheckout}>Done</Button>
@@ -898,103 +919,10 @@ export default function ItemDetail() {
           )
         }
       >
-        {checkoutResult && checkoutResult.payment ? (
-          <div>
-            <div className="checkout-confirm-note">
-              <ClockIcon size={16} />
-              <span>
-                {checkoutResult.method === 'bank'
-                  ? 'Transfer the exact amount using the details below. Reference must be included. Funds are verified and held in escrow.'
-                  : 'Send the exact amount to the address below. Funds are verified and held in escrow.'}
-              </span>
-            </div>
-
-            {checkoutResult.payment.bank && (
-              <div className="pay-info-list">
-                <div className="pay-info-row">
-                  <span className="pay-info-label">Amount</span>
-                  <strong>{formatPrice(checkoutResult.payment.amount)}</strong>
-                </div>
-                <div className="pay-info-row">
-                  <span className="pay-info-label">Reference</span>
-                  <span className="pay-info-value mono">{checkoutResult.payment.reference}</span>
-                  <button className="copy-btn" onClick={() => copyToClipboard(checkoutResult.payment.reference, 'Reference')}><CopyIcon size={14} /></button>
-                </div>
-                <div className="pay-info-row">
-                  <span className="pay-info-label">Recipient</span>
-                  <span className="pay-info-value">{checkoutResult.payment.bank.name}</span>
-                </div>
-                <div className="pay-info-row">
-                  <span className="pay-info-label">Bank</span>
-                  <span className="pay-info-value">{checkoutResult.payment.bank.bank}</span>
-                </div>
-                <div className="pay-info-row">
-                  <span className="pay-info-label">Account #</span>
-                  <span className="pay-info-value mono">{checkoutResult.payment.bank.accountNumber}</span>
-                  <button className="copy-btn" onClick={() => copyToClipboard(checkoutResult.payment.bank.accountNumber, 'Account number')}><CopyIcon size={14} /></button>
-                </div>
-                {checkoutResult.payment.bank.routing && (
-                  <div className="pay-info-row">
-                    <span className="pay-info-label">Routing</span>
-                    <span className="pay-info-value mono">{checkoutResult.payment.bank.routing}</span>
-                  </div>
-                )}
-                {checkoutResult.payment.bank.swift && (
-                  <div className="pay-info-row">
-                    <span className="pay-info-label">SWIFT</span>
-                    <span className="pay-info-value mono">{checkoutResult.payment.bank.swift}</span>
-                  </div>
-                )}
-                {checkoutResult.payment.bank.iban && (
-                  <div className="pay-info-row">
-                    <span className="pay-info-label">IBAN</span>
-                    <span className="pay-info-value mono">{checkoutResult.payment.bank.iban}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {checkoutResult.payment.address && (
-              <div className="pay-info-list">
-                <div className="pay-info-row">
-                  <span className="pay-info-label">Amount</span>
-                  <strong>{formatPrice(checkoutResult.payment.amount)}</strong>
-                </div>
-                <div className="pay-info-row">
-                  <span className="pay-info-label">Reference</span>
-                  <span className="pay-info-value mono">{checkoutResult.payment.reference}</span>
-                  <button className="copy-btn" onClick={() => copyToClipboard(checkoutResult.payment.reference, 'Reference')}><CopyIcon size={14} /></button>
-                </div>
-                {checkoutResult.payment.network && (
-                  <div className="pay-info-row">
-                    <span className="pay-info-label">Network</span>
-                    <span className="pay-info-value">{checkoutResult.payment.network.label} ({checkoutResult.payment.network.symbol})</span>
-                  </div>
-                )}
-                <div className="pay-info-row">
-                  <span className="pay-info-label">Networks</span>
-                  <span className="pay-info-value">{(checkoutResult.payment.networks || []).map((n) => n.symbol || n).join(' · ')}</span>
-                </div>
-                <div className="pay-info-row pay-info-row--column">
-                  <span className="pay-info-label">Address</span>
-                  <span className="pay-info-value mono break">{checkoutResult.payment.address}</span>
-                  <button className="copy-btn" onClick={() => copyToClipboard(checkoutResult.payment.address, 'Address')}><CopyIcon size={14} /></button>
-                </div>
-                {checkoutResult.payment.qr && (
-                  <div className="crypto-qr-wrap">
-                    <img
-                      className="crypto-qr"
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(checkoutResult.payment.qr)}`}
-                      alt="Payment QR code"
-                    />
-                    <span className="crypto-qr-caption">Scan to send payment</span>
-                  </div>
-                )}
-                {checkoutResult.payment.placeholder && (
-                  <p className="pay-info-hint">Demo address shown. Set <code>CRYPTO_ADDRESSES</code> or <code>CRYPTO_ADDRESS_&lt;SYMBOL&gt;</code> in production.</p>
-                )}
-              </div>
-            )}
+        {checkoutResult ? (
+          <div className="checkout-confirm-note" style={{ fontWeight: 600 }}>
+            <CheckIcon size={16} />
+            <span>Payment received and held in escrow. The seller is notified and your order is on its way.</span>
           </div>
         ) : (
           <div>
@@ -1004,7 +932,8 @@ export default function ItemDetail() {
             <div className="checkout-methods">
               {displayMethods.map((m) => {
                 const methodDesc =
-                  m.id === 'card' ? 'Credit, debit, Apple Pay' :
+                  m.id === 'card' ? 'Credit, debit, Verve' :
+                  m.id === 'paystack_bank' || m.id === 'bank' ? (m.description || 'Pay via a dedicated bank account') :
                   m.id === 'gift_card' ? walletCredit > 0 ? `${formatPrice(walletCredit / 100)} available` : 'Use store credit or a gift card' :
                   m.description || '';
                 return (
@@ -1023,25 +952,6 @@ export default function ItemDetail() {
                 );
               })}
             </div>
-
-            {checkoutMethod === 'crypto' && cryptoNetworks.length > 0 && (
-              <div className="input-group" style={{ marginTop: 12 }}>
-                <label className="input-label">Select Network</label>
-                <div className="crypto-network-grid">
-                  {cryptoNetworks.map((n) => (
-                    <button
-                      key={n.id}
-                      type="button"
-                      className={`crypto-network-chip ${cryptoNetwork === n.id ? 'active' : ''}`}
-                      onClick={() => setCryptoNetwork(n.id)}
-                    >
-                      <span className="crypto-network-symbol">{n.symbol}</span>
-                      <span className="crypto-network-label">{n.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {checkoutMethod === 'gift_card' && (
               <div className="input-group" style={{ marginTop: 12 }}>

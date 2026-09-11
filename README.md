@@ -1,6 +1,6 @@
 # TradeHub
 
-TradeHub is a local peer-to-peer marketplace with built-in **escrow payments**, **real-time chat**, **multi-item cart checkout**, and an **admin panel**. Buyers pay with store credit, gift cards, card, bank transfer, or crypto; funds are held in escrow until both sides confirm.
+TradeHub is a local peer-to-peer marketplace with built-in **escrow payments**, **real-time chat**, **multi-item cart checkout**, and an **admin panel**. Buyers pay with store credit, gift cards, card, or Paystack bank transfer; funds are held in escrow until both sides confirm.
 
 ## Tech Stack
 
@@ -8,7 +8,7 @@ TradeHub is a local peer-to-peer marketplace with built-in **escrow payments**, 
 | --- | --- |
 | Frontend | React 19, Vite 8, Context API, i18n (EN/DE/ES/FR), PWA |
 | Backend | Express 4, Socket.IO, sql.js (SQLite in-browser engine) |
-| Payments | Stripe, store credit, gift cards, bank transfer, crypto |
+| Payments | Paystack (card + bank transfer), store credit, gift cards |
 | Auth | JWT + refresh tokens, bcrypt, optional email verification |
 | Ops | Winston logging, node-cron jobs, Docker, Netlify/Render/Railway/Vercel |
 
@@ -80,7 +80,7 @@ TradeHub ships with configs for **Netlify** (`netlify.toml`), **Render** (`rende
 ### Production checklist
 
 - [ ] Strong, unique `JWT_SECRET`, `REFRESH_SECRET`, `ADMIN_PASSWORD`
-- [ ] Real Stripe keys + `STRIPE_WEBHOOK_SECRET` (webhooks are rejected until configured)
+- [ ] Real Paystack keys (**secret + public**) and `PAYSTACK_WEBHOOK_SECRET` (webhooks are rejected until configured)
 - [ ] `APP_URL` set to your real domain(s) (CORS allowlist)
 - [ ] Real SMTP credentials for verification/reset emails
 - [ ] `NODE_ENV=production`

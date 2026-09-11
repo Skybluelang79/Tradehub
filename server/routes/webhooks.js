@@ -1,126 +1,173 @@
+import { Router } from 'express';
 import express from 'express';
 import crypto from 'node:crypto';
-import Stripe from 'stripe';
 import db from '../db.js';
-import { releasePromo } from './promotions.js';
+import { verifyPaystackWebhook } from '../src/paystack.js';
+import { refundTxn } from './payments.js';
+import { activatePlan } from './subscriptions.js';
 import logger from '../src/logger.js';
 
-const router = express.Router();
+const router = Router();
 
-router.post('/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+function notify(userId, type, title, body) {
+  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
+    .run(crypto.randomUUID(), userId, type, title, body);
+}
 
-  if (!webhookSecret || !stripeSecretKey) {
-    logger.error('Stripe webhook rejected: STRIPE_WEBHOOK_SECRET / STRIPE_SECRET_KEY not configured');
-    return res.status(503).json({ error: 'Stripe not configured' });
+// Paystack webhook handler. Requires PAYSTACK_WEBHOOK_SECRET to be configured;
+// requests without a valid signature are rejected (HMAC-SHA512).
+router.post('/paystack', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!process.env.PAYSTACK_WEBHOOK_SECRET) {
+    logger.error('Paystack webhook rejected: PAYSTACK_WEBHOOK_SECRET not configured');
+    return res.status(503).json({ error: 'Paystack webhook secret not configured' });
+  }
+
+  if (!verifyPaystackWebhook(req)) {
+    logger.warn('Paystack webhook rejected: invalid signature');
+    return res.status(400).json({ error: 'Invalid signature' });
   }
 
   let event;
   try {
-    const stripe = new Stripe(stripeSecretKey);
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    event = JSON.parse(req.body?.toString('utf8') || '{}');
   } catch (err) {
-    logger.error(`Stripe webhook signature verification failed: ${err.message}`);
-    return res.status(400).json({ error: 'Invalid signature' });
+    return res.status(400).json({ error: 'Invalid JSON payload' });
   }
 
+  const eventType = event.event;
+  const data = event.data || {};
+
   try {
-    switch (event.type) {
-      case 'payment_intent.succeeded': {
-        const intent = event.data.object;
+    switch (eventType) {
+      case 'charge.success': {
+        const reference = data.reference;
+        if (!reference) throw new Error('Missing reference in charge.success payload');
+
         const txns = db.prepare(
-          'SELECT * FROM transactions WHERE stripe_payment_intent_id = ?'
-        ).all(intent.id);
+          "SELECT * FROM transactions WHERE paystack_reference = ? AND status = 'awaiting_payment'"
+        ).all(reference);
         for (const txn of txns) {
-          if (txn.status === 'awaiting_payment') {
-            db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
-            db.prepare(`
-              INSERT INTO notifications (id, user_id, type, title, body)
-              VALUES (?, ?, 'payment', 'Payment Received', ?)
-            `).run(
-              crypto.randomUUID(),
-              txn.buyer_id,
-              `Payment of $${txn.amount} for "${txn.item_title}" was received and is held in escrow.`
-            );
+          db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
+          notify(txn.buyer_id, 'payment', 'Payment Received', `Payment for "${txn.item_title}" was received and is held in escrow.`);
+        }
+
+        // Save the reusable authorization so the buyer can check out faster next time.
+        const auth = data.authorization;
+        if (auth?.authorization_code && auth.reusable && txns.length > 0) {
+          const txn = txns[0];
+          try {
+            const existing = db.prepare(
+              'SELECT id FROM payment_methods WHERE user_id = ? AND last4 = ? AND brand = ?'
+            ).get(txn.buyer_id, auth.last4, auth.card_type);
+            if (existing) {
+              db.prepare('UPDATE payment_methods SET paystack_authorization_code = ? WHERE id = ?')
+                .run(auth.authorization_code, existing.id);
+            } else {
+              db.prepare(`
+                INSERT INTO payment_methods (id, user_id, paystack_authorization_code, brand, card_type, last4, exp_month, exp_year, is_default)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+              `).run(crypto.randomUUID(), txn.buyer_id, auth.authorization_code, auth.card_type, auth.card_type, auth.last4, auth.exp_month, auth.exp_year);
+            }
+          } catch (err) {
+            logger.warn(`Could not save paystack auth code: ${err.message}`);
           }
         }
-        logger.info(`Payment succeeded: ${intent.id}`);
-        break;
-      }
 
-      case 'payment_intent.payment_failed': {
-        const intent = event.data.object;
-        db.prepare(`
-          UPDATE transactions SET status = 'failed'
-          WHERE stripe_payment_intent_id = ?
-        `).run(intent.id);
-        logger.warn(`Payment failed: ${intent.id}`);
-        break;
-      }
-
-      case 'charge.refunded': {
-        const charge = event.data.object;
-        const intentId = typeof charge.payment_intent === 'string' ? charge.payment_intent : charge.payment_intent?.id;
-        if (intentId) {
-          const txns = db.prepare(
-            'SELECT * FROM transactions WHERE stripe_payment_intent_id = ?'
-          ).all(intentId);
-          for (const txn of txns) {
-            if (txn.status === 'refunded') continue;
-            if (txn.status === 'completed') {
-              db.prepare('UPDATE wallets SET available_cents = MAX(0, available_cents - ?), lifetime_cents = MAX(0, lifetime_cents - ?) WHERE user_id = ?')
-                .run(Math.round(txn.net_amount * 100), Math.round(txn.net_amount * 100), txn.seller_id);
-            }
-            if (txn.credit_cents > 0) {
-              const w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(txn.buyer_id);
-              if (w) {
-                db.prepare('UPDATE wallets SET credit_cents = credit_cents + ?, updated_at = datetime(\'now\') WHERE user_id = ?')
-                  .run(txn.credit_cents, txn.buyer_id);
-              }
-            }
-            db.prepare("UPDATE transactions SET status = 'refunded', completed_at = NULL WHERE id = ?").run(txn.id);
-            db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
-            if (txn.promo_code) releasePromo(txn.promo_code);
-          }
+        // Subscription purchase activation (paid plan upgrade).
+        const meta = data.metadata || {};
+        if (meta.userId && meta.plan) {
+          activatePlan(meta.userId, meta.plan);
         }
-        logger.info(`Charge refunded: ${charge.id}`);
+
+        logger.info(`Paystack charge succeeded: ${reference}`);
         break;
       }
 
-      case 'checkout.session.completed': {
-        const session = event.data.object;
-        const userId = session.metadata?.userId;
-        const plan = session.metadata?.plan;
-        if (userId && plan && (plan === 'premium' || plan === 'pro')) {
-          const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);
-          if (sub) {
-            db.prepare(`
-              UPDATE subscriptions SET plan = ?, status = 'active',
-                current_period_start = datetime('now'),
-                current_period_end = datetime('now', '+30 days'),
-                trial_end = NULL,
-                updated_at = datetime('now')
-              WHERE user_id = ?
-            `).run(plan, userId);
+      case 'charge.failed': {
+        const reference = data.reference;
+        if (reference) {
+          db.prepare(`
+            UPDATE transactions SET status = 'failed'
+            WHERE paystack_reference = ? AND status = 'awaiting_payment'
+          `).run(reference);
+          logger.warn(`Paystack charge failed: ${reference}`);
+        }
+        break;
+      }
+
+      case 'charge.abandoned': {
+        const reference = data.reference;
+        if (reference) {
+          db.prepare(`
+            UPDATE transactions SET status = 'failed'
+            WHERE paystack_reference = ? AND status = 'awaiting_payment'
+          `).run(reference);
+          logger.warn(`Paystack charge abandoned: ${reference}`);
+        }
+        break;
+      }
+
+      case 'refund.processed': {
+        const reference = data.transaction?.reference || data.transaction;
+        if (!reference) break;
+        const txn = db.prepare('SELECT * FROM transactions WHERE paystack_reference = ?').get(reference);
+        if (txn && txn.status !== 'refunded') {
+          // Local bookkeeping only; the Paystack refund already happened.
+          await refundTxn(txn, { skipGateway: true });
+          notify(txn.buyer_id, 'system', 'Payment Refunded', `Payment for "${txn.item_title}" has been refunded.`);
+          logger.info(`Paystack refund processed for ${reference}`);
+        }
+        break;
+      }
+
+      case 'transfer.success': {
+        const transferCode = data.transfer_code || data.id;
+        const recipientCode = data.recipient?.recipient_code;
+        if (!transferCode) break;
+        const payout = db.prepare('SELECT * FROM payouts WHERE transfer_code = ?').get(transferCode) ||
+          db.prepare('SELECT * FROM payouts WHERE recipient_code = ?').get(recipientCode);
+        if (payout && payout.status !== 'completed') {
+          if (payout.status === 'pending' || payout.status === 'approved') {
+            db.prepare("UPDATE wallets SET pending_cents = pending_cents - ? WHERE user_id = ?")
+              .run(payout.amount_cents, payout.user_id);
           }
-          logger.info(`Subscription activated: user ${userId} plan ${plan}`);
-        } else {
-          logger.warn(`Checkout session completed without valid upgrade metadata: ${session.id}`);
+          db.prepare("UPDATE payouts SET status = 'completed', processed_at = datetime('now') WHERE id = ?").run(payout.id);
+          notify(payout.user_id, 'payment', 'Payout Sent', `Your payout of ${(payout.amount_cents / 100).toFixed(2)} has been sent.`);
+          logger.info(`Paystack transfer succeeded: ${transferCode}`);
+        }
+        break;
+      }
+
+      case 'transfer.failed':
+      case 'transfer.reversed': {
+        const transferCode = data.transfer_code || data.id;
+        if (!transferCode) break;
+        const payout = db.prepare('SELECT * FROM payouts WHERE transfer_code = ?').get(transferCode);
+        if (payout && payout.status !== 'rejected' && payout.status !== 'completed') {
+          db.prepare("UPDATE wallets SET available_cents = available_cents + ?, pending_cents = pending_cents - ? WHERE user_id = ?")
+            .run(payout.amount_cents, payout.amount_cents, payout.user_id);
+          db.prepare("UPDATE payouts SET status = 'rejected', processed_at = datetime('now'), admin_notes = 'Transfer failed at Paystack' WHERE id = ?").run(payout.id);
+          notify(payout.user_id, 'payment', 'Payout Reverted', `Your payout could not be completed and has been returned to your balance.`);
+          logger.warn(`Paystack transfer ${eventType}: ${transferCode}`);
         }
         break;
       }
 
       default:
-        logger.debug(`Unhandled event type: ${event.type}`);
+        logger.debug(`Unhandled Paystack event type: ${eventType}`);
     }
 
     res.json({ received: true });
   } catch (err) {
-    logger.error('Webhook handler error:', err);
+    logger.error('Paystack webhook handler error:', err);
     res.status(500).json({ error: 'Webhook handler error' });
   }
+});
+
+// Legacy Stripe webhook endpoint. Kept as a 404-safe stub so old deploy configs
+// that still send to /api/webhooks/stripe don't error; it is not processed.
+router.post('/stripe', (req, res) => {
+  res.status(200).json({ received: true, ignored: true });
 });
 
 export default router;

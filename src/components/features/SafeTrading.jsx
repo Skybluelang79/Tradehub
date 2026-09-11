@@ -53,8 +53,8 @@ const features = [
       </svg>
     ),
     title: 'Secure Payments',
-    desc: 'PCI-DSS compliant. We never store your card details. Stripe-powered encryption.',
-    detail: 'All transactions are processed through Stripe with 256-bit SSL encryption. Your financial data never touches our servers. Supports Apple Pay, Google Pay, and all major credit cards.',
+    desc: 'PCI-DSS compliant. We never store your card details. Paystack-powered encryption.',
+    detail: 'All transactions are processed through Paystack with 256-bit SSL encryption. Your financial data never touches our servers. Supports Visa, Mastercard, Verve, and mobile money.',
     color: '#FBBF24',
   },
 ];

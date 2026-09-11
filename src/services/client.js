@@ -129,6 +129,7 @@ export const api = {
     resetGiftCard: (id) => adminRequest(`/payments/gift-cards/${id}/reset`, { method: 'POST' }),
     confirmFunds: (txnId) => adminRequest(`/payments/admin/fund-confirmed/${txnId}`, { method: 'POST' }),
     createIntent: (data) => request('/payments/create-intent', { method: 'POST', body: JSON.stringify(data) }),
+    verify: (reference) => request(`/payments/verify/${reference}`, { method: 'POST' }),
     confirm: (txnId) => request(`/payments/confirm/${txnId}`, { method: 'POST' }),
     transactions: (filter) => request(`/payments/transactions?filter=${filter || 'all'}`),
     sellerAnalytics: () => request('/payments/analytics/seller'),
@@ -148,6 +149,7 @@ export const api = {
     plans: () => request('/subscription/plans'),
     benefits: () => request('/subscription/benefits'),
     upgrade: (plan) => request('/subscription/upgrade', { method: 'POST', body: JSON.stringify({ plan }) }),
+    verifyUpgrade: (reference) => request(`/subscription/upgrade/verify/${reference}`),
     cancel: () => request('/subscription/cancel', { method: 'POST' }),
   },
 

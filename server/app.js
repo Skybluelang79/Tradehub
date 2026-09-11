@@ -24,6 +24,7 @@ import disputeRoutes from './routes/disputes.js';
 import blockRoutes from './routes/blocking.js';
 import promotionRoutes from './routes/promotions.js';
 import webhookRoutes from './routes/webhooks.js';
+import giftCardRoutes from './routes/giftcards.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import payoutRoutes from './routes/payouts.js';
 import settingsRoutes from './routes/settings.js';
@@ -44,6 +45,9 @@ app.use(cors({
   origin: allowedOrigins(),
   credentials: true,
 }));
+// Webhooks must be mounted before express.json so Paystack signature
+// verification can read the raw request body.
+app.use('/api/webhooks', webhookRoutes);
 app.use(express.json({ limit: '1mb' }));
 
 if (USE_BLOB) {
@@ -76,6 +80,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/payments/gift-cards', giftCardRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
@@ -85,7 +90,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/disputes', disputeRoutes);
 app.use('/api/blocking', blockRoutes);
 app.use('/api/promotions', promotionRoutes);
-app.use('/api/webhooks', webhookRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/payouts', payoutRoutes);

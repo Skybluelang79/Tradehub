@@ -282,11 +282,12 @@ function applySchema() {
     CREATE TABLE IF NOT EXISTS payment_methods (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
-      stripe_payment_method_id TEXT,
+      paystack_authorization_code TEXT,
       brand TEXT NOT NULL,
+      card_type TEXT DEFAULT '',
       last4 TEXT NOT NULL,
-      exp_month INTEGER NOT NULL,
-      exp_year INTEGER NOT NULL,
+      exp_month INTEGER,
+      exp_year INTEGER,
       is_default INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
@@ -297,11 +298,12 @@ function applySchema() {
       item_title TEXT NOT NULL,
       item_image TEXT DEFAULT '',
       amount REAL NOT NULL,
+      currency TEXT DEFAULT 'NGN',
       buyer_id TEXT NOT NULL,
       seller_id TEXT NOT NULL,
       payment_method_id TEXT,
       status TEXT DEFAULT 'pending',
-      stripe_payment_intent_id TEXT,
+      paystack_reference TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       completed_at TEXT
     );
@@ -526,10 +528,13 @@ function applySchema() {
       user_id TEXT NOT NULL,
       amount_cents INTEGER NOT NULL,
       fee_cents INTEGER NOT NULL DEFAULT 0,
+      currency TEXT DEFAULT 'NGN',
       method TEXT NOT NULL,
       method_details TEXT DEFAULT '{}',
       status TEXT NOT NULL DEFAULT 'pending',
       provider_ref TEXT,
+      recipient_code TEXT,
+      transfer_code TEXT,
       admin_notes TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       processed_at TEXT
@@ -608,6 +613,15 @@ function migrate() {
   ensureColumn('transactions', 'discount_amount', 'REAL DEFAULT 0');
   ensureColumn('transactions', 'original_amount', 'REAL DEFAULT 0');
   ensureColumn('transactions', 'credit_cents', 'INTEGER DEFAULT 0');
+  ensureColumn('transactions', 'currency', "TEXT DEFAULT 'NGN'");
+  ensureColumn('transactions', 'paystack_reference', 'TEXT');
+
+  ensureColumn('payment_methods', 'paystack_authorization_code', 'TEXT');
+  ensureColumn('payment_methods', 'card_type', "TEXT DEFAULT ''");
+
+  ensureColumn('payouts', 'currency', "TEXT DEFAULT 'NGN'");
+  ensureColumn('payouts', 'recipient_code', 'TEXT');
+  ensureColumn('payouts', 'transfer_code', 'TEXT');
   ensureColumn('favorites', 'price_at_add', 'REAL');
   ensureColumn('items', 'is_auction', 'INTEGER DEFAULT 0');
   ensureColumn('items', 'starting_bid', 'REAL');
@@ -619,6 +633,9 @@ function migrate() {
 
   ensureColumn('users', 'firebase_uid', "TEXT DEFAULT ''");
   ensureColumn('users', 'auth_provider', "TEXT DEFAULT 'local'");
+  ensureColumn('users', 'paystack_customer_code', "TEXT DEFAULT ''");
+  ensureColumn('subscriptions', 'paystack_reference', 'TEXT');
+  ensureColumn('subscriptions', 'pending_plan', 'TEXT');
   ensureColumn('user_settings', 'fcm_token', "TEXT DEFAULT ''");
 
   seedPlatformSettings();

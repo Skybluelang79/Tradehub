@@ -33,7 +33,6 @@
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "sql.js": "^1.14.1",
-    "stripe": "^17.5.0",
     "uuid": "^11.1.0",
     "winston": "^3.19.0",
     "zod": "^4.4.3"

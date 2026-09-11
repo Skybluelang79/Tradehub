@@ -1,8 +1,14 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import Stripe from 'stripe';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import {
+  paystack,
+  isPaystackConfigured,
+  PAYSTACK_PUBLIC_KEY,
+  DEFAULT_CURRENCY,
+  toMinorUnits,
+} from '../src/paystack.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -13,10 +19,12 @@ const PLANS = {
   pro: { name: 'Pro', price: 24.99, fee: 0.015, boosts: 5, maxListings: -1, badge: 'Pro Seller' },
 };
 
-const STRIPE_KEY = process.env.STRIPE_SECRET_KEY;
-const stripe = STRIPE_KEY && !STRIPE_KEY.includes('placeholder') ? new Stripe(STRIPE_KEY) : null;
 const IS_PROD = process.env.NODE_ENV === 'production';
-const APP_URL = process.env.APP_URL || 'http://localhost:5173';
+
+function notify(userId, type, title, body) {
+  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
+    .run(uuidv4(), userId, type, title, body);
+}
 
 function getSubscription(userId) {
   let sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);
@@ -29,6 +37,27 @@ function getSubscription(userId) {
     sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);
   }
   return sub;
+}
+
+// Idempotent plan activation used by both the verify route and the
+// `charge.success` webhook after a successful Paystack payment.
+export function activatePlan(userId, plan) {
+  if (!PLANS[plan]) return false;
+  const sub = getSubscription(userId);
+  db.prepare(`
+    UPDATE subscriptions SET plan = ?, status = 'active',
+      current_period_start = datetime('now'),
+      current_period_end = datetime('now', '+30 days'),
+      trial_end = NULL,
+      pending_plan = NULL,
+      paystack_reference = NULL,
+      updated_at = datetime('now')
+    WHERE user_id = ?
+  `).run(plan, userId);
+  if (!sub || sub.plan !== plan) {
+    notify(userId, 'system', 'Plan Upgraded', `You're now on the ${PLANS[plan].name} plan!`);
+  }
+  return true;
 }
 
 router.get('/current', authenticateToken, (req, res) => {
@@ -76,48 +105,42 @@ router.post('/upgrade', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: `Already on the ${targetPlan} plan` });
     }
 
-    // Paid plans require real payment in production. Create a Stripe Checkout
-    // session; the subscription is activated by the checkout.session.completed
-    // webhook. In development/demo mode the legacy free upgrade is kept so the
-    // feature can still be demonstrated without Stripe.
+    // Paid plans require payment. In production we charge through Paystack and
+    // activate the plan after the charge succeeds (webhook or verify call). In
+    // development/demo mode a free upgrade is kept so the feature can still be
+    // demonstrated without a configured gateway.
     const isPaid = PLANS[targetPlan].price > 0;
     if (isPaid && IS_PROD) {
-      if (!stripe) {
-        return res.status(503).json({ error: 'Paid subscriptions require Stripe to be configured' });
+      if (!isPaystackConfigured()) {
+        return res.status(503).json({ error: 'Paid subscriptions require Paystack to be configured' });
       }
-      const session = await stripe.checkout.sessions.create({
-        mode: 'subscription',
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: { name: `${PLANS[targetPlan].name} Seller Plan` },
-            recurring: { interval: 'month' },
-            unit_amount: Math.round(PLANS[targetPlan].price * 100),
-          },
-          quantity: 1,
-        }],
-        metadata: { userId: req.user.id, plan: targetPlan },
-        client_reference_id: req.user.id,
-        success_url: `${APP_URL}/profile?upgrade=success&plan=${targetPlan}`,
-        cancel_url: `${APP_URL}/profile?upgrade=cancelled`,
-        allow_promotion_codes: false,
+      const reference = uuidv4();
+      const amountMinor = toMinorUnits(PLANS[targetPlan].price, DEFAULT_CURRENCY);
+      const initialized = await paystack.initializeTransaction({
+        amountMinor,
+        currency: DEFAULT_CURRENCY,
+        email: req.user.email,
+        reference,
+        metadata: { userId: req.user.id, plan: targetPlan, tradehub_subscription: reference },
+        callbackUrl: process.env.PAYSTACK_CALLBACK_URL,
       });
-      return res.json({ requires_payment: true, checkoutUrl: session.url });
+
+      // Remember which plan this reference is paying for so the frontend/webhook
+      // can activate it idempotently.
+      db.prepare("UPDATE subscriptions SET pending_plan = ?, paystack_reference = ?, updated_at = datetime('now') WHERE user_id = ?")
+        .run(targetPlan, reference, req.user.id);
+
+      return res.json({
+        requires_payment: true,
+        reference,
+        accessCode: initialized.access_code,
+        authorizationUrl: initialized.authorization_url,
+        publicKey: PAYSTACK_PUBLIC_KEY,
+        currency: DEFAULT_CURRENCY,
+      });
     }
 
-    db.prepare(`
-      UPDATE subscriptions SET plan = ?, status = 'active',
-        current_period_start = datetime('now'),
-        current_period_end = datetime('now', '+30 days'),
-        trial_end = NULL,
-        updated_at = datetime('now')
-      WHERE user_id = ?
-    `).run(targetPlan, req.user.id);
-
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, type, title, body)
-      VALUES (?, ?, 'system', 'Plan Upgraded', ?)
-    `).run(uuidv4(), req.user.id, `You're now on the ${PLANS[targetPlan].name} plan!`);
+    activatePlan(req.user.id, targetPlan);
 
     const updated = getSubscription(req.user.id);
     const plan = PLANS[updated.plan];
@@ -127,6 +150,43 @@ router.post('/upgrade', authenticateToken, async (req, res) => {
     });
   } catch (err) {
     logger.error('Upgrade error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Verifies a Paystack subscription payment after the Paystack Pop callback.
+// Idempotent: the plan is only activated once per reference.
+router.get('/upgrade/verify/:reference', authenticateToken, async (req, res) => {
+  try {
+    const ref = req.params.reference;
+    const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(req.user.id);
+    if (!sub || sub.paystack_reference !== ref) {
+      return res.status(404).json({ error: 'Reference not found' });
+    }
+    if (sub.plan === sub.pending_plan && sub.status === 'active') {
+      return res.json({ success: true, alreadyProcessed: true, plan: sub.plan });
+    }
+
+    if (!isPaystackConfigured()) {
+      return res.status(503).json({ error: 'Paystack is not configured' });
+    }
+
+    const verified = await paystack.verifyTransaction(ref);
+    if (verified.status !== 'success') {
+      return res.status(400).json({ error: `Payment not successful (${verified.status})` });
+    }
+
+    const plan = sub.pending_plan || verified.metadata?.plan;
+    if (!plan || !PLANS[plan]) {
+      return res.status(400).json({ error: 'No plan associated with this payment' });
+    }
+
+    activatePlan(req.user.id, plan);
+    const updated = getSubscription(req.user.id);
+    res.json({ success: true, plan: updated.plan, subscription: { ...updated, ...PLANS[updated.plan] } });
+  } catch (err) {
+    if (err.status === 400 || err.status === 404) return res.status(err.status).json({ error: err.message });
+    logger.error('Verify upgrade error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -144,10 +204,7 @@ router.post('/cancel', authenticateToken, (req, res) => {
       WHERE user_id = ?
     `).run(req.user.id);
 
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, type, title, body)
-      VALUES (?, ?, 'system', 'Plan Downgraded', ?)
-    `).run(uuidv4(), req.user.id, 'Your plan has been downgraded to Free.');
+    notify(req.user.id, 'system', 'Plan Downgraded', 'Your plan has been downgraded to Free.');
 
     res.json({ success: true, plan: 'free' });
   } catch (err) {

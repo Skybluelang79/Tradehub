@@ -107,7 +107,7 @@ export const addPaymentMethodSchema = z.object({
   exp_month: z.number().int().min(1).max(12),
   exp_year: z.number().int().min(2024).max(2100),
   is_default: z.boolean().optional().default(false),
-  stripe_payment_method_id: z.string().optional(),
+  paystack_authorization_code: z.string().optional(),
 });
 
 export const createIntentSchema = z.object({
