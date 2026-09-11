@@ -249,6 +249,68 @@ router.put('/users/:id/verify', adminAuth, (req, res) => {
   }
 });
 
+// Seller identity verification requests.
+router.get('/verifications', adminAuth, (req, res) => {
+  try {
+    const { page, limit, offset } = paginate(req);
+    const status = String(req.query.status || 'all');
+    const where = status === 'all' ? '' : 'WHERE r.status = ?';
+    const params = status === 'all' ? [] : [status];
+
+    const total = db.prepare(`SELECT COUNT(*) as count FROM verification_requests r ${where}`).get(...params).count;
+    const requests = db.prepare(`
+      SELECT r.id, r.user_id, r.id_type, r.id_number, r.id_image_url, r.selfie_url,
+        r.status, r.admin_note, r.created_at, r.reviewed_at,
+        u.name AS user_name, u.email AS user_email, u.avatar AS user_avatar,
+        u.verified AS email_verified, u.identity_verified,
+        (SELECT COUNT(*) FROM items i WHERE i.seller_id = r.user_id) AS listing_count
+      FROM verification_requests r
+      LEFT JOIN users u ON u.id = r.user_id
+      ${where}
+      ORDER BY r.created_at DESC LIMIT ? OFFSET ?
+    `).all(...params, limit, offset);
+
+    res.json({ requests, total, page, limit, totalPages: Math.ceil(total / limit) });
+  } catch (err) {
+    logger.error('List verifications error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/verifications/:id/approve', adminAuth, (req, res) => {
+  try {
+    const request = db.prepare("SELECT * FROM verification_requests WHERE id = ? AND status = 'pending'").get(req.params.id);
+    if (!request) return res.status(400).json({ error: 'Pending verification request not found' });
+    db.prepare("UPDATE verification_requests SET status = 'approved', admin_id = ?, reviewed_at = datetime('now') WHERE id = ?").run(req.adminId, request.id);
+    db.prepare('UPDATE users SET identity_verified = 1 WHERE id = ?').run(request.user_id);
+    db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
+      .run(uuidv4(), request.user_id, 'verification', 'Verification Approved',
+        'Congratulations! Your seller identity has been verified. You can now list with the Verified Seller badge.');
+    logAudit(req.adminId, 'verification_approved', 'verification', request.id, { user_id: request.user_id });
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('Approve verification error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/verifications/:id/reject', adminAuth, (req, res) => {
+  try {
+    const request = db.prepare("SELECT * FROM verification_requests WHERE id = ? AND status = 'pending'").get(req.params.id);
+    if (!request) return res.status(400).json({ error: 'Pending verification request not found' });
+    const note = String(req.body.note || '').trim().slice(0, 500);
+    db.prepare("UPDATE verification_requests SET status = 'rejected', admin_note = ?, admin_id = ?, reviewed_at = datetime('now') WHERE id = ?").run(note, req.adminId, request.id);
+    db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
+      .run(uuidv4(), request.user_id, 'verification', 'Verification Request Update',
+        note ? `Your verification request was rejected: ${note}` : 'Your verification request was rejected. Please resubmit with a clearer document photo.');
+    logAudit(req.adminId, 'verification_rejected', 'verification', request.id, { user_id: request.user_id, note });
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('Reject verification error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.put('/users/:id/status', adminAuth, (req, res) => {
   try {
     const { status, reason = '' } = req.body;

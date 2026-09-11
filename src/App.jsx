@@ -15,6 +15,7 @@ import AdminLogin from './components/admin/AdminLogin.jsx';
 import {
   AdminDashboard,
   AdminUsers,
+  AdminVerifications,
   AdminListings,
   AdminTransactions,
   AdminPayouts,
@@ -183,6 +184,8 @@ function AppContent() {
     switch (adminPath) {
       case '/admin/users':
         return <AdminUsers />;
+      case '/admin/verifications':
+        return <AdminVerifications />;
       case '/admin/listings':
         return <AdminListings />;
       case '/admin/transactions':

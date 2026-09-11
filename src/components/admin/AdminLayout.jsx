@@ -20,6 +20,7 @@ import './AdminLayout.css';
 const navItems = [
   { path: '/admin', label: 'Dashboard', icon: DashboardIcon },
   { path: '/admin/users', label: 'Users', icon: UsersIcon },
+  { path: '/admin/verifications', label: 'Verifications', icon: ShieldIcon },
   { path: '/admin/listings', label: 'Listings', icon: PackageIcon },
   { path: '/admin/transactions', label: 'Transactions', icon: DollarIcon },
   { path: '/admin/payouts', label: 'Payouts', icon: ChartIcon },

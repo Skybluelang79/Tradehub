@@ -252,6 +252,23 @@
   color: white;
 }
 
+.profile-identity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  background: rgba(16, 185, 129, 0.1);
+  padding: 4px 10px;
+  border-radius: 20px;
+  margin: 6px auto 0;
+}
+
+.profile-identity-badge svg {
+  flex-shrink: 0;
+}
+
 .profile-name {
   font-size: 24px;
   font-weight: 700;

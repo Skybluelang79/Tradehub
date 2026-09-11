@@ -267,7 +267,7 @@ router.get('/batch', (req, res) => {
 
 router.get('/:userId/profile', (req, res) => {
   try {
-    const user = db.prepare('SELECT id, name, avatar, bio, verified, rating, review_count, created_at FROM users WHERE id = ?').get(req.params.userId);
+    const user = db.prepare('SELECT id, name, avatar, bio, verified, identity_verified, rating, review_count, created_at FROM users WHERE id = ?').get(req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const stats = db.prepare(`
@@ -315,7 +315,7 @@ router.put('/me', authenticateToken, validate(updateProfileSchema), (req, res) =
 
     db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...params);
 
-    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, created_at FROM users WHERE id = ?').get(req.user.id);
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, identity_verified, rating, review_count, location_lat, location_lng, location_address, created_at FROM users WHERE id = ?').get(req.user.id);
     res.json({ user });
   } catch (err) {
     logger.error('Update profile error:', err);

@@ -204,8 +204,8 @@ export function AdPush({ className = '' }) {
 const brandAds = [
   {
     brand: 'Apple',
-    tagline: 'iPhone 16 Pro. Built for Apple Intelligence.',
-    offer: 'Up to $600 trade-in credit',
+    tagline: 'iPhone 18 Pro Max. The most advanced iPhone ever.',
+    offer: 'Up to $650 trade-in with any iPhone',
     category: 'electronics',
     gradient: 'linear-gradient(135deg, #1a1a2e 0%, #2d2d44 40%, #0a0a14 100%)',
     accentColor: '#007AFF',
@@ -218,8 +218,8 @@ const brandAds = [
   },
   {
     brand: 'Samsung',
-    tagline: 'Galaxy S25 Ultra. The next era of mobile AI.',
-    offer: 'Free Galaxy Buds with pre-order',
+    tagline: 'Galaxy S26 Ultra. The next era of mobile AI.',
+    offer: 'Free Galaxy Watch with pre-order',
     category: 'electronics',
     gradient: 'linear-gradient(135deg, #0c0c1d 0%, #1a1a3e 40%, #0d0d2b 100%)',
     accentColor: '#1428A0',
@@ -232,8 +232,8 @@ const brandAds = [
   },
   {
     brand: 'Nike',
-    tagline: 'Air Max Dn. Feel the rush of Dynamic Air.',
-    offer: 'Exclusive early access for TradeHub members',
+    tagline: 'Air Max Dn8. Engineered for the future of comfort.',
+    offer: 'New colorways every week. Members get early access.',
     category: 'fashion',
     gradient: 'linear-gradient(135deg, #111 0%, #1a1a1a 40%, #0a0a0a 100%)',
     accentColor: '#FA5400',

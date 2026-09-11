@@ -579,6 +579,20 @@ function applySchema() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS verification_requests (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      id_type TEXT NOT NULL,
+      id_number TEXT NOT NULL,
+      id_image_url TEXT NOT NULL,
+      selfie_url TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      admin_note TEXT DEFAULT '',
+      admin_id TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      reviewed_at TEXT
+    );
+
   `);
 
   db.exec(`
@@ -591,6 +605,8 @@ function applySchema() {
     CREATE INDEX IF NOT EXISTS idx_offers_item ON offers(item_id);
     CREATE INDEX IF NOT EXISTS idx_offers_buyer ON offers(buyer_id);
     CREATE INDEX IF NOT EXISTS idx_offers_seller ON offers(seller_id);
+    CREATE INDEX IF NOT EXISTS idx_verifications_user ON verification_requests(user_id);
+    CREATE INDEX IF NOT EXISTS idx_verifications_status ON verification_requests(status);
   `);
 
   migrate();
@@ -657,6 +673,7 @@ function migrate() {
   ensureColumn('subscriptions', 'pending_plan', 'TEXT');
   ensureColumn('user_settings', 'fcm_token', "TEXT DEFAULT ''");
   ensureColumn('items', 'sold_to', 'TEXT');
+  ensureColumn('users', 'identity_verified', 'INTEGER DEFAULT 0');
 
   seedPlatformSettings();
 }

@@ -33,6 +33,7 @@ import searchRoutes from './routes/searches.js';
 import firebaseRoutes from './routes/firebase.js';
 import fcmRoutes from './routes/fcm.js';
 import offerRoutes from './routes/offers.js';
+import verificationRoutes from './routes/verification.js';
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, '..', 'uploads');
 const USE_BLOB = process.env.NETLIFY === 'true' || process.env.DB_BLOB === 'true' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
@@ -99,6 +100,7 @@ app.use('/api/searches', searchRoutes);
 app.use('/api/firebase', firebaseRoutes);
 app.use('/api/fcm', fcmRoutes);
 app.use('/api/offers', offerRoutes);
+app.use('/api/verification', verificationRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

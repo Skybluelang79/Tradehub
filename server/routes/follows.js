@@ -13,7 +13,7 @@ function notify(userId, type, title, body) {
 }
 
 function getUserById(id) {
-  return db.prepare('SELECT id, name, email, avatar, bio, verified, rating, review_count, created_at FROM users WHERE id = ?').get(id);
+  return db.prepare('SELECT id, name, email, avatar, bio, verified, identity_verified, rating, review_count, created_at FROM users WHERE id = ?').get(id);
 }
 
 function followerCount(userId) {
@@ -120,7 +120,7 @@ router.get('/followers', authenticateToken, (req, res) => {
 
 router.get('/storefront/:userId', optionalAuth, (req, res) => {
   try {
-    const user = db.prepare('SELECT id, name, avatar, bio, phone, verified, rating, review_count, location_address, created_at FROM users WHERE id = ?').get(req.params.userId);
+    const user = db.prepare('SELECT id, name, avatar, bio, phone, verified, identity_verified, rating, review_count, location_address, created_at FROM users WHERE id = ?').get(req.params.userId);
     if (!user) return res.status(404).json({ error: 'User not found' });
 
     const listings = db.prepare(`

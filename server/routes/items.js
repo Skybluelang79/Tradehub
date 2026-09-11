@@ -64,6 +64,7 @@ router.get('/', optionalAuth, (req, res) => {
     let query = `
       SELECT i.*, u.name as seller_name, u.avatar as seller_avatar,
              u.rating as seller_rating, u.verified as seller_verified,
+             u.identity_verified as seller_identity_verified,
              COALESCE(s.plan, 'free') as seller_plan
       FROM items i
       JOIN users u ON i.seller_id = u.id
@@ -202,7 +203,8 @@ router.get('/:id', optionalAuth, (req, res) => {
   try {
     const item = db.prepare(`
       SELECT i.*, u.name as seller_name, u.avatar as seller_avatar, u.rating as seller_rating,
-             u.review_count as seller_review_count, u.verified as seller_verified, u.bio as seller_bio,
+             u.review_count as seller_review_count, u.verified as seller_verified,
+             u.identity_verified as seller_identity_verified, u.bio as seller_bio,
              u.created_at as seller_joined
       FROM items i JOIN users u ON i.seller_id = u.id
       WHERE i.id = ?

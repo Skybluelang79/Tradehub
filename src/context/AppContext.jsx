@@ -229,6 +229,7 @@ export function AppProvider({ children }) {
         avatar: fromItems.seller_avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${userId}`,
         rating: fromItems.seller_rating || 0,
         verified: !!fromItems.seller_verified,
+        identityVerified: !!fromItems.seller_identity_verified,
         location: fromItems.location || { lat: 40.7128, lng: -74.006, address: '' },
       };
     }

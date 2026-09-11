@@ -18,6 +18,7 @@ import { formatDate, formatPrice } from '../utils/helpers';
 import { categories } from '../services/api';
 import AddListing from './AddListing';
 import Offers from './Offers';
+import SellerVerification from '../components/verification/SellerVerification';
 import '../styles/globals.css';
 import './Profile.css';
 
@@ -586,6 +587,12 @@ export default function Profile() {
             )}
           </div>
           <h1 className="profile-name">{currentUser.name}</h1>
+          {currentUser.identity_verified && (
+            <div className="profile-identity-badge">
+              <ShieldIcon size={14} />
+              Verified Seller
+            </div>
+          )}
           {currentUser.username ? (
             <div className="profile-username">@{currentUser.username}</div>
           ) : null}
@@ -628,6 +635,8 @@ export default function Profile() {
             </button>
           </div>
         )}
+
+        <SellerVerification />
 
         <div className="profile-tabs">
           <button className={`profile-tab ${activeTab === 'listings' ? 'active' : ''}`} onClick={() => setActiveTabState('listings')}>

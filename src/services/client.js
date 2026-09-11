@@ -219,6 +219,11 @@ export const api = {
     cancel: (id) => request(`/offers/${id}/cancel`, { method: 'POST' }),
   },
 
+  verification: {
+    status: () => request('/verification/status'),
+    submit: (data) => request('/verification', { method: 'POST', body: JSON.stringify(data) }),
+  },
+
   admin: {
     login: (data) => request('/admin/login', { method: 'POST', body: JSON.stringify(data) }),
     dashboard: () => adminRequest('/admin/dashboard'),
@@ -247,6 +252,9 @@ export const api = {
     settingsUpdate: (data) => adminRequest('/admin/settings', { method: 'PUT', body: JSON.stringify(data) }),
     backup: () => adminDownload('/admin/backup', `tradehub-backup-${Date.now()}.db`),
     restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.stringify(data) }),
+    verifications: (params = {}) => adminRequest(`/admin/verifications?${new URLSearchParams(params).toString()}`),
+    verificationApprove: (id) => adminRequest(`/admin/verifications/${id}/approve`, { method: 'POST' }),
+    verificationReject: (id, note = '') => adminRequest(`/admin/verifications/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) }),
   },
 
   fcm: {
