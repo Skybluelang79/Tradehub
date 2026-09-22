@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldIcon, BellIcon, LockIcon, GlobeIcon, PaletteIcon, SaveIcon } from './Icons.jsx';
+import { ShieldIcon, BellIcon, LockIcon, GlobeIcon, SaveIcon } from './Icons.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import LanguageSwitcher from '../../components/ui/LanguageSwitcher.jsx';
 import { api } from '../../services/client.js';

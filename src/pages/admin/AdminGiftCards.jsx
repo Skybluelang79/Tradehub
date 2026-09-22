@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAdmin } from '../../context/AdminContext.jsx';
 import { api } from '../../services/client';
 import {
-  CheckIcon, BanIcon, EditIcon, TrashIcon, AlertIcon, PackageIcon, ChartIcon, DollarIcon, EyeIcon,
+  CheckIcon, BanIcon, EditIcon, AlertIcon, PackageIcon, ChartIcon, DollarIcon, EyeIcon,
 } from './Icons.jsx';
 import './AdminTransactions.css';
 import './AdminUsers.css';

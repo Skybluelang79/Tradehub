@@ -793,7 +793,7 @@ router.get('/promotions', adminAuth, (req, res) => {
 
 router.post('/promotions', adminAuth, (req, res) => {
   try {
-    const { code, discount_type, discount_value, max_uses, expires_at, min_purchase } = req.body;
+    const { code, discount_type, discount_value, max_uses, expires_at, min_purchase, active } = req.body;
     if (!code || !String(code).trim()) return res.status(400).json({ error: 'Code is required' });
     if (!['percentage', 'fixed'].includes(discount_type)) {
       return res.status(400).json({ error: 'discount_type must be percentage or fixed' });
@@ -804,9 +804,9 @@ router.post('/promotions', adminAuth, (req, res) => {
     if (existing) return res.status(409).json({ error: 'Promotion code already exists' });
     const id = uuidv4();
     db.prepare(`
-      INSERT INTO promotions (id, code, discount_type, discount_value, max_uses, expires_at, min_purchase)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, String(code).trim().toUpperCase(), discount_type, value, max_uses || 0, expires_at || null, min_purchase || null);
+      INSERT INTO promotions (id, code, discount_type, discount_value, max_uses, expires_at, min_purchase, active)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, String(code).trim().toUpperCase(), discount_type, value, max_uses || 0, expires_at || null, min_purchase || null, active !== undefined ? (active ? 1 : 0) : 1);
     logAudit(req.adminId, 'promotion_create', 'promotion', id, { code: String(code).trim().toUpperCase() });
     res.status(201).json({ promotion: db.prepare('SELECT * FROM promotions WHERE id = ?').get(id) });
   } catch (err) {

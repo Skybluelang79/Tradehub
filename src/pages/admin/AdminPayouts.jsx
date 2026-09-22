@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAdmin } from '../../context/AdminContext.jsx';
 import { api } from '../../services/client';
+import { useToast } from '../../components/ui/Toast.jsx';
 import { DollarIcon, CheckIcon, BanIcon, DownloadIcon, AlertIcon } from './Icons.jsx';
 import './AdminTransactions.css';
 import './AdminPayouts.css';
@@ -17,6 +18,7 @@ const STATUS_META = {
 
 export default function AdminPayouts() {
   const { isAdminAuth } = useAdmin();
+  const { addToast } = useToast();
   const [payouts, setPayouts] = useState([]);
   const [awaiting, setAwaiting] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,15 +38,22 @@ export default function AdminPayouts() {
     }
     setLoading(true);
     try {
-      const [p, t] = await Promise.all([api.payouts.all(), api.admin.transactions({ page: 1, limit: 100 })]);
-      setPayouts(p.payouts || []);
-      setAwaiting((t.transactions || []).filter((tx) => tx.status === 'awaiting_payment'));
-    } catch (err) {
-      console.error('Failed to load payouts:', err);
+      const [p, t] = await Promise.allSettled([
+        api.payouts.all(),
+        api.admin.transactions({ page: 1, limit: 100 }),
+      ]);
+      if (p.status === 'fulfilled') setPayouts(p.value.payouts || []);
+      if (t.status === 'fulfilled') {
+        setAwaiting((t.value.transactions || []).filter((tx) => tx.status === 'awaiting_payment'));
+      }
+      const failed = [p, t].filter((r) => r.status === 'rejected');
+      if (failed.length) {
+        addToast(failed[0].reason?.message || 'Failed to load some payout data', 'error');
+      }
     } finally {
       setLoading(false);
     }
-  }, [isAdminAuth]);
+  }, [isAdminAuth, addToast]);
 
   useEffect(() => {
     refresh();

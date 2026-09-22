@@ -251,7 +251,7 @@ export const api = {
     settingsGet: () => adminRequest('/admin/settings'),
     settingsUpdate: (data) => adminRequest('/admin/settings', { method: 'PUT', body: JSON.stringify(data) }),
     backup: () => adminDownload('/admin/backup', `tradehub-backup-${Date.now()}.db`),
-    restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.stringify(data) }),
+restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.stringify({ data }) }),
     verifications: (params = {}) => adminRequest(`/admin/verifications?${new URLSearchParams(params).toString()}`),
     verificationApprove: (id) => adminRequest(`/admin/verifications/${id}/approve`, { method: 'POST' }),
     verificationReject: (id, note = '') => adminRequest(`/admin/verifications/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) }),

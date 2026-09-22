@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { verifyFirebaseToken, sendPushNotification } from '../src/firebase.js';
 import { generateToken } from '../middleware/auth.js';
-import { sendVerificationEmail, sendPasswordResetEmail, sendNotificationEmail } from '../src/email.js';
+import { sendNotificationEmail } from '../src/email.js';
 
 const router = Router();
 

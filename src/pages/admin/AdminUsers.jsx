@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../../services/client.js';
 import { useToast } from '../../components/ui/Toast.jsx';
 import { SearchIcon, BanIcon, CheckIcon, TrashIcon, EyeIcon, DownloadIcon } from './Icons.jsx';
@@ -29,6 +29,7 @@ const AdminUsers = () => {
   const [banReason, setBanReason] = useState('');
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [tempPassword, setTempPassword] = useState(null);
+  const detailRequestRef = useRef(0);
 
   const loadUsers = useCallback(async () => {
     setLoading(true);
@@ -55,17 +56,20 @@ const AdminUsers = () => {
   }, [loadUsers]);
 
   const openDetail = async (user) => {
+    const requestId = ++detailRequestRef.current;
     setSelectedUser(user);
     setDetailTab('overview');
     setDetail(null);
     setDetailLoading(true);
     try {
       const data = await api.admin.userDetail(user.id);
-      setDetail(data);
+      if (requestId === detailRequestRef.current) setDetail(data);
     } catch (err) {
-      addToast(err.message || 'Failed to load user details', 'error');
+      if (requestId === detailRequestRef.current) {
+        addToast(err.message || 'Failed to load user details', 'error');
+      }
     } finally {
-      setDetailLoading(false);
+      if (requestId === detailRequestRef.current) setDetailLoading(false);
     }
   };
 

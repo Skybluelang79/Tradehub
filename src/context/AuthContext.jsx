@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { api, setToken } from '../services/client';
 import { auth as firebaseAuth } from '../config/firebase';
-import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile as fbUpdateProfile, sendPasswordResetEmail as fbSendPasswordReset } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile as fbUpdateProfile } from 'firebase/auth';
 import { initializeFCM, cleanupFCM } from '../services/fcm';
 
 const AuthContext = createContext();
