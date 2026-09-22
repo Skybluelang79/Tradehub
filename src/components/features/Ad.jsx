@@ -46,6 +46,14 @@ function useAdNavigation() {
 
 const banners = [
   {
+    isPromo: true,
+    images: [],
+    title: 'TradeHub',
+    desc: 'Buy, sell & trade near you — protected by escrow.',
+    cta: 'Explore Near You',
+    category: '',
+  },
+  {
     images: [
       'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800',
       'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800',
@@ -88,12 +96,20 @@ const pushes = [
 ];
 
 export function AdBanner({ className = '' }) {
-  const [currentAd, setCurrentAd] = useState(0);
+  const [current, setCurrent] = useState(0);
   const [dismissed, setDismissed] = useState(false);
-  const [banner] = useState(() => banners[Math.floor(Math.random() * banners.length)]);
   const { goHome } = useAdNavigation();
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrent((prev) => (prev + 1) % banners.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, []);
+
   if (dismissed) return null;
+
+  const banner = banners[current];
 
   return (
     <div className={`ad-banner ${className}`}>
@@ -104,7 +120,27 @@ export function AdBanner({ className = '' }) {
         </svg>
       </button>
       <div className="ad-content">
-        <img src={banner.images[currentAd]} alt="Advertisement" className="ad-image" />
+        {banner.isPromo ? (
+          <div className="thb-stage" aria-hidden="true">
+            <div className="thb-orb" />
+            <div className="thb-ring" />
+            <div className="thb-cards">
+              <div className="thb-card thb-card-back" />
+              <div className="thb-card thb-card-mid" />
+              <div className="thb-card thb-card-front">
+                <span className="thb-card-img" />
+                <span className="thb-card-meta">
+                  <span className="thb-card-title">Just Listed</span>
+                  <span className="thb-card-price">$149</span>
+                </span>
+              </div>
+            </div>
+            <span className="thb-coin thb-coin-1">$</span>
+            <span className="thb-coin thb-coin-2">%</span>
+          </div>
+        ) : (
+          <img src={banner.images[0]} alt="Advertisement" className="ad-image" />
+        )}
         <div className="ad-overlay">
           <span className="ad-label">Sponsored</span>
           <h4 className="ad-title">{banner.title}</h4>
@@ -113,11 +149,11 @@ export function AdBanner({ className = '' }) {
         </div>
       </div>
       <div className="ad-dots">
-        {banner.images.map((_, index) => (
+        {banners.map((_, index) => (
           <button
             key={index}
-            className={`ad-dot ${index === currentAd ? 'active' : ''}`}
-            onClick={() => setCurrentAd(index)}
+            className={`ad-dot ${index === current ? 'active' : ''}`}
+            onClick={() => setCurrent(index)}
           />
         ))}
       </div>
@@ -213,28 +249,6 @@ export function AdPush({ className = '' }) {
 
 const brandAds = [
   {
-    brand: 'TradeHub',
-    tagline: 'Buy, sell & trade near you — protected by escrow.',
-    offer: 'List for free. Zero fees on your first 10 listings.',
-    category: '',
-    isPromo: true,
-    gradient: 'linear-gradient(135deg, #06120d 0%, #0e2a1d 45%, #071b12 100%)',
-    accentColor: '#0F8A63',
-    logoSvg: (
-      <svg viewBox="0 0 48 48" width="32" height="32">
-        <defs>
-          <linearGradient id="th-promo-logo-grad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#DCC086" />
-            <stop offset="100%" stopColor="#A8883B" />
-          </linearGradient>
-        </defs>
-        <rect x="3" y="3" width="42" height="42" rx="12" fill="url(#th-promo-logo-grad)" />
-        <path d="M13 15h22 M13 15v20 M13 25h9 M35 15v20" stroke="#241D12" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-    image: '',
-  },
-  {
     brand: 'Apple',
     tagline: 'iPhone 18 Pro Max. The most advanced iPhone ever.',
     offer: 'Up to $650 trade-in with any iPhone',
@@ -316,31 +330,11 @@ export function BrandSponsor({ className = '' }) {
           <p className="brand-sponsor-tagline">{ad.tagline}</p>
           <p className="brand-sponsor-offer" style={{ color: ad.accentColor }}>{ad.offer}</p>
           <button className="brand-sponsor-cta" style={{ background: ad.accentColor }} onClick={() => goHome(ad.category)}>
-            {ad.isPromo ? 'Explore Near You' : 'Shop Now'}
+            Shop Now
           </button>
         </div>
         <div className="brand-sponsor-right">
-          {ad.isPromo ? (
-            <div className="th-promo-stage" aria-hidden="true">
-              <div className="th-promo-orb" />
-              <div className="th-promo-ring" />
-              <div className="th-promo-cards">
-                <div className="th-promo-card th-promo-card-back" />
-                <div className="th-promo-card th-promo-card-mid" />
-                <div className="th-promo-card th-promo-card-front">
-                  <span className="th-promo-card-img" />
-                  <span className="th-promo-card-meta">
-                    <span className="th-promo-card-title">Just Listed</span>
-                    <span className="th-promo-card-price">$149</span>
-                  </span>
-                </div>
-              </div>
-              <span className="th-promo-coin th-promo-coin-1">$</span>
-              <span className="th-promo-coin th-promo-coin-2">%</span>
-            </div>
-          ) : (
-            <img src={ad.image} alt={ad.brand} className="brand-sponsor-image" />
-          )}
+          <img src={ad.image} alt={ad.brand} className="brand-sponsor-image" />
           <div className="brand-sponsor-image-glow" style={{ background: ad.accentColor }} />
         </div>
       </div>

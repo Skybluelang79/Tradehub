@@ -494,98 +494,94 @@
   }
 }
 
-/* ---- TradeHub 3D promo ad ---- */
+/* ---- TradeHub 3D promo ad (banner slot) ---- */
 
-.brand-sponsor-right {
-  perspective: 1100px;
-}
-
-.th-promo-stage {
+.thb-stage {
   position: absolute;
   inset: 0;
   overflow: hidden;
 }
 
-.th-promo-orb {
+.thb-orb {
   position: absolute;
-  left: 50%;
+  right: 5%;
   top: 50%;
-  width: 270px;
-  height: 270px;
+  width: 250px;
+  height: 250px;
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, rgba(20, 160, 119, 0.5), rgba(15, 138, 99, 0.1) 55%, transparent 72%);
   filter: blur(2px);
-  transform: translate(-50%, -50%);
-  animation: th-orb-pulse 6s ease-in-out infinite;
+  transform: translateY(-50%);
+  animation: thb-orb-pulse 6s ease-in-out infinite;
 }
 
-.th-promo-ring {
+.thb-ring {
   position: absolute;
-  left: 50%;
+  right: 10%;
   top: 50%;
-  width: 150px;
-  height: 150px;
-  margin: -75px 0 0 -75px;
+  width: 128px;
+  height: 128px;
+  margin-top: -64px;
   border-radius: 50%;
   background: conic-gradient(from 0deg, transparent 0%, rgba(201, 169, 97, 0.9) 18%, transparent 38%, rgba(20, 160, 119, 0) 55%, rgba(20, 160, 119, 0.8) 75%, transparent 92%);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
           mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
   opacity: 0.85;
-  animation: th-ring-spin 9s linear infinite;
+  animation: thb-ring-spin 9s linear infinite;
 }
 
-.th-promo-cards {
+.thb-cards {
   position: absolute;
-  left: 50%;
+  right: 6%;
   top: 50%;
-  width: 118px;
-  height: 148px;
-  margin: -74px 0 0 -59px;
+  width: 104px;
+  height: 128px;
+  margin-top: -64px;
   transform-style: preserve-3d;
-  animation: th-cards-float 7s ease-in-out infinite;
+  animation: thb-cards-float 7s ease-in-out infinite;
 }
 
-.th-promo-card {
+.thb-card {
   position: absolute;
   inset: 0;
-  border-radius: 16px;
+  border-radius: 14px;
   background: linear-gradient(160deg, #143d2a 0%, #0b2218 65%, #081a12 100%);
   border: 1px solid rgba(201, 169, 97, 0.28);
-  box-shadow: 0 24px 44px -18px rgba(0, 0, 0, 0.75);
+  box-shadow: 0 20px 38px -16px rgba(0, 0, 0, 0.75);
 }
 
-.th-promo-card-back {
-  transform: rotateY(34deg) translateZ(-46px);
+.thb-card-back {
+  transform: rotateY(34deg) translateZ(-40px);
 }
 
-.th-promo-card-mid {
-  transform: rotateY(16deg) translateZ(-23px);
+.thb-card-mid {
+  transform: rotateY(16deg) translateZ(-20px);
 }
 
-.th-promo-card-front {
+.thb-card-front {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  padding: 10px;
+  padding: 9px;
   overflow: hidden;
   transform: rotateY(0deg) translateZ(0);
 }
 
-.th-promo-card-img {
+.thb-card-img {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  height: 82px;
-  border-radius: 12px;
+  top: 9px;
+  left: 9px;
+  right: 9px;
+  height: 70px;
+  border-radius: 10px;
   background:
     radial-gradient(circle at 28% 30%, rgba(220, 192, 134, 0.45), transparent 42%),
     radial-gradient(circle at 70% 72%, rgba(20, 160, 119, 0.55), transparent 46%),
     linear-gradient(135deg, #12c98a 0%, #0a6b48 100%);
-  animation: th-card-img-pulse 5s ease-in-out infinite;
+  animation: thb-card-img-pulse 5s ease-in-out infinite;
 }
 
-.th-promo-card-meta {
+.thb-card-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -593,76 +589,82 @@
   position: relative;
 }
 
-.th-promo-card-title {
-  font-size: 12px;
+.thb-card-title {
+  font-size: 11px;
   font-weight: 700;
   color: #fff;
   letter-spacing: 0.2px;
 }
 
-.th-promo-card-price {
-  font-size: 11px;
+.thb-card-price {
+  font-size: 10px;
   font-weight: 800;
   color: #0a1a12;
   background: linear-gradient(135deg, #e6c980, #b8944a);
-  border-radius: 10px;
-  padding: 3px 8px;
+  border-radius: 9px;
+  padding: 3px 7px;
 }
 
-.th-promo-coin {
+.thb-coin {
   position: absolute;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 15px;
+  font-size: 14px;
   color: #0a1a12;
   background: linear-gradient(135deg, #e6c980, #a8883b);
-  box-shadow: 0 10px 18px -6px rgba(0, 0, 0, 0.55), inset 0 2px 2px rgba(255, 255, 255, 0.4);
-  animation: th-coin-float 5s ease-in-out infinite;
+  box-shadow: 0 8px 16px -6px rgba(0, 0, 0, 0.55), inset 0 2px 2px rgba(255, 255, 255, 0.4);
+  animation: thb-coin-float 5s ease-in-out infinite;
 }
 
-.th-promo-coin-1 {
-  left: 10%;
-  top: 16%;
+.thb-coin-1 {
+  right: 32%;
+  top: 14%;
 }
 
-.th-promo-coin-2 {
-  right: 12%;
-  bottom: 18%;
+.thb-coin-2 {
+  right: 1%;
+  bottom: 12%;
   animation-delay: 1.2s;
 }
 
-@keyframes th-orb-pulse {
-  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.75; }
-  50% { transform: translate(-50%, -50%) scale(1.16); opacity: 1; }
+@keyframes thb-orb-pulse {
+  0%, 100% { transform: translateY(-50%) scale(1); opacity: 0.75; }
+  50% { transform: translateY(-50%) scale(1.16); opacity: 1; }
 }
 
-@keyframes th-ring-spin {
-  to { transform: rotate(360deg); }
+@keyframes thb-ring-spin {
+  to { transform: translateY(-50%) rotate(360deg); }
 }
 
-@keyframes th-cards-float {
+@keyframes thb-cards-float {
   0%, 100% { transform: rotateY(-8deg) translateY(0); }
-  50% { transform: rotateY(11deg) translateY(-9px); }
+  50% { transform: rotateY(11deg) translateY(-8px); }
 }
 
-@keyframes th-card-img-pulse {
+@keyframes thb-card-img-pulse {
   0%, 100% { filter: brightness(1) saturate(1); }
   50% { filter: brightness(1.15) saturate(1.25); }
 }
 
-@keyframes th-coin-float {
+@keyframes thb-coin-float {
   0%, 100% { transform: translateY(0) rotate(-8deg); }
-  50% { transform: translateY(-11px) rotate(8deg); }
+  50% { transform: translateY(-10px) rotate(8deg); }
+}
+
+@media (max-width: 480px) {
+  .thb-stage {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .th-promo-stage,
-  .th-promo-stage * {
+  .thb-stage,
+  .thb-stage * {
     animation: none !important;
   }
 }
