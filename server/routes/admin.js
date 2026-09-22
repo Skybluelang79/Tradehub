@@ -510,23 +510,33 @@ router.get('/reports', adminAuth, (req, res) => {
 
     const itemReports = db.prepare(`
       SELECT 'item' as type, r.id, r.reason, r.description, r.status, r.created_at,
-        i.title as target, u.name as reporter_name, i.status as item_status
+        i.title as target, u.name as reporter_name, i.status as item_status,
+        i.id as item_id, i.price as item_price, i.description as item_description,
+        i.seller_id, i.created_at as item_created_at,
+        seller.name as seller_name
       FROM reports r
       JOIN items i ON i.id = r.item_id
       JOIN users u ON u.id = r.reporter_id
+      JOIN users seller ON seller.id = i.seller_id
       WHERE 1=1 ${statusWhere} ${itemWhere}
       ORDER BY r.created_at DESC
     `).all(...statusParams, ...itemParams);
 
     const userReports = db.prepare(`
       SELECT 'user' as type, ur.id, ur.reason, ur.description, ur.status, ur.created_at,
-        u2.name as target, u.name as reporter_name, u2.status as user_status
+        u2.name as target, u.name as reporter_name, u2.status as user_status,
+        ur.reported_user_id as user_id
       FROM user_reports ur
       JOIN users u ON ur.reporter_id = u.id
       JOIN users u2 ON ur.reported_user_id = u2.id
       WHERE 1=1 ${statusWhere} ${userWhere}
       ORDER BY ur.created_at DESC
     `).all(...statusParams, ...userParams);
+
+    itemReports.forEach((report) => {
+      const images = db.prepare('SELECT url FROM item_images WHERE item_id = ? ORDER BY sort_order').all(report.item_id);
+      report.item_images = images.map((img) => img.url);
+    });
 
     let reports = [...itemReports, ...userReports];
     reports.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));

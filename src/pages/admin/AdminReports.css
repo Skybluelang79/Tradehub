@@ -284,6 +284,94 @@
   text-align: left;
 }
 
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.status-active,
+.status-approved,
+.status-removed {
+  background: rgba(107, 107, 123, 0.15);
+  color: var(--text-tertiary);
+}
+
+.detail-item-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.detail-item-preview .detail-image + .detail-row {
+  margin-top: 4px;
+}
+
+.detail-item-preview .btn-secondary {
+  align-self: flex-start;
+}
+
+.detail-user-listings {
+  margin-top: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.detail-user-listings h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.table-empty {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+.mini-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.mini-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.mini-row:last-child {
+  border-bottom: none;
+}
+
+.mini-main {
+  flex: 1;
+  font-weight: 500;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mini-mid {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
 .detail-header {
   display: flex;
   align-items: center;

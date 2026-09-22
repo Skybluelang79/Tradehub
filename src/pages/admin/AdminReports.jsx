@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../../services/client.js';
 import { useToast } from '../../components/ui/Toast.jsx';
-import { SearchIcon, CheckIcon, XIcon, FlagIcon, AlertIcon } from './Icons.jsx';
+import { SearchIcon, CheckIcon, XIcon, FlagIcon, AlertIcon, EyeIcon } from './Icons.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import './AdminReports.css';
 
@@ -23,6 +23,29 @@ const AdminReports = () => {
 
   const [selectedReport, setSelectedReport] = useState(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+
+  const [userListings, setUserListings] = useState(null);
+  const [userListingsLoading, setUserListingsLoading] = useState(false);
+  const [showUserListings, setShowUserListings] = useState(false);
+
+  const loadUserListings = async (userId) => {
+    if (!userId || (userListings && showUserListings)) {
+      setShowUserListings((v) => !v);
+      return;
+    }
+    setShowUserListings(true);
+    setUserListingsLoading(true);
+    setUserListings(null);
+    try {
+      const data = await api.admin.userDetail(userId);
+      setUserListings(data.listings || []);
+    } catch (err) {
+      addToast(err.message || 'Failed to load user listings', 'error');
+      setUserListings([]);
+    } finally {
+      setUserListingsLoading(false);
+    }
+  };
 
   const loadReports = useCallback(async () => {
     setLoading(true);
@@ -247,6 +270,46 @@ const AdminReports = () => {
               </span>
             </div>
             <div className="detail-content">
+              {selectedReport.type === 'item' && selectedReport.item_id && (
+                <div className="detail-item-preview">
+                  <div className="detail-image">
+                    {selectedReport.item_images && selectedReport.item_images[0] ? (
+                      <img
+                        src={selectedReport.item_images[0]}
+                        alt={selectedReport.target}
+                        style={{ width: '100%', height: '180px', objectFit: 'cover', borderRadius: '10px' }}
+                      />
+                    ) : (
+                      <div className="image-placeholder small">No image</div>
+                    )}
+                  </div>
+                  <div className="detail-row">
+                    <span className="label">Price</span>
+                    <span className="value">${Number(selectedReport.item_price || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="detail-row">
+                    <span className="label">Seller</span>
+                    <span className="value">{selectedReport.seller_name || '—'}</span>
+                  </div>
+                  {selectedReport.item_description && (
+                    <div className="detail-row">
+                      <span className="label">Description</span>
+                      <span className="value">{selectedReport.item_description}</span>
+                    </div>
+                  )}
+                  <div className="detail-row">
+                    <span className="label">Listed On</span>
+                    <span className="value">{formatDate(selectedReport.item_created_at)}</span>
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    onClick={() => loadUserListings(selectedReport.seller_id)}
+                  >
+                    <EyeIcon size={16} />
+                    View Seller's Listings
+                  </button>
+                </div>
+              )}
               <div className="detail-row">
                 <span className="label">Reported Item</span>
                 <span className="value">{selectedReport.target}</span>
@@ -269,7 +332,36 @@ const AdminReports = () => {
                 <span className="label">Date</span>
                 <span className="value">{formatDate(selectedReport.created_at)}</span>
               </div>
+              {selectedReport.type === 'user' && selectedReport.user_id && (
+                <button
+                  className="btn-secondary"
+                  onClick={() => loadUserListings(selectedReport.user_id)}
+                >
+                  <EyeIcon size={16} />
+                  View User's Listings
+                </button>
+              )}
             </div>
+            {showUserListings && (
+              <div className="detail-user-listings">
+                <h4>User's Listings</h4>
+                {userListingsLoading && <p className="table-empty">Loading listings...</p>}
+                {!userListingsLoading && userListings && userListings.length === 0 && (
+                  <p className="table-empty">No listings</p>
+                )}
+                {!userListingsLoading && userListings && userListings.length > 0 && (
+                  <div className="mini-table">
+                    {userListings.map((item) => (
+                      <div key={item.id} className="mini-row">
+                        <span className="mini-main">{item.title}</span>
+                        <span className="mini-mid">${Number(item.price || 0).toFixed(2)}</span>
+                        <span className={`status-badge ${getStatusBadge(item.status)}`}>{item.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {selectedReport.status === 'pending' && (
               <div className="detail-actions">
                 <button
