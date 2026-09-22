@@ -1,0 +1,13 @@
+name = "tradehub"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+pages_build_output_dir = "./dist"
+
+# Set BACKEND_URL as an encrypted environment variable in the Cloudflare dashboard
+# e.g. BACKEND_URL = https://your-backend.onrender.com
+
+# Optional: custom domain
+# [[routes]]
+# pattern = "tradehub.yourdomain.com"
+# zone_name = "yourdomain.com"
