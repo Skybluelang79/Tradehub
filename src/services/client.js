@@ -267,6 +267,14 @@ restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.st
     generateCode: () => request('/referrals/code', { method: 'POST' }),
   },
 
+  ai: {
+    listing: (data) => request('/ai/listing', { method: 'POST', body: JSON.stringify(data) }),
+    parse: (query) => request('/ai/parse', { method: 'POST', body: JSON.stringify({ query }) }),
+    question: (itemId, question) => request('/ai/question', { method: 'POST', body: JSON.stringify({ itemId, question }) }),
+    priceGuide: (itemId) => request('/ai/price-guide', { method: 'POST', body: JSON.stringify({ itemId }) }),
+    recommendations: (params = {}) => request(`/ai/recommendations?${new URLSearchParams(params).toString()}`),
+  },
+
   firebase: {
     sendEmail: (data) => request('/firebase/firebase/send-email', { method: 'POST', body: JSON.stringify(data) }),
     sendPush: (data) => request('/firebase/firebase/push', { method: 'POST', body: JSON.stringify(data) }),

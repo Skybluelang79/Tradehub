@@ -204,6 +204,119 @@
   margin-bottom: 24px;
 }
 
+.ai-assist {
+  background: linear-gradient(135deg, #06120d 0%, #0e2a1d 55%, #071b12 100%);
+  border: 1px solid rgba(201, 169, 97, 0.22);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  margin-bottom: 24px;
+}
+
+.ai-assist-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 10px;
+}
+
+.ai-assist-head svg {
+  color: #C9A961;
+}
+
+.ai-assist-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.ai-assist-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(15, 138, 99, 0.5);
+  background: rgba(15, 138, 99, 0.14);
+  color: #7fe0b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.ai-assist-btn:hover:not(:disabled) {
+  background: #0F8A63;
+  border-color: #0F8A63;
+  color: #fff;
+}
+
+.ai-assist-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ai-assist-ask {
+  display: flex;
+  gap: 8px;
+}
+
+.ai-assist-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 13px;
+  transition: border-color var(--transition-fast);
+}
+
+.ai-assist-input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.ai-assist-input:focus {
+  outline: none;
+  border-color: rgba(201, 169, 97, 0.6);
+}
+
+.ai-assist-send {
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: linear-gradient(135deg, #e6c980, #b8944a);
+  color: #241D12;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.ai-assist-send:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.ai-assist-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.ai-assist-answer {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: rgba(15, 138, 99, 0.1);
+  border-left: 3px solid #0F8A63;
+  color: #d8f3e8;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
 .seller-card-detail {
   background: var(--surface);
   border-radius: var(--radius-lg);

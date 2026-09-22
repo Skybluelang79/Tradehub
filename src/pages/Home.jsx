@@ -33,6 +33,8 @@ export default function Home() {
   const [showSaveSearch, setShowSaveSearch] = useState(false);
   const [saveName, setSaveName] = useState('');
   const [saving, setSaving] = useState(false);
+  const [aiSearching, setAiSearching] = useState(false);
+  const [aiPicks, setAiPicks] = useState([]);
   const loadingTimerRef = useRef(null);
   const debouncedSearch = useDebounce(searchInput, 300);
 
@@ -85,6 +87,40 @@ export default function Home() {
   useEffect(() => {
     setFilters((prev) => prev.search === debouncedSearch ? prev : { ...prev, search: debouncedSearch });
   }, [debouncedSearch, setFilters]);
+
+  useEffect(() => {
+    let alive = true;
+    const q = filters.category ? { basedOn: filters.category } : {};
+    api.ai.recommendations(q)
+      .then((res) => { if (alive) setAiPicks(res.items || []); })
+      .catch(() => { if (alive) setAiPicks([]); });
+    return () => { alive = false; };
+  }, [filters.category]);
+
+  const handleAiSearch = async () => {
+    const query = searchInput.trim();
+    if (!query) {
+      addToast('Type what you are looking for first', 'error');
+      return;
+    }
+    setAiSearching(true);
+    try {
+      const res = await api.ai.parse(query);
+      setSearchInput(res.query || query);
+      setFilters({
+        ...filters,
+        search: res.query || query,
+        category: res.category || '',
+        minPrice: res.minPrice || '',
+        maxPrice: res.maxPrice || '',
+      });
+      addToast(res.category || res.minPrice || res.maxPrice ? 'AI searched smart 🎯' : 'Search updated', 'success');
+    } catch {
+      addToast('AI search unavailable — using normal search', 'error');
+    } finally {
+      setAiSearching(false);
+    }
+  };
 
   useEffect(() => {
     return () => clearTimeout(loadingTimerRef.current);
@@ -165,6 +201,17 @@ export default function Home() {
                 <XIcon size={16} />
               </button>
             )}
+            <button
+              className={`ai-search-btn ${searchInput ? 'enabled' : ''}`}
+              onClick={handleAiSearch}
+              disabled={aiSearching}
+              title="AI search — understands phrases like 'PS5 under $400'"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2l1.9 5.6L19.5 9l-5.6 1.9L12 16.5l-1.9-5.6L4.5 9l5.6-1.4L12 2zM19 14l.9 2.6L22.5 17.5l-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9L19 14zm-9 3l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" />
+              </svg>
+              {aiSearching ? '…' : 'AI'}
+            </button>
             <button
               className={`save-search-btn ${(searchInput || filters.category || filters.minPrice || filters.maxPrice) ? 'enabled' : ''}`}
               onClick={handleSaveSearch}
@@ -397,6 +444,39 @@ export default function Home() {
           </div>
         )}
         
+        {!filters.search && aiPicks.length > 0 && (
+          <div className="section-block">
+            <div className="section-header">
+              <h3 className="section-title">AI Picks for You</h3>
+              <span className="section-subtitle">Smart recommendations</span>
+            </div>
+            <div className="horizontal-scroll">
+              {aiPicks.map(item => {
+                const hasSale = item.salePrice && item.salePrice > 0 && item.salePrice < item.price;
+                return (
+                  <div key={item.id} className="mini-item-card" onClick={() => setSelectedItem(item)}>
+                    <div className="mini-item-image">
+                      <img src={item.images?.[0]} alt={item.title} />
+                      <span className="mini-item-ai-tag">AI</span>
+                    </div>
+                    <div className="mini-item-info">
+                      <span className="mini-item-title">{item.title}</span>
+                      {hasSale ? (
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice)}</span>
+                          <span className="mini-item-price-original">{formatPrice(item.price)}</span>
+                        </div>
+                      ) : (
+                        <span className="mini-item-price">{formatPrice(item.price)}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <ItemsGrid
           items={sortedItems}
           onItemClick={setSelectedItem}

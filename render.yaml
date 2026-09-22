@@ -17,6 +17,11 @@ services:
         generateValue: true
       - key: ADMIN_PASSWORD
         generateValue: true
+      - key: OPENAI_API_KEY
+        value:
+        sync: false
+      - key: AI_MODEL
+        value: gpt-4o-mini
       - key: APP_URL
         fromService:
           type: web

@@ -259,7 +259,7 @@
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 14px 44px;
+  padding: 14px 155px 14px 44px;
   color: var(--text-primary);
   font-size: 15px;
   transition: all var(--transition-fast);
@@ -292,7 +292,7 @@
 
 .save-search-btn {
   position: absolute;
-  right: 44px;
+  right: 88px;
   display: flex;
   align-items: center;
   gap: 5px;
@@ -318,6 +318,41 @@
   background: var(--accent);
   border-color: var(--accent);
   color: white;
+}
+
+.ai-search-btn {
+  position: absolute;
+  right: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.ai-search-btn.enabled {
+  color: #C9A961;
+  border-color: rgba(201, 169, 97, 0.45);
+  background: rgba(201, 169, 97, 0.08);
+}
+
+.ai-search-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #0F8A63, #0a6b48);
+  border-color: #0F8A63;
+  color: white;
+}
+
+.ai-search-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 
 .save-search-overlay {
@@ -540,6 +575,19 @@
   padding: 3px 8px;
   border-radius: 6px;
   border: 1px solid rgba(255,255,255,0.08);
+}
+
+.mini-item-ai-tag {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: linear-gradient(135deg, #C9A961, #A8883B);
+  color: #241D12;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 6px;
+  letter-spacing: 0.4px;
 }
 
 .mini-item-info {

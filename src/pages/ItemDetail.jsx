@@ -98,6 +98,43 @@ export default function ItemDetail() {
   const [now, setNow] = useState(() => Date.now());
   const auctionRef = useRef(null);
 
+  const [aiQuestion, setAiQuestion] = useState('');
+  const [aiAnswer, setAiAnswer] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [guide, setGuide] = useState('');
+  const [guideBusy, setGuideBusy] = useState(false);
+
+  const askAi = async () => {
+    if (!selectedItem) return;
+    const q = aiQuestion.trim();
+    if (!q) {
+      addToast('Type a question first', 'error');
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const res = await api.ai.question(selectedItem.id, q);
+      setAiAnswer(res.answer);
+    } catch (err) {
+      addToast(err.message || 'AI assistant unavailable', 'error');
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const checkPrice = async () => {
+    if (!selectedItem) return;
+    setGuideBusy(true);
+    try {
+      const res = await api.ai.priceGuide(selectedItem.id);
+      setGuide(res.advice);
+    } catch (err) {
+      addToast(err.message || 'Price guide unavailable', 'error');
+    } finally {
+      setGuideBusy(false);
+    }
+  };
+
   useEffect(() => {
     if (!selectedItem?.isAuction || !selectedItem.auctionEndsAt) return;
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -675,6 +712,35 @@ export default function ItemDetail() {
         </div>
 
         <p className="detail-description">{selectedItem.description}</p>
+
+        <div className="ai-assist">
+          <div className="ai-assist-head">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2l1.9 5.6L19.5 9l-5.6 1.9L12 16.5l-1.9-5.6L4.5 9l5.6-1.4L12 2zM19 14l.9 2.6 2.6.9-2.6.9-.9 2.6-.9-2.6-2.6-.9 2.6-.9.9-2.6z" />
+            </svg>
+            AI Assistant
+          </div>
+          <div className="ai-assist-actions">
+            <button type="button" className="ai-assist-btn" onClick={checkPrice} disabled={guideBusy}>
+              {guideBusy ? 'Checking price…' : 'Is this fairly priced?'}
+            </button>
+          </div>
+          {guide && <div className="ai-assist-answer">{guide}</div>}
+          <div className="ai-assist-ask">
+            <input
+              type="text"
+              className="ai-assist-input"
+              placeholder="Ask anything about this item…"
+              value={aiQuestion}
+              onChange={(e) => setAiQuestion(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') askAi(); }}
+            />
+            <button type="button" className="ai-assist-send" onClick={askAi} disabled={aiBusy || !aiQuestion.trim()}>
+              {aiBusy ? '…' : 'Ask'}
+            </button>
+          </div>
+          {aiAnswer && <div className="ai-assist-answer">{aiAnswer}</div>}
+        </div>
 
         {selectedItem.quantity > 1 && (
           <div className="detail-stock-info">

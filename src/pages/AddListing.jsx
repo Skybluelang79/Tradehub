@@ -5,6 +5,7 @@ import { useToast } from '../components/ui/Toast';
 import { useApp } from '../context';
 import { LivePreview } from '../components/features';
 import { categories } from '../services/api';
+import { api } from '../services/client';
 import { compressToDataUrl } from '../utils/imageCompression';
 import '../styles/globals.css';
 import './AddListing.css';
@@ -128,6 +129,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
   const [templateName, setTemplateName] = useState('');
 
   const [showAiDesc, setShowAiDesc] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
 
   const existingTemplates = getTemplates();
 
@@ -196,6 +198,31 @@ export default function AddListing({ editItemId, onEditComplete }) {
     const template = AUTO_DESCRIPTIONS[catKey] || AUTO_DESCRIPTIONS.other;
     setDescription(`"${title}"\n\n${template}`);
     addToast('Description generated!', 'success');
+  };
+
+  const runAiListing = async () => {
+    if (!title.trim() && !category) {
+      addToast('Enter a title or category first', 'error');
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const res = await api.ai.listing({
+        title,
+        description,
+        category,
+        condition,
+      });
+      if (res.title && !title.trim()) setTitle(res.title);
+      if (res.description) setDescription(res.description);
+      if (res.price !== null && res.price !== undefined && !price) setPrice(String(res.price));
+      addToast('AI draft ready — review before posting!', 'success');
+    } catch (err) {
+      addToast(err.message || 'AI unavailable — used a template', 'error');
+      generateAutoDescription();
+    } finally {
+      setAiBusy(false);
+    }
   };
 
   const suggestCategory = () => {
@@ -419,8 +446,8 @@ export default function AddListing({ editItemId, onEditComplete }) {
           <div style={{ display: 'flex', gap: 8 }}>
             <input type="text" className="input" placeholder="What are you selling?" value={title} onChange={(e) => { setTitle(e.target.value); suggestCategory(); }} required style={{ flex: 1 }} />
             {title && (
-              <button type="button" className="ai-btn" onClick={generateAutoDescription} title="Auto-generate description">
-                <i className="bi bi-stars" />
+              <button type="button" className="ai-btn" onClick={runAiListing} disabled={aiBusy} title="AI-generate title, description & price">
+                <i className={`bi ${aiBusy ? 'bi-arrow-repeat' : 'bi-stars'}`} />
               </button>
             )}
           </div>
@@ -436,9 +463,13 @@ export default function AddListing({ editItemId, onEditComplete }) {
           </div>
           {showAiDesc && (
             <div className="ai-tools-panel">
+              <button type="button" className="ai-tool-btn" onClick={runAiListing} disabled={aiBusy}>
+                <i className={`bi ${aiBusy ? 'bi-arrow-repeat' : 'bi-stars'}`} />
+                {aiBusy ? 'Generating…' : 'AI Generate Listing'}
+              </button>
               <button type="button" className="ai-tool-btn" onClick={generateAutoDescription}>
                 <i className="bi bi-pencil-square" />
-                Generate Description
+                Description Template
               </button>
               <button type="button" className="ai-tool-btn" onClick={suggestCategory}>
                 <i className="bi bi-tag" />
