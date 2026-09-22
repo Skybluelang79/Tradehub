@@ -493,3 +493,176 @@
     width: 100%;
   }
 }
+
+/* ---- TradeHub 3D promo ad ---- */
+
+.brand-sponsor-right {
+  perspective: 1100px;
+}
+
+.th-promo-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.th-promo-orb {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 270px;
+  height: 270px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, rgba(20, 160, 119, 0.5), rgba(15, 138, 99, 0.1) 55%, transparent 72%);
+  filter: blur(2px);
+  transform: translate(-50%, -50%);
+  animation: th-orb-pulse 6s ease-in-out infinite;
+}
+
+.th-promo-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 150px;
+  height: 150px;
+  margin: -75px 0 0 -75px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0%, rgba(201, 169, 97, 0.9) 18%, transparent 38%, rgba(20, 160, 119, 0) 55%, rgba(20, 160, 119, 0.8) 75%, transparent 92%);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+          mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  opacity: 0.85;
+  animation: th-ring-spin 9s linear infinite;
+}
+
+.th-promo-cards {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 118px;
+  height: 148px;
+  margin: -74px 0 0 -59px;
+  transform-style: preserve-3d;
+  animation: th-cards-float 7s ease-in-out infinite;
+}
+
+.th-promo-card {
+  position: absolute;
+  inset: 0;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #143d2a 0%, #0b2218 65%, #081a12 100%);
+  border: 1px solid rgba(201, 169, 97, 0.28);
+  box-shadow: 0 24px 44px -18px rgba(0, 0, 0, 0.75);
+}
+
+.th-promo-card-back {
+  transform: rotateY(34deg) translateZ(-46px);
+}
+
+.th-promo-card-mid {
+  transform: rotateY(16deg) translateZ(-23px);
+}
+
+.th-promo-card-front {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 10px;
+  overflow: hidden;
+  transform: rotateY(0deg) translateZ(0);
+}
+
+.th-promo-card-img {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  height: 82px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 28% 30%, rgba(220, 192, 134, 0.45), transparent 42%),
+    radial-gradient(circle at 70% 72%, rgba(20, 160, 119, 0.55), transparent 46%),
+    linear-gradient(135deg, #12c98a 0%, #0a6b48 100%);
+  animation: th-card-img-pulse 5s ease-in-out infinite;
+}
+
+.th-promo-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  position: relative;
+}
+
+.th-promo-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.2px;
+}
+
+.th-promo-card-price {
+  font-size: 11px;
+  font-weight: 800;
+  color: #0a1a12;
+  background: linear-gradient(135deg, #e6c980, #b8944a);
+  border-radius: 10px;
+  padding: 3px 8px;
+}
+
+.th-promo-coin {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 15px;
+  color: #0a1a12;
+  background: linear-gradient(135deg, #e6c980, #a8883b);
+  box-shadow: 0 10px 18px -6px rgba(0, 0, 0, 0.55), inset 0 2px 2px rgba(255, 255, 255, 0.4);
+  animation: th-coin-float 5s ease-in-out infinite;
+}
+
+.th-promo-coin-1 {
+  left: 10%;
+  top: 16%;
+}
+
+.th-promo-coin-2 {
+  right: 12%;
+  bottom: 18%;
+  animation-delay: 1.2s;
+}
+
+@keyframes th-orb-pulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.75; }
+  50% { transform: translate(-50%, -50%) scale(1.16); opacity: 1; }
+}
+
+@keyframes th-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes th-cards-float {
+  0%, 100% { transform: rotateY(-8deg) translateY(0); }
+  50% { transform: rotateY(11deg) translateY(-9px); }
+}
+
+@keyframes th-card-img-pulse {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50% { filter: brightness(1.15) saturate(1.25); }
+}
+
+@keyframes th-coin-float {
+  0%, 100% { transform: translateY(0) rotate(-8deg); }
+  50% { transform: translateY(-11px) rotate(8deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .th-promo-stage,
+  .th-promo-stage * {
+    animation: none !important;
+  }
+}

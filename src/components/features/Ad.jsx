@@ -213,6 +213,28 @@ export function AdPush({ className = '' }) {
 
 const brandAds = [
   {
+    brand: 'TradeHub',
+    tagline: 'Buy, sell & trade near you — protected by escrow.',
+    offer: 'List for free. Zero fees on your first 10 listings.',
+    category: '',
+    isPromo: true,
+    gradient: 'linear-gradient(135deg, #06120d 0%, #0e2a1d 45%, #071b12 100%)',
+    accentColor: '#0F8A63',
+    logoSvg: (
+      <svg viewBox="0 0 48 48" width="32" height="32">
+        <defs>
+          <linearGradient id="th-promo-logo-grad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor="#DCC086" />
+            <stop offset="100%" stopColor="#A8883B" />
+          </linearGradient>
+        </defs>
+        <rect x="3" y="3" width="42" height="42" rx="12" fill="url(#th-promo-logo-grad)" />
+        <path d="M13 15h22 M13 15v20 M13 25h9 M35 15v20" stroke="#241D12" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+    image: '',
+  },
+  {
     brand: 'Apple',
     tagline: 'iPhone 18 Pro Max. The most advanced iPhone ever.',
     offer: 'Up to $650 trade-in with any iPhone',
@@ -294,11 +316,31 @@ export function BrandSponsor({ className = '' }) {
           <p className="brand-sponsor-tagline">{ad.tagline}</p>
           <p className="brand-sponsor-offer" style={{ color: ad.accentColor }}>{ad.offer}</p>
           <button className="brand-sponsor-cta" style={{ background: ad.accentColor }} onClick={() => goHome(ad.category)}>
-            Shop Now
+            {ad.isPromo ? 'Explore Near You' : 'Shop Now'}
           </button>
         </div>
         <div className="brand-sponsor-right">
-          <img src={ad.image} alt={ad.brand} className="brand-sponsor-image" />
+          {ad.isPromo ? (
+            <div className="th-promo-stage" aria-hidden="true">
+              <div className="th-promo-orb" />
+              <div className="th-promo-ring" />
+              <div className="th-promo-cards">
+                <div className="th-promo-card th-promo-card-back" />
+                <div className="th-promo-card th-promo-card-mid" />
+                <div className="th-promo-card th-promo-card-front">
+                  <span className="th-promo-card-img" />
+                  <span className="th-promo-card-meta">
+                    <span className="th-promo-card-title">Just Listed</span>
+                    <span className="th-promo-card-price">$149</span>
+                  </span>
+                </div>
+              </div>
+              <span className="th-promo-coin th-promo-coin-1">$</span>
+              <span className="th-promo-coin th-promo-coin-2">%</span>
+            </div>
+          ) : (
+            <img src={ad.image} alt={ad.brand} className="brand-sponsor-image" />
+          )}
           <div className="brand-sponsor-image-glow" style={{ background: ad.accentColor }} />
         </div>
       </div>
