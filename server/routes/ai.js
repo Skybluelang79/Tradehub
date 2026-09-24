@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import logger from '../src/logger.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
+import { aiLimiter } from '../src/rateLimiter.js';
 import {
   generateListing,
   parseSearch,
@@ -12,7 +13,7 @@ import {
 
 const router = Router();
 
-router.post('/listing', authenticateToken, async (req, res) => {
+router.post('/listing', authenticateToken, aiLimiter, async (req, res) => {
   try {
     const { title = '', description = '', category = '', condition = '', imageHints = '' } = req.body || {};
     if (!String(title).trim() && !category) {
@@ -26,7 +27,7 @@ router.post('/listing', authenticateToken, async (req, res) => {
   }
 });
 
-router.post('/parse', async (req, res) => {
+router.post('/parse', aiLimiter, async (req, res) => {
   try {
     const { query = '' } = req.body || {};
     if (!String(query).trim()) {
@@ -40,7 +41,7 @@ router.post('/parse', async (req, res) => {
   }
 });
 
-router.post('/question', optionalAuth, async (req, res) => {
+router.post('/question', optionalAuth, aiLimiter, async (req, res) => {
   try {
     const { itemId, question = '' } = req.body || {};
     if (!itemId) return res.status(400).json({ error: 'itemId is required' });

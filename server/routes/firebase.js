@@ -8,7 +8,7 @@ import { sendNotificationEmail } from '../src/email.js';
 
 const router = Router();
 
-router.post('/firebase/signup', async (req, res) => {
+router.post('/signup', async (req, res) => {
   try {
     const { idToken, name } = req.body;
     if (!idToken) return res.status(400).json({ error: 'Firebase ID token is required' });
@@ -50,7 +50,7 @@ router.post('/firebase/signup', async (req, res) => {
   }
 });
 
-router.post('/firebase/link', async (req, res) => {
+router.post('/link', async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
     const jwtToken = authHeader && authHeader.split(' ')[1];
@@ -76,7 +76,7 @@ router.post('/firebase/link', async (req, res) => {
   }
 });
 
-router.post('/firebase/send-email', async (req, res) => {
+router.post('/send-email', async (req, res) => {
   try {
     const { to, subject, body } = req.body;
     if (!to || !subject || !body) {
@@ -90,7 +90,7 @@ router.post('/firebase/send-email', async (req, res) => {
   }
 });
 
-router.post('/firebase/push', async (req, res) => {
+router.post('/push', async (req, res) => {
   try {
     const { tokens, title, body, image, data } = req.body;
     if (!tokens || !title || !body) {

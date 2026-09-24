@@ -41,6 +41,14 @@ export const authLimiter = RATE_LIMIT_ENABLED
 
 export const apiLimiter = RATE_LIMIT_ENABLED ? rateLimit({ ...base, max: 100 }) : passThrough();
 
+export const aiLimiter = RATE_LIMIT_ENABLED
+  ? rateLimit({
+      ...base,
+      max: 30,
+      message: { error: 'Too many AI requests. Try again in 15 minutes.' },
+    })
+  : passThrough();
+
 export const adminLimiter = RATE_LIMIT_ENABLED
   ? rateLimit({
       ...base,

@@ -27,9 +27,14 @@ export default {
       url.protocol = target.protocol;
       url.port = target.port;
 
+      // Preserve the client headers but point Host at the backend so that
+      // host-based routing, webhook URLs, and email links are built correctly.
+      const headers = new Headers(request.headers);
+      headers.set('Host', target.host);
+
       const proxyRequest = new Request(url.toString(), {
         method: request.method,
-        headers: request.headers,
+        headers,
         body: request.body,
         redirect: 'follow',
       });
@@ -49,3 +54,4 @@ export default {
     return env.ASSETS.fetch(indexRequest);
   },
 };
+

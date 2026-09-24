@@ -62,8 +62,8 @@ export const api = {
     signup: (data) => request('/auth/signup', { method: 'POST', body: JSON.stringify(data) }),
     login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
     social: (data) => request('/auth/social', { method: 'POST', body: JSON.stringify(data) }),
-    firebaseSignup: (data) => request('/firebase/firebase/signup', { method: 'POST', body: JSON.stringify(data) }),
-    firebaseLink: (data) => request('/firebase/firebase/link', { method: 'POST', body: JSON.stringify(data) }),
+    firebaseSignup: (data) => request('/firebase/signup', { method: 'POST', body: JSON.stringify(data) }),
+    firebaseLink: (data) => request('/firebase/link', { method: 'POST', body: JSON.stringify(data) }),
     me: () => request('/auth/me'),
     updateProfile: (data) => request('/auth/me', { method: 'PUT', body: JSON.stringify(data) }),
     changePassword: (data) => request('/auth/change-password', { method: 'PUT', body: JSON.stringify(data) }),
@@ -276,8 +276,8 @@ restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.st
   },
 
   firebase: {
-    sendEmail: (data) => request('/firebase/firebase/send-email', { method: 'POST', body: JSON.stringify(data) }),
-    sendPush: (data) => request('/firebase/firebase/push', { method: 'POST', body: JSON.stringify(data) }),
+    sendEmail: (data) => request('/firebase/send-email', { method: 'POST', body: JSON.stringify(data) }),
+    sendPush: (data) => request('/firebase/push', { method: 'POST', body: JSON.stringify(data) }),
   },
 
   upload: {
