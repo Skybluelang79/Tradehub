@@ -143,7 +143,12 @@ export function AuthProvider({ children }) {
       const data = await api.auth.forgotPassword({ email });
       return { success: true, message: 'If an account exists with this email, you will receive reset instructions', devResetToken: data.devResetToken };
     } catch (err) {
-      return { success: true, message: 'If an account exists with this email, you will receive reset instructions' };
+      // Surface real failures (e.g. email delivery not configured). The server
+      // answers unknown addresses with a generic success, so this cannot leak
+      // whether an account exists.
+      const message = err.message || 'Failed to send reset instructions';
+      setError(message);
+      return { success: false, error: message };
     } finally {
       setIsLoading(false);
     }

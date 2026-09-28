@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { isFirebaseConfigured } from '../../config/firebase';
 import { useToast } from '../ui/Toast';
 import './SocialAuthButtons.css';
 
@@ -144,6 +145,10 @@ export default function SocialAuthButtons({ onClose }) {
     else if (platform.id === 'facebook') handleFacebook();
     else addToast(`${platform.name} login is not configured yet`, 'error');
   };
+
+  // Without a Firebase project the popup flow cannot produce a token, so hide
+  // the buttons entirely rather than offering a control that always fails.
+  if (!isFirebaseConfigured()) return null;
 
   return (
     <div className="social-auth">

@@ -351,6 +351,17 @@ router.put('/change-password', authenticateToken, validate(changePasswordSchema)
 router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), (req, res) => {
   try {
     const { email } = req.validatedBody;
+
+    // Locally, hand the token back so the flow is testable without SMTP.
+    const devMode = process.env.NODE_ENV !== 'production' && !isEmailConfigured();
+
+    // In production, report a global misconfiguration instead of silently
+    // accepting a request we cannot fulfil. This does not reveal whether the
+    // account exists.
+    if (!isEmailConfigured() && !devMode) {
+      return res.status(503).json({ error: 'Password reset email is not configured' });
+    }
+
     const user = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
 
     let devResetToken = null;
@@ -366,9 +377,7 @@ router.post('/forgot-password', authLimiter, validate(forgotPasswordSchema), (re
         logger.warn(`Password reset email failed for ${email}: ${err.message}`);
       });
 
-      if (process.env.NODE_ENV !== 'production' && !isEmailConfigured()) {
-        devResetToken = token;
-      }
+      if (devMode) devResetToken = token;
     }
 
     const body = { message: 'If an account exists with this email, you will receive reset instructions' };
