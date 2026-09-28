@@ -3,7 +3,10 @@ services:
     name: tradehub-api
     env: node
     region: oregon
-    plan: free
+    # Must be a paid plan (starter or above). Render does not attach persistent
+    # disks to free instances, and without the disk below the database and every
+    # uploaded image are wiped on each deploy.
+    plan: starter
     buildCommand: cd server && npm install
     startCommand: cd server && node index.js
     envVars:
@@ -32,9 +35,18 @@ services:
           type: web
           name: tradehub-frontend
           property: url
+      # Both must sit on the disk. Unset, they resolve inside the ephemeral
+      # checkout and the database and every uploaded image are lost on redeploy.
+      - key: DB_PATH
+        value: /var/data/tradehub.db
+      - key: UPLOADS_DIR
+        value: /var/data/uploads
+    # Mounted outside the repo. Mounting over the server directory would shadow
+    # index.js and the routes with an empty volume, and the service would not
+    # boot. Persistent disks require a paid plan, so this cannot run on `free`.
     disk:
       name: tradehub-data
-      mountPath: /opt/render/project/src/server
+      mountPath: /var/data
       sizeGB: 1
 
   - type: web
@@ -45,9 +57,11 @@ services:
     buildCommand: npm install && npm run build
     staticPublishPath: dist
     routes:
+      # The app is built with VITE_BASE=/ and its routes sit at the root, so
+      # deep links such as /terms must fall through to the SPA shell.
       - type: rewrite
-        source: /Tradehub/*
-        destination: /Tradehub/index.html
+        source: /*
+        destination: /index.html
     envVars:
       - key: VITE_API_URL
         fromService:

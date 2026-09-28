@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { join, extname } from 'path';
+import fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { authenticateToken } from '../middleware/auth.js';
 import { uploadLimiter } from '../src/rateLimiter.js';
@@ -10,15 +11,30 @@ import { uploadToFirebaseStorage } from '../src/firebase.js';
 const USE_BLOB = process.env.NETLIFY === 'true' || process.env.DB_BLOB === 'true' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 const USE_FIREBASE_STORAGE = process.env.FIREBASE_STORAGE === 'true';
 
+// Defaults to the repo, but a host with a persistent disk needs UPLOADS_DIR to
+// point at it. Left on the ephemeral checkout, every uploaded image disappears
+// on the next deploy. This must stay the same variable app.js serves from, or
+// uploads are written to one directory and read from another.
+const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, '..', 'uploads');
+
+if (!USE_BLOB && !USE_FIREBASE_STORAGE) {
+  try {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  } catch (err) {
+    console.error(`Could not create uploads dir ${UPLOADS_DIR}:`, err.message);
+  }
+}
+
 const storage = (USE_BLOB || USE_FIREBASE_STORAGE)
   ? multer.memoryStorage()
   : multer.diskStorage({
-      destination: join(__dirname, '..', 'uploads'),
+      destination: (req, file, cb) => cb(null, UPLOADS_DIR),
       filename: (req, file, cb) => {
         const ext = extname(file.originalname);
         cb(null, `${uuidv4()}${ext}`);
       },
     });
+
 
 const upload = multer({
   storage,
