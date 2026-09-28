@@ -10,6 +10,12 @@ import { AUTH_GATED_TABS, GATE_COPY } from './config/authGate';
 
 
 import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, ResetPassword, Favorites, Notifications, GiftMall, SellerProfile, Cart } from './pages';
+import { getLegalPath } from './pages/legal/legalRoutes';
+import Terms from './pages/legal/Terms';
+import Privacy from './pages/legal/Privacy';
+import { Faq } from './pages/legal/LegalShell';
+import Contact from './pages/legal/Contact';
+import ReportProblem from './pages/legal/ReportProblem';
 import { AdminProvider, useAdmin } from './context/AdminContext.jsx';
 import AdminLayout from './components/admin/AdminLayout.jsx';
 import AdminLogin from './components/admin/AdminLogin.jsx';
@@ -94,6 +100,15 @@ function AppContent() {
   const [authResetToken, setAuthResetToken] = useState(null);
   const [verifyState, setVerifyState] = useState(null);
   const authLinkHandledRef = useRef(false);
+  const [legalPath, setLegalPath] = useState(() => getLegalPath());
+
+  // The legal pages are plain URL paths rather than app state, so back/forward
+  // and the in-page links that push history have to re-evaluate the location.
+  useEffect(() => {
+    const sync = () => setLegalPath(getLegalPath());
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
 
   useEffect(() => {
     if (authLinkHandledRef.current) return;
@@ -291,6 +306,14 @@ function AppContent() {
       </AdminLayout>
     );
   }
+
+  // Static legal and support pages sit outside the app shell so they can be
+  // linked to directly, including by people who are not signed in.
+  if (legalPath === '/terms') return <Terms />;
+  if (legalPath === '/privacy') return <Privacy />;
+  if (legalPath === '/faq') return <Faq />;
+  if (legalPath === '/contact') return <Contact />;
+  if (legalPath === '/report') return <ReportProblem />;
 
   // Hold the splash only while auth is hydrating on first paint, otherwise the
   // login/signup modal would be torn away mid-request (isLoading toggles there too).

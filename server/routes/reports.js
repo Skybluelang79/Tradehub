@@ -7,6 +7,75 @@ import logger from '../src/logger.js';
 
 const router = Router();
 
+const SUPPORT_CATEGORIES = new Set([
+  'account',
+  'payment',
+  'listing',
+  'technical',
+  'safety',
+  'other',
+]);
+
+// General problem reports that are not tied to a specific item or user, which
+// the item/user report endpoints cannot represent.
+router.post('/support', authenticateToken, (req, res) => {
+  try {
+    const { category, subject, message, contactEmail } = req.body || {};
+
+    if (!category || !SUPPORT_CATEGORIES.has(category)) {
+      return res.status(400).json({ error: 'A valid category is required' });
+    }
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ error: 'Subject is required' });
+    }
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+    if (subject.length > 200) {
+      return res.status(400).json({ error: 'Subject must be 200 characters or fewer' });
+    }
+    if (message.length > 5000) {
+      return res.status(400).json({ error: 'Message must be 5000 characters or fewer' });
+    }
+
+    const id = uuidv4();
+    db.prepare(`
+      INSERT INTO support_tickets (id, user_id, category, subject, message, contact_email)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      req.user.id,
+      category,
+      subject.trim(),
+      message.trim(),
+      (contactEmail || '').trim()
+    );
+
+    logger.info(`Support ticket ${id} opened by user ${req.user.id} (${category})`);
+    res.status(201).json({ success: true, id });
+  } catch (err) {
+    logger.error('Create support ticket error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/support', authenticateToken, (req, res) => {
+  try {
+    const tickets = db.prepare(`
+      SELECT id, category, subject, status, created_at, updated_at
+      FROM support_tickets
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT 50
+    `).all(req.user.id);
+
+    res.json({ tickets });
+  } catch (err) {
+    logger.error('List support tickets error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/', authenticateToken, (req, res) => {
   try {
     const reports = db.prepare(`

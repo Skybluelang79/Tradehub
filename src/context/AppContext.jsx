@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { mockItems, mockUsers, mockConversations, mockMessages, mockTransactions, mockReviews, mockPaymentMethods, currentUser } from '../services/api';
+import { mockItems, mockTransactions, mockReviews, mockPaymentMethods, currentUser } from '../services/api';
 import { storage, geolocation } from '../services/storage';
 import { generateId } from '../utils/helpers';
 import { api } from '../services/client';
@@ -10,12 +10,17 @@ const DEFAULT_LOCATION = { lat: 40.7128, lng: -74.006 };
 
 export function AppProvider({ children }) {
   const { user: authUser } = useAuth();
-  const currentUserId = authUser?.id || currentUser.id;
+  // Deliberately null when signed out. Defaulting to the demo account's id
+  // made conversation participant lookups pick the wrong side of the chat.
+  const currentUserId = authUser?.id || null;
 
   const [activeTab, setActiveTab] = useState('home');
   const [items, setItems] = useState(() => storage.get('items', mockItems));
-  const [conversations, setConversations] = useState(() => storage.get('conversations', mockConversations));
-  const [messages, setMessages] = useState(() => storage.get('messages', mockMessages));
+  // Conversations, messages and users are seeded empty rather than from the
+  // mock fixtures. The fixtures describe a single demo account, so seeding them
+  // made every real conversation render under the same placeholder name.
+  const [conversations, setConversations] = useState(() => storage.get('conversations', []));
+  const [messages, setMessages] = useState(() => storage.get('messages', {}));
   const [transactions, setTransactions] = useState(() => storage.get('transactions', mockTransactions));
   const [reviews, setReviews] = useState(() => storage.get('reviews', mockReviews));
   const [paymentMethods, setPaymentMethods] = useState(() => storage.get('paymentMethods', mockPaymentMethods));
@@ -147,6 +152,55 @@ export function AppProvider({ children }) {
     fetchItems();
   }, []);
 
+  // The conversation list is per-account server state, so it has to come from
+  // the API rather than a fixture. Names for the other party arrive alongside
+  // each row, so the same response also seeds the user directory that
+  // getUser() reads.
+  useEffect(() => {
+    if (!authUser?.id) return;
+    let cancelled = false;
+
+    const fetchConversations = async () => {
+      try {
+        const data = await api.chat.conversations();
+        if (cancelled) return;
+
+        const rows = data.conversations || [];
+        setConversations(rows.map((c) => ({
+          id: c.id,
+          itemId: c.item_id,
+          participants: [c.buyer_id, c.seller_id],
+          lastMessage: c.last_message || '',
+          lastMessageTime: c.last_message_time || c.created_at,
+          unreadCount: c.unread_count || 0,
+          pinned: !!c.pinned,
+          muted: !!c.muted,
+        })));
+
+        setUsers((prev) => {
+          const byId = new Map(prev.map((u) => [u.id, u]));
+          for (const c of rows) {
+            const otherId = c.buyer_id === authUser.id ? c.seller_id : c.buyer_id;
+            if (!otherId || byId.has(otherId)) continue;
+            byId.set(otherId, {
+              id: otherId,
+              name: c.other_name || 'Unknown user',
+              avatar: c.other_avatar || null,
+              verified: !!c.other_verified,
+            });
+          }
+          return Array.from(byId.values());
+        });
+      } catch (err) {
+        // Leave the list empty rather than substituting demo conversations.
+        if (!cancelled) console.log('Could not load conversations:', err?.message || err);
+      }
+    };
+
+    fetchConversations();
+    return () => { cancelled = true; };
+  }, [authUser?.id]);
+
   // Listen for socket incoming messages from Chat.jsx
   useEffect(() => {
     const handler = (e) => {
@@ -234,10 +288,9 @@ export function AppProvider({ children }) {
   });
 
   const getUser = useCallback((userId) => {
+    if (!userId) return null;
     const found = users.find((u) => u.id === userId);
     if (found) return found;
-    const mock = mockUsers.find((u) => u.id === userId);
-    if (mock) return mock;
     const fromItems = items.find(i => i.sellerId === userId);
     if (fromItems?.seller_name) {
       return {
@@ -250,7 +303,9 @@ export function AppProvider({ children }) {
         location: fromItems.location || { lat: 40.7128, lng: -74.006, address: '' },
       };
     }
-    return currentUser;
+    // Previously this fell back to the demo account, so every unknown id
+    // rendered as the same placeholder name. Fall back to the id instead.
+    return { id: userId, name: 'Unknown user', avatar: null, verified: false };
   }, [users, items]);
 
   const addNotification = useCallback((notification) => {
@@ -451,7 +506,18 @@ export function AppProvider({ children }) {
           : conv
       )
     );
+
+    return newMessage.id;
   }, [currentUserId]);
+
+  // Used to roll back an optimistic bubble when persisting the message fails.
+  const removeMessage = useCallback((conversationId, messageId) => {
+    setMessages((prev) => {
+      const list = prev[conversationId];
+      if (!Array.isArray(list)) return prev;
+      return { ...prev, [conversationId]: list.filter((m) => m.id !== messageId) };
+    });
+  }, []);
 
   const markConversationRead = useCallback((conversationId) => {
     setConversations((prev) =>
@@ -651,6 +717,7 @@ export function AppProvider({ children }) {
     conversations,
     messages,
     sendMessage,
+    removeMessage,
     hydrateMessages,
     addConversation,
     markConversationRead,

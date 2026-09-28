@@ -311,7 +311,10 @@ export default function Signup({ onSwitchToLogin, onClose }) {
               onChange={handleChange}
             />
             <span className="checkbox-custom"></span>
-            I agree to the <a href="#">Terms of Service</a> and <a href="#">Privacy Policy</a>
+            I agree to the{' '}
+            <a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
+            {' '}and{' '}
+            <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
           </label>
           {validationErrors.acceptTerms && (
             <span className="field-error terms-error">{validationErrors.acceptTerms}</span>

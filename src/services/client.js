@@ -228,6 +228,11 @@ export const api = {
     resolve: (id, action) => request(`/reports/${id}/resolve`, { method: 'PUT', body: JSON.stringify({ action }) }),
   },
 
+  support: {
+    create: (data) => request('/reports/support', { method: 'POST', body: JSON.stringify(data) }),
+    list: () => request('/reports/support'),
+  },
+
   offers: {
     create: (data) => request('/offers', { method: 'POST', body: JSON.stringify(data) }),
     incoming: () => request('/offers/incoming'),

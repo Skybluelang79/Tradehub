@@ -44,6 +44,7 @@ const XIcon = ({ size = 16 }) => (
 import {
   connectSocket,
   disconnectSocket,
+  getSocket,
   joinConversation,
   leaveConversation,
   sendMessage as socketSendMessage,
@@ -192,6 +193,7 @@ export default function Chat() {
     setSelectedConversation,
     setActiveTab,
     sendMessage,
+    removeMessage,
     hydrateMessages,
     markConversationRead,
     getUser,
@@ -508,6 +510,19 @@ export default function Chat() {
       const hasFiles = pendingAttachments.length > 0;
       if ((!hasText && !hasFiles) || uploading) return;
 
+      // Saves the message server-side when there is no live socket, and drops
+      // the optimistic copy again if the write fails so the bubble does not
+      // linger as if it had been delivered.
+      let localMessageId = null;
+      const persistViaRest = async (payload) => {
+        try {
+          await api.chat.send(selectedConversation, payload.text, payload);
+        } catch (err) {
+          if (localMessageId) removeMessage(selectedConversation, localMessageId);
+          addToast(err?.message || 'Message could not be sent', 'error');
+        }
+      };
+
       let uploaded = [];
       if (hasFiles) {
         setUploading(true);
@@ -548,18 +563,41 @@ export default function Chat() {
         }
       }
 
+      // Persist through exactly one transport. The socket handler on the server
+      // also inserts the message, so using both would write it twice. When no
+      // socket is connected (which is the case on the current Netlify deploy,
+      // where Socket.IO is disabled) the REST endpoint is the only path, so
+      // without this fallback sent messages vanished on reload.
+      const liveSocket = getSocket();
+      const canUseSocket = !!liveSocket?.connected;
+
       if (encMeta) {
-        sendMessage(selectedConversation, plaintext, encMeta, sendOptions);
-        socketSendMessage(selectedConversation, plaintext, {
-          type,
-          encrypted: true,
-          ciphertext: encMeta.ciphertext,
-          iv: encMeta.iv,
-          attachments: uploaded,
-        });
+        localMessageId = sendMessage(selectedConversation, plaintext, encMeta, sendOptions);
+        if (canUseSocket) {
+          socketSendMessage(selectedConversation, plaintext, {
+            type,
+            encrypted: true,
+            ciphertext: encMeta.ciphertext,
+            iv: encMeta.iv,
+            attachments: uploaded,
+          });
+        } else {
+          await persistViaRest({
+            text: plaintext,
+            type,
+            encrypted: true,
+            ciphertext: encMeta.ciphertext,
+            iv: encMeta.iv,
+            attachments: uploaded,
+          });
+        }
       } else {
-        sendMessage(selectedConversation, hasText ? plaintext : '', null, sendOptions);
-        socketSendMessage(selectedConversation, hasText ? plaintext : '', sendOptions);
+        localMessageId = sendMessage(selectedConversation, hasText ? plaintext : '', null, sendOptions);
+        if (canUseSocket) {
+          socketSendMessage(selectedConversation, hasText ? plaintext : '', sendOptions);
+        } else {
+          await persistViaRest({ text: hasText ? plaintext : '', ...sendOptions });
+        }
       }
 
       pendingAttachments.forEach((a) => {
@@ -895,7 +933,11 @@ export default function Chat() {
                         <span className="conv-time">{formatDate(conv.lastMessageTime)}</span>
                       </div>
                       <div className="conv-preview">
-                        <span className="conv-message">{item ? `${item.title}: ` : ''}{conv.lastMessage || 'No messages yet'}</span>
+                        <span className="conv-message">
+                          {conv.lastMessage
+                            ? `${item ? `${item.title}: ` : ''}${conv.lastMessage}`
+                            : 'Start the conversation'}
+                        </span>
                         {conv.unreadCount > 0 && <span className="unread-badge">{conv.unreadCount}</span>}
                       </div>
                     </div>

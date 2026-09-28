@@ -639,6 +639,20 @@ function applySchema() {
       duration_seconds INTEGER DEFAULT 0
     );
 
+    CREATE TABLE IF NOT EXISTS support_tickets (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      category TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      message TEXT NOT NULL,
+      contact_email TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id);
+
   `);
 
   db.exec(`

@@ -715,10 +715,16 @@
 }
 
 .help-item {
+  display: block;
+  width: 100%;
   padding: 16px;
+  border: none;
   border-bottom: 1px solid var(--border);
+  background: none;
   color: var(--text-primary);
+  font-family: inherit;
   font-size: 14px;
+  text-align: left;
   cursor: pointer;
   transition: background 0.2s ease;
 }

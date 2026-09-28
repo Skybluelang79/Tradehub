@@ -18,6 +18,7 @@ import { formatDate, formatPrice } from '../utils/helpers';
 import { categories } from '../services/api';
 import AddListing from './AddListing';
 import Offers from './Offers';
+import { navigateToLegalPath } from './legal/legalRoutes';
 import SellerVerification from '../components/verification/SellerVerification';
 import Referrals from '../components/profile/Referrals';
 import '../styles/globals.css';
@@ -104,6 +105,10 @@ export default function Profile() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const openLegalPage = useCallback((path) => {
+    setShowHelpModal(false);
+    navigateToLegalPath(path);
+  }, []);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(null);
   const [editItemId, setEditItemId] = useState(null);
@@ -1440,11 +1445,11 @@ export default function Profile() {
 
       <Modal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} title="Help & Support">
         <div className="help-options">
-          <div className="help-item">FAQ</div>
-          <div className="help-item">Contact Us</div>
-          <div className="help-item">Report a Problem</div>
-          <div className="help-item">Terms of Service</div>
-          <div className="help-item">Privacy Policy</div>
+          <button type="button" className="help-item" onClick={() => openLegalPage('/faq')}>FAQ</button>
+          <button type="button" className="help-item" onClick={() => openLegalPage('/contact')}>Contact Us</button>
+          <button type="button" className="help-item" onClick={() => openLegalPage('/report')}>Report a Problem</button>
+          <button type="button" className="help-item" onClick={() => openLegalPage('/terms')}>Terms of Service</button>
+          <button type="button" className="help-item" onClick={() => openLegalPage('/privacy')}>Privacy Policy</button>
         </div>
       </Modal>
 
