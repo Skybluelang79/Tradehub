@@ -13,7 +13,7 @@ const defaultSettings = {
   siteUrl: 'https://tradehub.app',
   supportEmail: 'support@tradehub.app',
   maintenanceMode: false,
-  currency: 'USD',
+  currency: 'NGN',
   termsUrl: '',
   privacyUrl: '',
   aboutText: '',

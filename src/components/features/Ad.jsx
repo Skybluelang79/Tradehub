@@ -28,7 +28,7 @@ function useAdNavigation() {
         const res = await api.referrals.code();
         if (res && res.code) {
           url = `https://tradehub-app-928.netlify.app/?ref=${res.code}`;
-          text = `Join me on TradeHub and we both get $10 credit! Use my code: ${res.code}`;
+          text = `Join me on TradeHub and we both get ₦10,000 credit! Use my code: ${res.code}`;
         }
       } catch {}
     }

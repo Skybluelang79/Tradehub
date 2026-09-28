@@ -1,38 +1,39 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { formatPrice } from '../../utils/helpers';
 import './PremiumSeller.css';
 
 const premiumSellers = [
   {
-    id: 1, name: 'Sarah Chen',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
-    tagline: 'Vintage fashion specialist',
-    rating: 4.9, reviews: 142, sales: 387, verified: true,
-    badge: 'Top Seller', badgeColor: '#E94560', responseTime: '< 1h',
+    id: 1, name: 'Alex Olajide',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=AlexOlajide',
+    tagline: 'Celebrity-style bags & shoes',
+    rating: 4.9, reviews: 186, sales: 412, verified: true,
+    badge: 'Elite Seller', badgeColor: '#E94560', responseTime: '< 15m',
     items: [
-      { title: 'Designer Leather Bag', price: 280, img: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=300&q=80' },
-      { title: 'Vintage Silk Scarf', price: 65, img: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc64?w=300&q=80' },
+      { title: 'Celebrity-Style Leather Bag', price: 285000, img: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=300&q=80' },
+      { title: 'Luxury Sneaker Pair', price: 195000, img: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=300&q=80' },
     ],
   },
   {
-    id: 2, name: 'Mike Johnson',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Mike',
+    id: 2, name: 'Adaeze Okafor',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=AdaezeOkafor',
+    tagline: 'Luxury fashion curator',
+    rating: 4.9, reviews: 142, sales: 367, verified: true,
+    badge: 'Top Seller', badgeColor: '#A78BFA', responseTime: '< 30m',
+    items: [
+      { title: 'Vintage Structured Handbag', price: 145000, img: 'https://images.unsplash.com/photo-1584917865442-de89df76afd3?w=300&q=80' },
+      { title: 'Italian Silk Scarf', price: 48000, img: 'https://images.unsplash.com/photo-1601924994987-69e26d50dc64?w=300&q=80' },
+    ],
+  },
+  {
+    id: 3, name: 'Ibrahim Musa',
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=IbrahimMusa',
     tagline: 'Certified electronics reseller',
     rating: 4.8, reviews: 203, sales: 512, verified: true,
-    badge: 'Power Seller', badgeColor: '#007AFF', responseTime: '< 30m',
+    badge: 'Power Seller', badgeColor: '#4ADE80', responseTime: '< 1h',
     items: [
-      { title: 'MacBook Pro M3', price: 1650, img: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=300&q=80' },
-      { title: 'AirPods Pro 2', price: 180, img: 'https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?w=300&q=80' },
-    ],
-  },
-  {
-    id: 3, name: 'Lisa Park',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Lisa',
-    tagline: 'Home & lifestyle curator',
-    rating: 4.9, reviews: 98, sales: 245, verified: true,
-    badge: 'Rising Star', badgeColor: '#4ADE80', responseTime: '< 2h',
-    items: [
-      { title: 'Mid-Century Lamp', price: 120, img: 'https://images.unsplash.com/photo-1507473885765-e6ed057ab6fe?w=300&q=80' },
-      { title: 'Ceramic Vase Set', price: 45, img: 'https://images.unsplash.com/photo-1612196808214-b7e239e5bb6a?w=300&q=80' },
+      { title: 'iPhone 15 Pro Max', price: 1250000, img: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=300&q=80' },
+      { title: 'AirPods Pro 2', price: 285000, img: 'https://images.unsplash.com/photo-1606220588913-b3aacb4d2f46?w=300&q=80' },
     ],
   },
 ];
@@ -60,7 +61,7 @@ const plans = [
   {
     id: 'premium',
     name: 'Premium',
-    price: 9.99,
+    price: 2500,
     period: '/mo',
     color: '#FBBF24',
     features: ['Unlimited listings', '2% transaction fee', 'Priority search ranking', 'Premium badge', '2 free boosts/mo', 'Analytics dashboard'],
@@ -71,7 +72,7 @@ const plans = [
   {
     id: 'pro',
     name: 'Pro',
-    price: 24.99,
+    price: 6000,
     period: '/mo',
     color: '#A78BFA',
     features: ['Everything in Premium', '1.5% transaction fee', 'Featured on homepage', 'API access', 'Priority support', 'Custom storefront'],
@@ -105,7 +106,7 @@ export default function PremiumSeller() {
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('premium');
   const [monthlySales, setMonthlySales] = useState(20);
-  const [avgPrice, setAvgPrice] = useState(75);
+  const [avgPrice, setAvgPrice] = useState(45000);
   const [upgradeStep, setUpgradeStep] = useState(0);
   const [particles, setParticles] = useState([]);
   const particleTimerRef = useRef(null);
@@ -206,7 +207,7 @@ export default function PremiumSeller() {
                   <img src={item.img} alt={item.title} />
                   <div className="premium-mini-item-info">
                     <span className="premium-mini-item-title">{item.title}</span>
-                    <span className="premium-mini-item-price">${item.price}</span>
+                    <span className="premium-mini-item-price">{formatPrice(item.price)}</span>
                   </div>
                 </div>
               ))}
@@ -268,30 +269,30 @@ export default function PremiumSeller() {
                   </div>
                 </div>
                 <div className="premium-calc-field">
-                  <label>Avg. Price ($)</label>
+                  <label>Avg. Price (₦)</label>
                   <div className="premium-calc-slider-row">
-                    <input type="range" min="10" max="500" step="5" value={avgPrice}
+                    <input type="range" min="5000" max="500000" step="5000" value={avgPrice}
                       onChange={(e) => setAvgPrice(Number(e.target.value))} className="premium-slider" />
-                    <span className="premium-calc-val">${avgPrice}</span>
+                    <span className="premium-calc-val">{formatPrice(avgPrice)}</span>
                   </div>
                 </div>
               </div>
               <div className="premium-calc-results">
                 <div className="premium-calc-result">
                   <span className="premium-calc-result-label">Revenue</span>
-                  <span className="premium-calc-result-value">${monthlyRevenue.toLocaleString()}</span>
+                  <span className="premium-calc-result-value">{formatPrice(monthlyRevenue)}</span>
                 </div>
                 <div className="premium-calc-result free">
                   <span className="premium-calc-result-label">Free fees (3%)</span>
-                  <span className="premium-calc-result-value">-${freeFee.toFixed(0)}</span>
+                  <span className="premium-calc-result-value">-{formatPrice(freeFee)}</span>
                 </div>
                 <div className="premium-calc-result premium">
                   <span className="premium-calc-result-label">Premium fees (2%)</span>
-                  <span className="premium-calc-result-value">-${premiumFee.toFixed(0)}</span>
+                  <span className="premium-calc-result-value">-{formatPrice(premiumFee)}</span>
                 </div>
                 <div className="premium-calc-result savings">
                   <span className="premium-calc-result-label">You save</span>
-                  <span className="premium-calc-result-value">${premiumSavings}/mo</span>
+                  <span className="premium-calc-result-value">{formatPrice(premiumSavings)}/mo</span>
                 </div>
               </div>
             </div>
@@ -308,7 +309,7 @@ export default function PremiumSeller() {
                     <h5 className="premium-plan-name">{plan.name}</h5>
                     <div className="premium-plan-price">
                       {plan.price === 0 ? 'Free' : <>
-                        <span className="premium-plan-amount">${plan.price}</span>
+                        <span className="premium-plan-amount">{formatPrice(plan.price)}</span>
                         <span className="premium-plan-period">{plan.period}</span>
                       </>}
                     </div>
@@ -354,7 +355,7 @@ export default function PremiumSeller() {
                       <p>Start your free 3-month trial. No charge until trial ends.</p>
                       <div className="premium-modal-plan-summary">
                         <span>{plans.find(p => p.id === selectedPlan)?.name} Plan</span>
-                        <strong>${plans.find(p => p.id === selectedPlan)?.price}/mo</strong>
+                        <strong>{formatPrice(plans.find(p => p.id === selectedPlan)?.price || 0)}/mo</strong>
                       </div>
                       <button className="premium-modal-confirm" onClick={handleConfirmUpgrade}
                         style={{ background: plans.find(p => p.id === selectedPlan)?.color }}>

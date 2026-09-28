@@ -129,7 +129,7 @@ export default function Profile() {
     distanceUnit: 'km',
     language: 'English',
     profileVisibility: 'public',
-    currency: 'USD',
+    currency: 'NGN',
   });
 
   const SETTINGS_TABS = [
@@ -198,7 +198,7 @@ export default function Profile() {
         distanceUnit: s.distance_unit || 'km',
         language: s.language || 'English',
         profileVisibility: s.profile_visibility || 'public',
-        currency: s.currency || 'USD',
+        currency: s.currency || 'NGN',
       });
       setNotifPrefs({
         messages: !!s.notif_messages,

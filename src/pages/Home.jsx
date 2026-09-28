@@ -205,7 +205,7 @@ export default function Home() {
               className={`ai-search-btn ${searchInput ? 'enabled' : ''}`}
               onClick={handleAiSearch}
               disabled={aiSearching}
-              title="AI search — understands phrases like 'PS5 under $400'"
+              title="AI search — understands phrases like 'PS5 under ₦400,000'"
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2l1.9 5.6L19.5 9l-5.6 1.9L12 16.5l-1.9-5.6L4.5 9l5.6-1.4L12 2zM19 14l.9 2.6L22.5 17.5l-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9L19 14zm-9 3l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" />
@@ -270,7 +270,7 @@ export default function Home() {
                 <input
                   type="number"
                   className="filter-price-input"
-                  placeholder="Min $"
+                  placeholder="Min ₦"
                   min="0"
                   value={filters.minPrice}
                   onChange={(e) => handleFilterClick('minPrice', e.target.value)}
@@ -279,7 +279,7 @@ export default function Home() {
                 <input
                   type="number"
                   className="filter-price-input"
-                  placeholder="Max $"
+                  placeholder="Max ₦"
                   min="0"
                   value={filters.maxPrice}
                   onChange={(e) => handleFilterClick('maxPrice', e.target.value)}

@@ -5,8 +5,8 @@ export const formatDistance = (km) => {
   return `${km.toFixed(1)}km`;
 };
 
-export const formatPrice = (amount, currency = 'USD') => {
-  return new Intl.NumberFormat('en-US', {
+export const formatPrice = (amount, currency = 'NGN') => {
+  return new Intl.NumberFormat('en-NG', {
     style: 'currency',
     currency,
     minimumFractionDigits: 0,

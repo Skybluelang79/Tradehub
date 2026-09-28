@@ -19,8 +19,8 @@ describe('formatDistance', () => {
 });
 
 describe('formatPrice', () => {
-  it('formats whole-dollar amounts', () => {
-    expect(formatPrice(25)).toBe('$25');
+  it('formats Nigerian naira by default', () => {
+    expect(formatPrice(25000)).toBe('₦25,000');
   });
 
   it('supports other currencies', () => {
