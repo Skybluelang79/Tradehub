@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react';
-import { mockItems, mockTransactions, mockReviews, mockPaymentMethods, currentUser } from '../services/api';
+import { mockTransactions, mockReviews, mockPaymentMethods, currentUser } from '../services/api';
 import { storage, geolocation } from '../services/storage';
 import { generateId } from '../utils/helpers';
 import { api } from '../services/client';
@@ -35,7 +35,10 @@ export function AppProvider({ children }) {
   const currentUserId = authUser?.id || null;
 
   const [activeTab, setActiveTab] = useState('home');
-  const [items, setItems] = useState(() => storage.get('items', mockItems));
+  // Listings live in the database, so start empty and let the API fill this in.
+// Seeding from a cached fixture made deleted listings reappear forever: an
+// empty API response looked like "no update" instead of "nothing for sale".
+const [items, setItems] = useState([]);
   // Conversations, messages and users are seeded empty rather than from the
   // mock fixtures. The fixtures describe a single demo account, so seeding them
   // made every real conversation render under the same placeholder name.
@@ -67,9 +70,12 @@ export function AppProvider({ children }) {
     condition: 'all',
   });
 
+  // Listings are no longer cached: the API is the only source, so nothing reads
+  // this key. Clear it once for browsers still holding fixtures from earlier
+  // builds, and stop writing it.
   useEffect(() => {
-    storage.set('items', items);
-  }, [items]);
+    storage.remove('items');
+  }, []);
 
   useEffect(() => {
     storage.set('conversations', conversations);
@@ -141,8 +147,7 @@ export function AppProvider({ children }) {
     const fetchItems = async () => {
       try {
         const data = await api.items.list({ limit: 100 });
-        if (data.items && data.items.length > 0) {
-          const normalized = data.items.map(item => ({
+        const normalized = (data.items || []).map(item => ({
             ...item,
             sellerId: item.seller_id,
             location: {
@@ -162,11 +167,10 @@ export function AppProvider({ children }) {
             auctionStatus: item.auction_status,
             currentBid: item.current_bid,
             currentBidderId: item.current_bidder_id,
-          }));
-          setItems(normalized);
-        }
+        }));
+        setItems(normalized);
       } catch (err) {
-        console.log('Using mock items (backend not available)');
+        console.log('Could not load listings:', err?.message);
       }
     };
     fetchItems();
