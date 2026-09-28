@@ -35,6 +35,26 @@ const upload = multer({
   },
 });
 
+const IMAGE_TYPES = ['jpeg', 'jpg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+const DOC_TYPES = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'rtf', 'ppt', 'pptx', 'odt'];
+const ARCHIVE_TYPES = ['zip', 'rar', '7z', 'tar', 'gz'];
+const AUDIO_TYPES = ['mp3', 'm4a', 'wav', 'ogg', 'aac', 'opus', 'webm'];
+const VIDEO_TYPES = ['mp4', 'mov', 'avi', 'mkv', 'webm'];
+
+const chatAttachment = multer({
+  storage,
+  limits: { fileSize: 20 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const ext = extname(file.originalname).toLowerCase().replace('.', '');
+    const allowed = [...IMAGE_TYPES, ...DOC_TYPES, ...ARCHIVE_TYPES, ...AUDIO_TYPES, ...VIDEO_TYPES];
+    if (allowed.includes(ext) || file.mimetype.startsWith('image/') || file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('File type not supported for chat attachments'));
+    }
+  },
+});
+
 const router = Router();
 
 async function saveBlobFile(buffer, ext) {
@@ -43,6 +63,28 @@ async function saveBlobFile(buffer, ext) {
   const filename = `${uuidv4()}${ext}`;
   await store.set(`uploads/${filename}`, buffer);
   return filename;
+}
+
+async function storeSingle(file) {
+  if (USE_FIREBASE_STORAGE) {
+    const ext = extname(file.originalname);
+    const path = `tradehub/uploads/${uuidv4()}${ext}`;
+    const url = await uploadToFirebaseStorage(file.buffer, path, file.mimetype);
+    return { url, filename: file.originalname };
+  }
+  if (USE_BLOB) {
+    const filename = await saveBlobFile(file.buffer, extname(file.originalname));
+    return { url: `/uploads/${filename}`, filename: file.originalname };
+  }
+  return { url: `/uploads/${file.filename}`, filename: file.originalname };
+}
+
+function attachmentKind(file) {
+  const mime = file.mimetype || '';
+  if (mime.startsWith('image/')) return 'image';
+  if (mime.startsWith('video/')) return 'video';
+  if (mime.startsWith('audio/')) return 'audio';
+  return 'document';
 }
 
 router.post('/', authenticateToken, uploadLimiter, upload.array('images', 6), async (req, res) => {
@@ -71,25 +113,30 @@ router.post('/', authenticateToken, uploadLimiter, upload.array('images', 6), as
 router.post('/single', authenticateToken, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    if (USE_FIREBASE_STORAGE) {
-      const ext = extname(req.file.originalname);
-      const path = `tradehub/uploads/${uuidv4()}${ext}`;
-      const url = await uploadToFirebaseStorage(req.file.buffer, path, req.file.mimetype);
-      return res.json({ file: { url, filename: path } });
-    }
-    if (USE_BLOB) {
-      const filename = await saveBlobFile(req.file.buffer, extname(req.file.originalname));
-      return res.json({ file: { url: `/uploads/${filename}`, filename } });
-    }
-    res.json({
-      file: {
-        url: `/uploads/${req.file.filename}`,
-        filename: req.file.filename,
-      }
-    });
+    const stored = await storeSingle(req.file);
+    res.json({ file: stored });
   } catch (err) {
     console.error('Upload error:', err);
     res.status(500).json({ error: 'Upload failed' });
+  }
+});
+
+router.post('/attachment', authenticateToken, uploadLimiter, chatAttachment.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const stored = await storeSingle(req.file);
+    res.json({
+      file: {
+        url: stored.url,
+        filename: stored.filename || 'file',
+        kind: attachmentKind(req.file),
+        mime: req.file.mimetype || extname(req.file.originalname).replace('.', ''),
+        size: req.file.size,
+      }
+    });
+  } catch (err) {
+    console.error('Attachment upload error:', err);
+    res.status(500).json({ error: err.message || 'Upload failed' });
   }
 });
 

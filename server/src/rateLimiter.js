@@ -66,3 +66,12 @@ export const uploadLimiter = RATE_LIMIT_ENABLED
       message: { error: 'Upload limit reached. Try again later.' },
     })
   : passThrough();
+
+export const chatSearchLimiter = RATE_LIMIT_ENABLED
+  ? rateLimit({
+      ...base,
+      windowMs: 60 * 1000,
+      max: 30,
+      message: { error: 'Search too frequently. Try again in a minute.' },
+    })
+  : passThrough();

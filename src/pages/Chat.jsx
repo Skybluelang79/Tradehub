@@ -4,10 +4,43 @@ import { Avatar } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import { ArrowLeftIcon, SendIcon, ShieldIcon } from '../components/ui/Icons';
 import EncryptionBadge from '../components/features/EncryptionBadge';
+import EmojiPicker from '../components/ui/EmojiPicker';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useEncryption } from '../context/EncryptionContext';
-import { getToken } from '../services/client';
+import api, { getToken } from '../services/client';
+import { onCallState as watchCallState, initiateCall } from '../services/webrtc';
+import CallOverlay from '../components/window/CallOverlay';
+
+// Local inline icons (self-contained; avoids dependence on the ui/Icons surface)
+const SmileIcon = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="10" />
+    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+    <line x1="9" y1="9" x2="9.01" y2="9" />
+    <line x1="15" y1="9" x2="15.01" y2="9" />
+  </svg>
+);
+
+const FileIcon = ({ size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+    <polyline points="14 2 14 8 20 8" />
+  </svg>
+);
+
+const PaperclipIcon = ({ size = 22 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+  </svg>
+);
+
+const XIcon = ({ size = 16 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
 import {
   connectSocket,
   disconnectSocket,
@@ -36,6 +69,121 @@ function formatDayLabel(date) {
   return formatDate(date);
 }
 
+const MAX_ATTACHMENTS = 6;
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const ALLOWED_EXT = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'zip', 'rar', '7z', 'mp3', 'm4a', 'wav', 'ogg', 'mp4', 'mov', 'webm'];
+
+function formatBytes(bytes) {
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function DownloadIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function AudioIcon({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 18V5l12-2v13" />
+      <circle cx="6" cy="18" r="3" />
+      <circle cx="18" cy="16" r="3" />
+    </svg>
+  );
+}
+
+function AttachmentView({ att }) {
+  const [open, setOpen] = useState(false);
+  const kind = att.kind || 'document';
+  const isImg = kind === 'image' || /\.(jpe?g|png|gif|webp)$/i.test(att.filename || '');
+  const isVideo = kind === 'video' || /\.(mp4|mov|webm)$/i.test(att.filename || '');
+  const isAudio = kind === 'audio' || /\.(mp3|m4a|wav|ogg|opus)$/i.test(att.filename || '');
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  if (isImg) {
+    return (
+      <>
+        <button type="button" className="att-image" onClick={() => setOpen(true)} aria-label={`View ${att.filename}`}>
+          <img src={att.url} alt={att.filename || 'Attachment'} loading="lazy" />
+        </button>
+        {open && (
+          <div className="att-lightbox" onClick={() => setOpen(false)} role="dialog" aria-modal="true">
+            <button type="button" className="att-lightbox-close" onClick={() => setOpen(false)} aria-label="Close">
+              <XIcon size={20} />
+            </button>
+            <img src={att.url} alt={att.filename || 'Attachment'} onClick={(e) => e.stopPropagation()} />
+            <div className="att-lightbox-meta" onClick={(e) => e.stopPropagation()}>
+              {att.filename} · {formatBytes(att.size)}
+            </div>
+          </div>
+        )}
+      </>
+    );
+  }
+
+  if (isVideo) {
+    return (
+      <div className="att-video-wrap">
+        <video src={att.url} controls preload="metadata" />
+      </div>
+    );
+  }
+
+  if (isAudio) {
+    return (
+      <div className="att-audio">
+        <span className="att-audio-icon"><AudioIcon size={18} /></span>
+        <div className="att-audio-body">
+          <div className="att-audio-name">{att.filename || 'Voice note'}</div>
+          <audio src={att.url} controls preload="metadata" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <a className="att-file" href={att.url} download={att.filename || true} target="_blank" rel="noreferrer">
+      <span className="att-file-icon"><FileIcon size={20} /></span>
+      <span className="att-file-body">
+        <span className="att-file-name">{att.filename || 'Attachment'}</span>
+        <span className="att-file-size">{formatBytes(att.size)}</span>
+      </span>
+      <span className="att-file-dl"><DownloadIcon size={16} /></span>
+    </a>
+  );
+}
+
+function mapServerMessage(m) {
+  return {
+    id: m.id,
+    senderId: m.sender_id,
+    text: m.text,
+    type: m.type || 'text',
+    time: m.created_at || m.time,
+    read: !!m.read,
+    delivered: !!m.delivered,
+    encrypted: !!m.encrypted,
+    ciphertext: m.ciphertext,
+    iv: m.iv,
+    attachments: m.attachments || [],
+    replyTo: m.reply_to || null,
+  };
+}
+
 export default function Chat() {
   const {
     conversations,
@@ -44,6 +192,7 @@ export default function Chat() {
     setSelectedConversation,
     setActiveTab,
     sendMessage,
+    hydrateMessages,
     markConversationRead,
     getUser,
     items,
@@ -73,6 +222,96 @@ export default function Chat() {
   const typingTimeoutRef = useRef(null);
   const isTypingRef = useRef(false);
   const prevConvRef = useRef(null);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [activeCallId, setActiveCallId] = useState(null);
+  const [activeCallInitiator, setActiveCallInitiator] = useState(false);
+  const [activeCallConversation, setActiveCallConversation] = useState(null);
+
+  const handleCallStart = async () => {
+    if (!selectedConversation) return;
+    try {
+      const { callId } = await initiateCall(selectedConversation, { audio: true, video: false, kind: 'audio' });
+      setActiveCallId(callId);
+      setActiveCallInitiator(true);
+      setActiveCallConversation(selectedConversation);
+      setCallOpen(true);
+    } catch (err) {
+      console.error('Failed to start call', err);
+    }
+  };
+
+  useEffect(() => {
+    const off = watchCallState((evt) => {
+      if (!evt || typeof evt.type !== 'string') return;
+      const isIncoming = /incoming|offer|request/i.test(evt.type) && !/dial|outgoing|local/i.test(evt.type);
+      if (isIncoming) {
+        if (evt.callId) setActiveCallId(evt.callId);
+        setCallOpen(true);
+      } else if (/end|close|reject|canceled|cancel|error/i.test(evt.type)) {
+        setCallOpen(false);
+      }
+    });
+    return off;
+  }, []);
+
+  const handleEmojiPick = useCallback((emoji) => {
+    setInputText((prev) => prev + emoji);
+    setEmojiPickerOpen(false);
+    inputRef.current?.focus();
+  }, []);
+
+  const fileInputRef = useRef(null);
+  const [pendingAttachments, setPendingAttachments] = useState([]);
+
+  const handleFilesPick = useCallback((e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const accepted = [];
+    let rejected = 0;
+    for (const file of files) {
+      const ext = (file.name.split('.').pop() || '').toLowerCase();
+      if (file.size > MAX_ATTACHMENT_BYTES) { rejected++; continue; }
+      if (!file.type.startsWith('image/') && !file.type.startsWith('audio/') && !ALLOWED_EXT.includes(ext)) {
+        rejected++;
+        continue;
+      }
+      accepted.push({
+        id: `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: file.name,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        isImage: (file.type || '').startsWith('image/'),
+        isAudio: (file.type || '').startsWith('audio/'),
+        preview: URL.createObjectURL(file),
+        file,
+      });
+    }
+    if (rejected > 0) addToast(`${rejected} file(s) skipped — max 20MB, unsupported type`, 'error');
+    if (accepted.length > 0) {
+      setPendingAttachments((prev) => {
+        const room = MAX_ATTACHMENTS - prev.length;
+        if (room <= 0) return prev;
+        if (accepted.length > room) addToast(`Only ${MAX_ATTACHMENTS} files per message`, 'error');
+        return [...prev, ...accepted.slice(0, room)];
+      });
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [addToast]);
+
+  const removePendingAttachment = useCallback((idx) => {
+    setPendingAttachments((prev) => {
+      const next = [...prev];
+      const removed = next.splice(idx, 1);
+      removed.forEach((a) => {
+        if (a.preview) URL.revokeObjectURL(a.preview);
+      });
+      return next;
+    });
+  }, []);
+
 
   const currentUserId = user?.id;
 
@@ -122,16 +361,7 @@ export default function Chat() {
       window.dispatchEvent(new CustomEvent('app_add_message', {
         detail: {
           conversationId: message.conversation_id,
-          message: {
-            id: message.id,
-            senderId: message.sender_id,
-            text: message.text,
-            time: message.created_at || message.time,
-            read: !!message.read,
-            encrypted: !!message.encrypted,
-            ciphertext: message.ciphertext,
-            iv: message.iv,
-          },
+          message: mapServerMessage(message),
         },
       }));
     };
@@ -167,6 +397,24 @@ export default function Chat() {
       markRead(selectedConversation);
     }
   }, [selectedConversation, markConversationRead]);
+
+  // Load chat history from the server when a conversation is opened
+  useEffect(() => {
+    if (!selectedConversation || !isAuthenticated) return;
+    let cancelled = false;
+    setHistoryLoading(true);
+    api.chat.messages(selectedConversation)
+      .then((data) => {
+        if (cancelled) return;
+        const list = Array.isArray(data?.messages) ? data.messages : [];
+        hydrateMessages(selectedConversation, list.map(mapServerMessage));
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setHistoryLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedConversation, isAuthenticated, hydrateMessages]);
 
   // Encryption init
   useEffect(() => {
@@ -255,31 +503,76 @@ export default function Chat() {
     const otherTyping = typingUsers[otherUserId];
 
     const handleSend = async () => {
-      if (inputText.trim()) {
-        const plaintext = inputText.trim();
-        let encMeta = null;
-        if (isConversationEncrypted(selectedConversation)) {
-          try {
-            encMeta = await encrypt(selectedConversation, plaintext);
-          } catch (err) {
-            console.error('Encryption failed, sending plaintext:', err);
-          }
-        }
-        if (encMeta) {
-          sendMessage(selectedConversation, plaintext, encMeta);
-          socketSendMessage(selectedConversation, plaintext, true, encMeta.ciphertext, encMeta.iv);
-        } else {
-          sendMessage(selectedConversation, plaintext);
-          socketSendMessage(selectedConversation, plaintext);
-        }
-        setInputText('');
-        requestAnimationFrame(autoResizeInput);
+      const plaintext = inputText.trim();
+      const hasText = plaintext.length > 0;
+      const hasFiles = pendingAttachments.length > 0;
+      if ((!hasText && !hasFiles) || uploading) return;
 
-        if (isTypingRef.current) {
-          isTypingRef.current = false;
-          stopTyping(selectedConversation);
-          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      let uploaded = [];
+      if (hasFiles) {
+        setUploading(true);
+        const batch = [...pendingAttachments];
+        const results = await Promise.allSettled(
+          batch.map((a) => api.upload.chatAttachment(a.file))
+        );
+        const failed = [];
+        results.forEach((r, i) => {
+          const f = r.status === 'fulfilled' ? r.value?.file : null;
+          if (f && f.url) {
+            uploaded.push({
+              kind: f.kind || 'document',
+              url: f.url,
+              filename: f.filename || batch[i].name,
+              mime: f.mime || batch[i].type,
+              size: Number(f.size) || batch[i].size,
+            });
+          } else {
+            failed.push(batch[i].name);
+          }
+        });
+        setUploading(false);
+
+        if (failed.length > 0) addToast(`Could not upload: ${failed.join(', ')}`, 'error');
+        if (uploaded.length === 0) return;
+      }
+
+      const type = hasText ? 'text' : 'file';
+      const sendOptions = { type, attachments: uploaded };
+
+      let encMeta = null;
+      if (isConversationEncrypted(selectedConversation) && hasText) {
+        try {
+          encMeta = await encrypt(selectedConversation, plaintext);
+        } catch (err) {
+          console.error('Encryption failed, sending plaintext:', err);
         }
+      }
+
+      if (encMeta) {
+        sendMessage(selectedConversation, plaintext, encMeta, sendOptions);
+        socketSendMessage(selectedConversation, plaintext, {
+          type,
+          encrypted: true,
+          ciphertext: encMeta.ciphertext,
+          iv: encMeta.iv,
+          attachments: uploaded,
+        });
+      } else {
+        sendMessage(selectedConversation, hasText ? plaintext : '', null, sendOptions);
+        socketSendMessage(selectedConversation, hasText ? plaintext : '', sendOptions);
+      }
+
+      pendingAttachments.forEach((a) => {
+        if (a.preview && a.preview.startsWith('blob:')) URL.revokeObjectURL(a.preview);
+      });
+      setPendingAttachments([]);
+      setInputText('');
+      requestAnimationFrame(autoResizeInput);
+
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        stopTyping(selectedConversation);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
       }
     };
 
@@ -302,6 +595,11 @@ export default function Chat() {
             {item && <div className="chat-user-item">{item.title}</div>}
             {isOtherOnline && <span className="online-text">Online</span>}
           </div>
+          <button className="chat-call-btn" onClick={handleCallStart} aria-label="Start audio call">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" />
+            </svg>
+          </button>
         </div>
 
         {encInitializing && (
@@ -350,6 +648,11 @@ export default function Chat() {
         )}
 
         <div className="chat-messages" ref={chatScrollRef} onScroll={handleChatScroll}>
+          {historyLoading && convMessages.length === 0 && (
+            <div className="history-loading">
+              <span className="uploading-spinner" /> Loading messages…
+            </div>
+          )}
           {(() => {
             const items = [];
             let lastDate = null;
@@ -376,12 +679,19 @@ export default function Chat() {
               return (
                 <div key={msg.id} className={`message-row ${isSent ? 'sent' : 'received'} ${first ? 'first' : ''}`}>
                   <div
-                    className={`message-bubble ${isSent ? 'sent' : 'received'} ${first ? 'first' : ''}`}
-                    onClick={() => copyMessage(msg.text)}
-                    title="Click to copy"
+                    className={`message-bubble ${isSent ? 'sent' : 'received'} ${first ? 'first' : ''} ${msg.attachments?.length ? 'has-attachments' : ''}`}
+                    onClick={() => msg.text && copyMessage(msg.text)}
+                    title={msg.text ? 'Click to copy' : undefined}
                   >
                     {!isSent && first && <span className="message-sender">{otherUser?.name}</span>}
-                    <p className="message-text">{msg.text}</p>
+                    {msg.attachments?.length > 0 && (
+                      <div className="msg-attachments">
+                        {msg.attachments.map((att, ai) => (
+                          <AttachmentView key={att.id || `${att.url}-${ai}`} att={att} />
+                        ))}
+                      </div>
+                    )}
+                    {msg.text && <p className="message-text">{msg.text}</p>}
                     <span className="message-time">
                       {formatTime(msg.time)}
                       {isSent && (
@@ -410,27 +720,86 @@ export default function Chat() {
         </div>
 
         <div className="message-input-bar">
-          <textarea
-            ref={inputRef}
-            rows={1}
-            className="message-input"
-            placeholder="Type a message…"
-            value={inputText}
-            onChange={(e) => {
-              setInputText(e.target.value);
-              autoResizeInput();
-              handleTypingStart();
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
-          <button className="send-btn" onClick={handleSend} disabled={!inputText.trim()}>
-            <SendIcon size={20} />
-          </button>
+          <div className="input-bar-inner">
+            <button type="button" className="emoji-btn" onClick={() => setEmojiPickerOpen((o) => !o)} aria-label="Emoji" aria-expanded={emojiPickerOpen}>
+              <SmileIcon size={22} />
+            </button>
+            <button type="button" className="attach-btn" onClick={() => fileInputRef.current?.click()} aria-label="Attach file">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+              </svg>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="file-input-hidden"
+              onChange={handleFilesPick}
+            />
+            {pendingAttachments.length > 0 && (
+              <div className="pending-attachments">
+                {pendingAttachments.map((f, i) => (
+                  <div className="pending-attachment" key={`${f.name}-${i}`}>
+                    {f.isImage ? <img src={f.preview} alt={f.name} /> : f.isAudio ? <AudioIcon size={20} /> : <FileIcon size={20} />}
+                    <span className="pending-attachment-name">{f.name}</span>
+                    <span className="pending-attachment-size">{formatBytes(f.size)}</span>
+                    <button type="button" className="pending-attachment-remove" onClick={() => removePendingAttachment(i)} aria-label="Remove">
+                      XIcon size={16}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {uploading && (
+              <div className="uploading-bar">
+                <span className="uploading-spinner" /> Uploading files…
+              </div>
+            )}
+            <textarea
+              ref={inputRef}
+              rows={1}
+              className="message-input"
+              placeholder="Type a message…"
+              value={inputText}
+              onChange={(e) => {
+                setInputText(e.target.value);
+                autoResizeInput();
+                handleTypingStart();
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+            />
+            <button
+              className="send-btn"
+              onClick={handleSend}
+              disabled={uploading || (!inputText.trim() && pendingAttachments.length === 0)}
+            >
+              {uploading ? <span className="uploading-spinner light" /> : <SendIcon size={20} />}
+            </button>
+          </div>
+          {emojiPickerOpen && (
+            <div className="emoji-picker-wrap">
+              <EmojiPicker onSelect={handleEmojiPick} onClose={() => setEmojiPickerOpen(false)} />
+            </div>
+          )}
+          {callOpen && (
+            <CallOverlay
+              conversationId={activeCallConversation || selectedConversation}
+              callId={activeCallId}
+              otherUser={otherUser}
+              isInitiator={activeCallInitiator}
+              onClose={() => {
+                setCallOpen(false);
+                setActiveCallId(null);
+                setActiveCallConversation(null);
+                setActiveCallInitiator(false);
+              }}
+            />
+          )}
         </div>
       </div>
     );

@@ -6,18 +6,20 @@ import {
   decryptMessage,
   generateFingerprint,
 } from '../services/crypto';
+import { api } from '../services/client';
+import { useAuth } from './AuthContext';
 
 const EncryptionContext = createContext();
 
 const STORAGE_PREFIX = 'tradehub_enc_';
 
-function storeKeys(conversationId, keys) {
-  localStorage.setItem(`${STORAGE_PREFIX}${conversationId}`, JSON.stringify(keys));
+function storeKeys(userId, keys) {
+  localStorage.setItem(`${STORAGE_PREFIX}kp_${userId}`, JSON.stringify(keys));
 }
 
-function loadKeys(conversationId) {
+function loadKeys(userId) {
   try {
-    const raw = localStorage.getItem(`${STORAGE_PREFIX}${conversationId}`);
+    const raw = localStorage.getItem(`${STORAGE_PREFIX}kp_${userId}`);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -25,9 +27,10 @@ function loadKeys(conversationId) {
 }
 
 export function EncryptionProvider({ children }) {
-  const [keyPairs, setKeyPairs] = useState({});
+  const { user: authUser } = useAuth();
   const [sharedKeys, setSharedKeys] = useState({});
   const [fingerprints, setFingerprints] = useState({});
+  const [pendingConvs, setPendingConvs] = useState({});
   const [trustedKeys, setTrustedKeys] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem('tradehub_trusted_keys') || '{}');
@@ -41,29 +44,60 @@ export function EncryptionProvider({ children }) {
   }, [trustedKeys]);
 
   const getOrCreateKeyPair = useCallback(async (userId) => {
-    if (keyPairs[userId]) return keyPairs[userId];
-
-    const stored = loadKeys(`kp_${userId}`);
-    if (stored) {
-      setKeyPairs(prev => ({ ...prev, [userId]: stored }));
-      return stored;
-    }
+    const stored = loadKeys(userId);
+    if (stored) return stored;
 
     const kp = await generateKeyPair();
-    storeKeys(`kp_${userId}`, kp);
-    setKeyPairs(prev => ({ ...prev, [userId]: kp }));
+    storeKeys(userId, kp);
     return kp;
-  }, [keyPairs]);
+  }, []);
 
-  const initConversationEncryption = useCallback(async (conversationId, myUserId, otherUserId, myPrivateKey, otherPublicKey) => {
-    const key = await deriveSharedSecret(myPrivateKey, otherPublicKey);
-    const fingerprint = generateFingerprint(otherPublicKey);
+  const syncPublicKey = useCallback(async (userId) => {
+    if (!userId) return;
+    const kp = await getOrCreateKeyPair(userId);
+    try {
+      await api.chat.savePublicKey(kp.publicKey);
+    } catch (err) {
+      console.error('Failed to sync public key:', err);
+    }
+  }, [getOrCreateKeyPair]);
 
-    setSharedKeys(prev => ({ ...prev, [conversationId]: key }));
-    setFingerprints(prev => ({ ...prev, [conversationId]: fingerprint }));
+  const ensureIdentity = useCallback(async (userId) => {
+    const kp = await getOrCreateKeyPair(userId);
+    return kp;
+  }, [getOrCreateKeyPair]);
+
+  const hasIdentity = useCallback(
+    (userId) => !!loadKeys(userId),
+    []
+  );
+
+  // Push our own public key to the server whenever we are signed in.
+  useEffect(() => {
+    if (authUser?.id && authUser.id !== 'user-1') {
+      syncPublicKey(authUser.id);
+    }
+  }, [authUser?.id, syncPublicKey]);
+
+  const initConversationEncryption = useCallback(async (conversationId, peerPublicKey) => {
+    if (!peerPublicKey) {
+      setPendingConvs((prev) => ({ ...prev, [conversationId]: true }));
+      return null;
+    }
+
+    const myUserId = authUser?.id;
+    if (!myUserId) return null;
+
+    const myKp = await getOrCreateKeyPair(myUserId);
+    const key = await deriveSharedSecret(myKp.privateKey, peerPublicKey);
+    const fingerprint = generateFingerprint(peerPublicKey);
+
+    setSharedKeys((prev) => ({ ...prev, [conversationId]: key }));
+    setFingerprints((prev) => ({ ...prev, [conversationId]: fingerprint }));
+    setPendingConvs((prev) => ({ ...prev, [conversationId]: false }));
 
     return { key, fingerprint };
-  }, []);
+  }, [authUser?.id, getOrCreateKeyPair]);
 
   const encrypt = useCallback(async (conversationId, plaintext) => {
     const key = sharedKeys[conversationId];
@@ -81,12 +115,16 @@ export function EncryptionProvider({ children }) {
     return !!sharedKeys[conversationId];
   }, [sharedKeys]);
 
+  const isConversationPending = useCallback((conversationId) => {
+    return !!pendingConvs[conversationId];
+  }, [pendingConvs]);
+
   const getFingerprint = useCallback((conversationId) => {
     return fingerprints[conversationId] || null;
   }, [fingerprints]);
 
   const trustKey = useCallback((conversationId) => {
-    setTrustedKeys(prev => ({ ...prev, [conversationId]: true }));
+    setTrustedKeys((prev) => ({ ...prev, [conversationId]: true }));
   }, []);
 
   const isKeyTrusted = useCallback((conversationId) => {
@@ -94,11 +132,14 @@ export function EncryptionProvider({ children }) {
   }, [trustedKeys]);
 
   const value = {
-    getOrCreateKeyPair,
+    ensureIdentity,
+    syncPublicKey,
+    hasIdentity,
     initConversationEncryption,
     encrypt,
     decrypt,
     isConversationEncrypted,
+    isConversationPending,
     getFingerprint,
     trustKey,
     isKeyTrusted,

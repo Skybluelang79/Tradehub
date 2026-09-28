@@ -101,8 +101,28 @@ export const api = {
     conversations: () => request('/chat'),
     create: (itemId, sellerId) => request('/chat', { method: 'POST', body: JSON.stringify({ itemId, sellerId }) }),
     messages: (convId) => request(`/chat/${convId}/messages`),
-    send: (convId, text) => request(`/chat/${convId}/messages`, { method: 'POST', body: JSON.stringify({ text }) }),
+    send: (convId, text, options = {}) => request(`/chat/${convId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({
+        text,
+        type: options.type || 'text',
+        encrypted: !!options.encrypted,
+        ciphertext: options.ciphertext || null,
+        iv: options.iv || null,
+        attachments: options.attachments || [],
+        replyTo: options.replyTo || null,
+      }),
+    }),
     unreadCount: () => request('/chat/unread/count'),
+    search: (q) => request(`/chat/search?q=${encodeURIComponent(q)}`),
+    searchInConversation: (convId, q) => request(`/chat/${convId}/search?q=${encodeURIComponent(q)}`),
+    exportConversation: (convId) => request(`/chat/${convId}/export`),
+    conversationAttachments: (convId) => request(`/chat/${convId}/attachments`),
+    settings: (convId) => request(`/chat/${convId}/settings`),
+    updateSettings: (convId, data) => request(`/chat/${convId}/settings`, { method: 'PUT', body: JSON.stringify(data) }),
+    unsend: (convId, messageId) => request(`/chat/${convId}/unsend`, { method: 'POST', body: JSON.stringify({ messageId }) }),
+    savePublicKey: (publicKey) => request('/chat/public-key', { method: 'PUT', body: JSON.stringify({ publicKey }) }),
+    peerPublicKey: (convId) => request(`/chat/${convId}/peer-public-key`),
   },
 
   payments: {
@@ -306,6 +326,24 @@ restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.st
         headers: { Authorization: `Bearer ${authToken}` },
         body: formData,
       }).then(r => r.json());
+    },
+    chatAttachment: async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return fetch(`${API_BASE}/upload/attachment`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${authToken}` },
+        body: formData,
+      }).then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error || 'Upload failed');
+        return data;
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'Failed to fetch') {
+          throw new Error('Upload failed - server unreachable');
+        }
+        throw err;
+      });
     },
   },
 };

@@ -151,6 +151,23 @@ export function AppProvider({ children }) {
   useEffect(() => {
     const handler = (e) => {
       const { conversationId, message } = e.detail;
+
+      const exists = (messages[conversationId] || []).some((m) => m.id === message.id);
+      if (exists) return;
+
+      const type = message.type || 'text';
+      let preview = message.text;
+      if (type === 'file') {
+        const att = message.attachments && message.attachments.length > 0
+          ? message.attachments[0].filename
+          : 'Attachment';
+        preview = `📎 ${att}`;
+      } else if (message.encrypted) {
+        preview = '🔒 Encrypted message';
+      } else if (type === 'call') {
+        preview = `📞 ${message.text}`;
+      }
+
       setMessages((prev) => ({
         ...prev,
         [conversationId]: [...(prev[conversationId] || []), message],
@@ -158,14 +175,14 @@ export function AppProvider({ children }) {
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === conversationId
-            ? { ...conv, lastMessage: message.text, lastMessageTime: message.time, unreadCount: conv.unreadCount + 1 }
+            ? { ...conv, lastMessage: preview, lastMessageTime: message.time || message.created_at, unreadCount: conv.unreadCount + 1 }
             : conv
         )
       );
     };
     window.addEventListener('app_add_message', handler);
     return () => window.removeEventListener('app_add_message', handler);
-  }, []);
+  }, [messages]);
 
   const getDistanceFromUser = useCallback((lat, lng) => {
     if (!userLocation) return null;
@@ -397,14 +414,19 @@ export function AppProvider({ children }) {
     });
   }, [items]);
 
-  const sendMessage = useCallback((conversationId, text, encryptionMeta = null) => {
+  const sendMessage = useCallback((conversationId, text, encryptionMeta = null, options = {}) => {
+    const type = options.type || 'text';
     const newMessage = {
       id: generateId(),
       senderId: currentUserId,
-      text: encryptionMeta ? '(encrypted)' : text,
+      text: type === 'file' ? '' : (encryptionMeta ? '(encrypted)' : text),
+      type,
       time: new Date().toISOString(),
       read: false,
-      ...(encryptionMeta ? { encrypted: true, ciphertext: encryptionMeta.ciphertext, iv: encryptionMeta.iv } : {}),
+      delivered: false,
+      attachments: options.attachments || [],
+      replyTo: options.replyTo || null,
+      ...(encryptionMeta ? { encrypted: true, ciphertext: encryptionMeta.ciphertext, iv: encryptionMeta.iv, localText: text } : {}),
     };
 
     setMessages((prev) => ({
@@ -412,10 +434,20 @@ export function AppProvider({ children }) {
       [conversationId]: [...(prev[conversationId] || []), newMessage],
     }));
 
+    let preview = newMessage.text;
+    if (type === 'file') {
+      const att = (options.attachments || [])[0];
+      preview = `📎 ${att?.filename || 'Attachment'}`;
+    } else if (encryptionMeta) {
+      preview = '🔒 Encrypted message';
+    } else if (type === 'call') {
+      preview = `📞 ${text}`;
+    }
+
     setConversations((prev) =>
       prev.map((conv) =>
         conv.id === conversationId
-          ? { ...conv, lastMessage: text, lastMessageTime: newMessage.time }
+          ? { ...conv, lastMessage: preview, lastMessageTime: newMessage.time }
           : conv
       )
     );
@@ -425,6 +457,19 @@ export function AppProvider({ children }) {
     setConversations((prev) =>
       prev.map((c) => c.id === conversationId ? { ...c, unreadCount: 0 } : c)
     );
+  }, []);
+
+  const hydrateMessages = useCallback((conversationId, incoming) => {
+    setMessages((prev) => {
+      const byId = new Map((prev[conversationId] || []).map((m) => [m.id, m]));
+      for (const m of incoming) {
+        if (m && m.id && !byId.has(m.id)) byId.set(m.id, m);
+      }
+      const merged = [...byId.values()].sort(
+        (a, b) => new Date(a.time || 0).getTime() - new Date(b.time || 0).getTime()
+      );
+      return { ...prev, [conversationId]: merged };
+    });
   }, []);
 
   const addConversation = useCallback((itemId, sellerId) => {
@@ -606,6 +651,7 @@ export function AppProvider({ children }) {
     conversations,
     messages,
     sendMessage,
+    hydrateMessages,
     addConversation,
     markConversationRead,
     selectedConversation,

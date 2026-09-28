@@ -569,7 +569,7 @@ function applySchema() {
       buyer_id TEXT NOT NULL,
       seller_id TEXT NOT NULL,
       amount_cents INTEGER NOT NULL,
-      currency TEXT DEFAULT 'USD',
+      currency TEXT DEFAULT 'NGN',
       message TEXT DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       offered_by TEXT NOT NULL DEFAULT 'buyer',
@@ -604,6 +604,41 @@ function applySchema() {
       credited_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS message_attachments (
+      id TEXT PRIMARY KEY,
+      message_id TEXT NOT NULL,
+      conversation_id TEXT NOT NULL,
+      sender_id TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'image',
+      url TEXT NOT NULL,
+      filename TEXT DEFAULT '',
+      mime TEXT DEFAULT '',
+      size INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS conversation_settings (
+      conversation_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      pinned INTEGER DEFAULT 0,
+      muted INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (conversation_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS call_logs (
+      id TEXT PRIMARY KEY,
+      conversation_id TEXT NOT NULL,
+      caller_id TEXT NOT NULL,
+      callee_id TEXT NOT NULL,
+      kind TEXT NOT NULL DEFAULT 'audio',
+      status TEXT NOT NULL DEFAULT 'ringing',
+      started_at TEXT DEFAULT (datetime('now')),
+      answered_at TEXT,
+      ended_at TEXT,
+      duration_seconds INTEGER DEFAULT 0
+    );
+
   `);
 
   db.exec(`
@@ -620,6 +655,10 @@ function applySchema() {
     CREATE INDEX IF NOT EXISTS idx_verifications_status ON verification_requests(status);
     CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_id);
     CREATE INDEX IF NOT EXISTS idx_referrals_referred ON referrals(referred_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_conversation ON messages(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_attachments_message ON message_attachments(message_id);
+    CREATE INDEX IF NOT EXISTS idx_attachments_conversation ON message_attachments(conversation_id);
+    CREATE INDEX IF NOT EXISTS idx_calls_conversation ON call_logs(conversation_id);
   `);
 
   migrate();
@@ -637,7 +676,7 @@ function migrate() {
   ensureColumn('user_settings', 'notif_price_drops', 'INTEGER DEFAULT 1');
   ensureColumn('user_settings', 'notif_followers', 'INTEGER DEFAULT 1');
   ensureColumn('user_settings', 'notif_boosts', 'INTEGER DEFAULT 1');
-  ensureColumn('user_settings', 'currency', "TEXT DEFAULT 'USD'");
+  ensureColumn('user_settings', 'currency', "TEXT DEFAULT 'NGN'");
   ensureColumn('users', 'avatar', "TEXT DEFAULT ''");
   ensureColumn('users', 'bio', "TEXT DEFAULT ''");
   ensureColumn('users', 'phone', "TEXT DEFAULT ''");
@@ -688,6 +727,18 @@ function migrate() {
 ensureColumn('items', 'sold_to', 'TEXT');
 ensureColumn('users', 'identity_verified', 'INTEGER DEFAULT 0');
 ensureColumn('users', 'referral_code', "TEXT DEFAULT ''");
+ensureColumn('users', 'public_key', "TEXT DEFAULT ''");
+ensureColumn('messages', 'type', "TEXT DEFAULT 'text'");
+ensureColumn('messages', 'delivered', 'INTEGER DEFAULT 0');
+ensureColumn('messages', 'reply_to_id', 'TEXT');
+ensureColumn('messages', 'deleted_for_sender', 'INTEGER DEFAULT 0');
+  ensureColumn('conversations', 'is_secure', 'INTEGER DEFAULT 0');
+
+  db.exec(`
+    UPDATE user_settings SET currency = 'NGN' WHERE currency IS NULL OR currency = '' OR currency = 'USD';
+    UPDATE offers SET currency = 'NGN' WHERE currency IS NULL OR currency = '' OR currency = 'USD';
+    UPDATE platform_settings SET value = 'NGN' WHERE key = 'currency' AND (value IS NULL OR value = '' OR value = 'USD');
+  `);
 
   seedPlatformSettings();
 }
@@ -698,7 +749,7 @@ function seedPlatformSettings() {
     support_email: 'support@tradehub.app',
     maintenance_mode: '0',
     platform_fee_percent: '10',
-    currency: 'USD',
+    currency: 'NGN',
     terms_url: '',
     privacy_url: '',
     about_text: '',
