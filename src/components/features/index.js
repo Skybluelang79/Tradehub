@@ -14,3 +14,4 @@ export { default as GiftCardModal } from './GiftCardModal';
 export { default as SocialLinks } from './SocialLinks';
 export { default as SocialAuthButtons } from './SocialAuthButtons';
 export { default as CommunityFeed } from './CommunityFeed';
+export { default as AuthGate } from './AuthGate';

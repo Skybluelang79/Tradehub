@@ -5,7 +5,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { EncryptionProvider } from './context/EncryptionContext';
 import { ToastProvider, OnboardingGate } from './components/ui';
 import { BottomNav } from './components/layout';
-import { OfflineIndicator } from './components/features';
+import { OfflineIndicator, AuthGate } from './components/features';
+import { AUTH_GATED_TABS, GATE_COPY } from './config/authGate';
 
 
 import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, ResetPassword, Favorites, Notifications, GiftMall, SellerProfile, Cart } from './pages';
@@ -77,7 +78,7 @@ function AuthPages({ onAuthSuccess, initialView = 'login', resetToken = null }) 
 
 function AppContent() {
   const { activeTab, selectedItem, setActiveTab, setSelectedItem, unreadMessagesCount } = useApp();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { isAdminAuth } = useAdmin();
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [adminPath, setAdminPath] = useState('/admin');
@@ -212,14 +213,13 @@ function AppContent() {
   };
 
   const handleTabChange = (tab) => {
-    const authRequiredTabs = ['chat', 'payments', 'profile'];
-    
-    if (authRequiredTabs.includes(tab) && !isAuthenticated) {
+    if (AUTH_GATED_TABS.includes(tab) && !isAuthenticated) {
       setAuthRedirectTab(tab);
+      setAuthInitialView('signup');
       setShowAuthModal(true);
       return;
     }
-    
+
     setActiveTab(tab);
   };
 
@@ -252,48 +252,53 @@ function AppContent() {
     }
   };
 
-  if (showFavorites) {
-    return (
-      <Favorites onClose={() => setShowFavorites(false)} />
-    );
-  }
+  const overlayContent = (() => {
+    if (showFavorites) return <Favorites onClose={() => setShowFavorites(false)} />;
+    if (showNotifications) return <Notifications onClose={() => setShowNotifications(false)} />;
+    if (showGiftMall) return <GiftMall onClose={() => setShowGiftMall(false)} />;
+    if (showCart) return <Cart onClose={() => setShowCart(false)} />;
+    if (sellerProfileId) {
+      return (
+        <SellerProfile
+          userId={sellerProfileId}
+          onClose={() => setSellerProfileId(null)}
+          onItemOpen={(item) => {
+            setSelectedItem(item);
+            setSellerProfileId(null);
+          }}
+        />
+      );
+    }
+    return null;
+  })();
 
-  if (showNotifications) {
-    return (
-      <Notifications onClose={() => setShowNotifications(false)} />
-    );
-  }
+  const overlayOpen = overlayContent !== null;
 
-  if (showGiftMall) {
-    return (
-      <GiftMall onClose={() => setShowGiftMall(false)} />
-    );
-  }
+  // Everything is walled off until an account exists, including the overlay
+  // surfaces (cart, favourites, seller profile) that bypass the page switcher.
+  const gateCopy = overlayOpen
+    ? GATE_COPY.overlay
+    : selectedItem
+      ? GATE_COPY.item
+      : GATE_COPY[activeTab] || GATE_COPY.home;
 
-  if (showCart) {
-    return (
-      <Cart onClose={() => setShowCart(false)} />
-    );
-  }
-
-  if (sellerProfileId) {
-    return (
-      <SellerProfile
-        userId={sellerProfileId}
-        onClose={() => setSellerProfileId(null)}
-        onItemOpen={(item) => {
-          setSelectedItem(item);
-          setSellerProfileId(null);
-        }}
-      />
-    );
-  }
+  const showGate = !isAuthenticated && (overlayOpen || !!selectedItem || AUTH_GATED_TABS.includes(activeTab));
 
   if (isAdminMode) {
     return (
       <AdminLayout currentPath={adminPath} onNavigate={handleAdminNavigate} onExit={() => setIsAdminMode(false)}>
         {renderAdminPage()}
       </AdminLayout>
+    );
+  }
+
+  // Hold the splash only while auth is hydrating on first paint, otherwise the
+  // login/signup modal would be torn away mid-request (isLoading toggles there too).
+  if (authLoading && !showAuthModal) {
+    return (
+      <div className="app-auth-loading">
+        <span className="uploading-spinner" />
+      </div>
     );
   }
 
@@ -317,7 +322,7 @@ function AppContent() {
 
       <main className="main-content">
         <div className="page-transition-wrapper" key={activeTab}>
-          {renderPage()}
+          {showGate ? <AuthGate copy={gateCopy} /> : overlayContent || renderPage()}
         </div>
       </main>
       
