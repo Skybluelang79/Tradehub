@@ -8,6 +8,26 @@ import { useAuth } from './AuthContext';
 const AppContext = createContext();
 const DEFAULT_LOCATION = { lat: 40.7128, lng: -74.006 };
 
+// Fixture conversations use ids like "conv-1"; the server issues UUIDs. Dropping
+// the fixtures on read means anyone who visited before the API hydration existed
+// does not keep seeing the demo chat out of localStorage.
+function readConversations() {
+  const stored = storage.get('conversations', []);
+  if (!Array.isArray(stored)) return [];
+  return stored.filter((c) => !/^conv-\d+$/.test(c?.id || ''));
+}
+
+function readMessages() {
+  const stored = storage.get('messages', {});
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return {};
+  const out = {};
+  for (const [key, list] of Object.entries(stored)) {
+    if (/^conv-\d+$/.test(key)) continue;
+    if (Array.isArray(list)) out[key] = list;
+  }
+  return out;
+}
+
 export function AppProvider({ children }) {
   const { user: authUser } = useAuth();
   // Deliberately null when signed out. Defaulting to the demo account's id
@@ -19,8 +39,8 @@ export function AppProvider({ children }) {
   // Conversations, messages and users are seeded empty rather than from the
   // mock fixtures. The fixtures describe a single demo account, so seeding them
   // made every real conversation render under the same placeholder name.
-  const [conversations, setConversations] = useState(() => storage.get('conversations', []));
-  const [messages, setMessages] = useState(() => storage.get('messages', {}));
+  const [conversations, setConversations] = useState(() => readConversations());
+  const [messages, setMessages] = useState(() => readMessages());
   const [transactions, setTransactions] = useState(() => storage.get('transactions', mockTransactions));
   const [reviews, setReviews] = useState(() => storage.get('reviews', mockReviews));
   const [paymentMethods, setPaymentMethods] = useState(() => storage.get('paymentMethods', mockPaymentMethods));
