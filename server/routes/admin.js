@@ -735,6 +735,56 @@ router.put('/settings', adminAuth, (req, res) => {
   }
 });
 
+// Permanently delete every listing and all rows that only exist to describe one.
+// Accounts, wallets, payouts and support history are left intact. Irreversible:
+// take a full backup via GET /admin/backup first.
+router.delete('/items/bulk', adminAuth, (req, res) => {
+  try {
+    const dependents = [
+      'message_attachments',
+      'messages',
+      'disputes',
+      'payouts',
+      'reviews',
+      'bids',
+      'offers',
+      'favorites',
+      'carts',
+      'item_variants',
+      'item_images',
+      'reports',
+      'conversations',
+      'transactions',
+    ];
+    const removed = {};
+    const statements = ['BEGIN TRANSACTION;'];
+
+    for (const table of dependents) {
+      try {
+        removed[table] = db.prepare(`SELECT COUNT(*) as c FROM ${table}`).get().c;
+        statements.push(`DELETE FROM ${table};`);
+      } catch {
+        delete removed[table];
+      }
+    }
+    removed.items = db.prepare('SELECT COUNT(*) as c FROM items').get().c;
+    statements.push('DELETE FROM items;');
+
+    // One db.exec so the wipe commits atomically. db.transaction() is unusable
+    // here: every run() calls queueFlush(), which exports the database and
+    // implicitly ends the transaction before COMMIT is reached.
+    statements.push('COMMIT;');
+    db.exec(statements.join('\n'));
+
+    logAudit(req.adminId, 'items_bulk_delete', 'items', null, { removed });
+    logger.warn('All listings deleted by admin', { adminId: req.adminId, removed });
+    res.json({ success: true, removed });
+  } catch (err) {
+    logger.error('Bulk delete items error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.get('/system-info', adminAuth, async (req, res) => {
   try {
     const buf = await exportDatabase();
