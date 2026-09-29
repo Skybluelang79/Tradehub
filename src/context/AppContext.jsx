@@ -316,6 +316,20 @@ const [items, setItems] = useState([]);
 
   const getUser = useCallback((userId) => {
     if (!userId) return null;
+    // The signed-in account is not in the conversation-seeded directory, so a
+    // seller looking at their own listing resolved to 'Unknown user'. The auth
+    // record is authoritative and always carries a name.
+    if (userId === currentUserId && authUser?.name) {
+      return {
+        id: authUser.id,
+        name: authUser.name,
+        avatar: authUser.avatar || null,
+        rating: authUser.rating || 0,
+        verified: !!authUser.verified,
+        identityVerified: !!authUser.identity_verified,
+        location: authUser.location || null,
+      };
+    }
     // Skip unresolved entries rather than returning them: the directory is
     // persisted to localStorage, so a name-less row would otherwise mask the
     // real profile the listings below already carry.
@@ -333,10 +347,10 @@ const [items, setItems] = useState([]);
         location: fromItems.location || { lat: 40.7128, lng: -74.006, address: '' },
       };
     }
-    // Previously this fell back to the demo account, so every unknown id
-    // rendered as the same placeholder name. Fall back to the id instead.
-    return { id: userId, name: 'Unknown user', avatar: null, verified: false };
-  }, [users, items]);
+    // Keep the id rather than a generic name: several sellers with no resolved
+    // profile would otherwise render as one indistinguishable row.
+    return { id: userId, name: `Seller ${String(userId).slice(-4)}`, avatar: null, verified: false };
+  }, [users, items, currentUserId, authUser]);
 
   const addNotification = useCallback((notification) => {
     const newNotification = {
@@ -353,6 +367,14 @@ const [items, setItems] = useState([]);
       ...item,
       id: generateId(),
       sellerId: currentUserId,
+      // The list endpoint joins the users table and returns these. A listing
+      // built locally has to carry them too, otherwise getUser() has no name
+      // to resolve and the seller card renders a placeholder.
+      seller_name: item.seller_name || authUser?.name || '',
+      seller_avatar: item.seller_avatar || authUser?.avatar || '',
+      seller_rating: item.seller_rating ?? authUser?.rating ?? 0,
+      seller_verified: item.seller_verified ?? !!authUser?.verified,
+      seller_identity_verified: item.seller_identity_verified ?? !!authUser?.identity_verified,
       createdAt: new Date().toISOString(),
       status,
       views: 0,
@@ -373,7 +395,7 @@ const [items, setItems] = useState([]);
       });
     }
     return newItem;
-  }, [addNotification, currentUserId]);
+  }, [addNotification, currentUserId, authUser]);
 
   const updateItem = useCallback((itemId, updates) => {
     setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, ...updates } : item));

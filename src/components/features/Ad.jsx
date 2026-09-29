@@ -82,7 +82,7 @@ const banners = [
       'https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=800',
     ],
     title: 'Premium Finds',
-    desc: 'Curated luxury items starting at $49',
+    desc: 'Curated luxury items starting at ₦49,000',
     cta: 'Browse',
     category: '',
   },
@@ -92,7 +92,7 @@ const pushes = [
   { title: 'Premium Seller?', desc: 'Get verified and appear first!', btn: 'Upgrade', action: 'upgrade' },
   { title: 'List for Free!', desc: 'Zero fees on your first 10 listings', btn: 'Start Selling', action: 'add' },
   { title: 'Safe Trading', desc: 'Escrow protection for every transaction', btn: 'Learn More', action: 'learn' },
-  { title: 'Refer a Friend', desc: 'Earn $10 credit for each referral', btn: 'Invite', action: 'invite' },
+  { title: 'Refer a Friend', desc: 'Earn ₦10,000 credit for each referral', btn: 'Invite', action: 'invite' },
 ];
 
 export function AdBanner({ className = '' }) {
@@ -251,7 +251,7 @@ const brandAds = [
   {
     brand: 'Apple',
     tagline: 'iPhone 18 Pro Max. The most advanced iPhone ever.',
-    offer: 'Up to $650 trade-in with any iPhone',
+    offer: 'Up to ₦650,000 trade-in with any iPhone',
     category: 'electronics',
     gradient: 'linear-gradient(135deg, #1a1a2e 0%, #2d2d44 40%, #0a0a14 100%)',
     accentColor: '#007AFF',

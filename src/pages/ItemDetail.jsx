@@ -28,7 +28,7 @@ import {
 } from '../components/ui/Icons';
 import { AdBanner } from '../components/features';
 import { useApp } from '../context';
-import { currentUser, categories, conditionOptions } from '../services/api';
+import { categories, conditionOptions } from '../services/api';
 import { formatPrice, formatDistance, formatDate } from '../utils/helpers';
 import '../styles/globals.css';
 import './ItemDetail.css';
@@ -399,7 +399,11 @@ export default function ItemDetail() {
   const seller = getUser(selectedItem.sellerId);
   const sellerReviews = getReviewsForUser(seller.id);
   const sellerRating = getUserRating(seller.id);
-  const isOwnItem = selectedItem.sellerId === currentUser.id;
+  // Ownership has to be judged against the signed-in account. `currentUser` from
+  // services/api is a fixed demo fixture with id 'user-1', so comparing against
+  // it never matched a real seller and the owner always saw the buyer actions.
+  const viewerId = authUser?.id || null;
+  const isOwnItem = !!viewerId && selectedItem.sellerId === viewerId;
   const distance = getDistanceFromUser(selectedItem.location.lat, selectedItem.location.lng);
   const hasSale = selectedItem.salePrice && selectedItem.salePrice > 0 && selectedItem.salePrice < selectedItem.price;
   const saleEnded = selectedItem.saleEndsAt && new Date(selectedItem.saleEndsAt) < new Date();
@@ -475,13 +479,13 @@ export default function ItemDetail() {
       const res = await api.items.bid(selectedItem.id, amount);
       updateItem(selectedItem.id, {
         currentBid: amount,
-        currentBidderId: currentUser.id,
+        currentBidderId: viewerId,
       });
       addToast(res.message || 'Bid placed!', 'success');
     } catch (err) {
       updateItem(selectedItem.id, {
         currentBid: amount,
-        currentBidderId: currentUser.id,
+        currentBidderId: viewerId,
       });
       addToast('Demo mode: bid recorded locally', 'success');
     } finally {
@@ -492,8 +496,8 @@ export default function ItemDetail() {
       const bid = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         amount,
-        bidder_name: currentUser.name,
-        bidder_avatar: currentUser.avatar,
+        bidder_name: authUser?.name || 'You',
+        bidder_avatar: authUser?.avatar || null,
         created_at: new Date().toISOString(),
       };
       return [bid, ...(prev || [])].sort((a, b) => b.amount - a.amount);

@@ -72,9 +72,11 @@ export function EncryptionProvider({ children }) {
     []
   );
 
-  // Push our own public key to the server whenever we are signed in.
+  // Push our own public key to the server whenever we are signed in. The
+  // previous 'user-1' guard existed only to skip the demo fixture account and
+  // silently skipped key setup for any real account.
   useEffect(() => {
-    if (authUser?.id && authUser.id !== 'user-1') {
+    if (authUser?.id) {
       syncPublicKey(authUser.id);
     }
   }, [authUser?.id, syncPublicKey]);
