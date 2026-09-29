@@ -19,12 +19,16 @@ describe('formatDistance', () => {
 });
 
 describe('formatPrice', () => {
-  it('formats Nigerian naira by default', () => {
+  it('formats Nigerian naira', () => {
     expect(formatPrice(25000)).toBe('₦25,000');
   });
 
-  it('supports other currencies', () => {
-    expect(formatPrice(100, 'EUR')).toBe('€100');
+  it('ignores a second argument rather than switching currency', () => {
+    expect(formatPrice(100, 'EUR')).toBe('₦100');
+  });
+
+  it('drops fractional naira', () => {
+    expect(formatPrice(1500.75)).toBe('₦1,501');
   });
 });
 

@@ -57,8 +57,8 @@ export default function PriceChart({ priceHistory, currentPrice }) {
       </div>
 
       <div className="chart-labels">
-        <span>${Math.round(minPrice)}</span>
-        <span>${Math.round(maxPrice)}</span>
+        <span>₦{Math.round(minPrice).toLocaleString()}</span>
+        <span>₦{Math.round(maxPrice).toLocaleString()}</span>
       </div>
 
       <div className="chart-intervals">

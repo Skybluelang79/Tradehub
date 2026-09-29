@@ -202,9 +202,10 @@ const AdminSettings = () => {
                   <label>Currency</label>
                   <input
                     type="text"
-                    value={settings.currency}
+                    value="NGN"
+                    readOnly
                     disabled={loading}
-                    onChange={(e) => handleChange('currency', e.target.value)}
+                    title="TradeHub prices are fixed to Nigerian naira"
                   />
                 </div>
                 <div className="setting-item">
@@ -363,7 +364,7 @@ const AdminSettings = () => {
                   />
                 </div>
                 <div className="setting-item">
-                  <label>Max Listing Price ($)</label>
+                  <label>Max Listing Price (₦)</label>
                   <input
                     type="number"
                     value={settings.maxListingPrice}

@@ -483,7 +483,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
           <div className="input-group">
             <label className="input-label">Price *</label>
             <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>$</span>
+              <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>₦</span>
               <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
             </div>
           </div>
@@ -498,13 +498,13 @@ export default function AddListing({ editItemId, onEditComplete }) {
             </div>
             <div className="price-suggestions-chips">
               <button type="button" className="suggestion-chip" onClick={() => handleApplySuggestion(suggestions.median)}>
-                Median ${suggestions.median.toLocaleString()}
+                Median ₦{suggestions.median.toLocaleString()}
               </button>
               <button type="button" className="suggestion-chip" onClick={() => handleApplySuggestion(suggestions.avg)}>
-                Avg ${suggestions.avg.toLocaleString()}
+                Avg ₦{suggestions.avg.toLocaleString()}
               </button>
               <button type="button" className="suggestion-chip" onClick={() => handleApplySuggestion(suggestions.min)}>
-                Min ${suggestions.min.toLocaleString()}
+                Min ₦{suggestions.min.toLocaleString()}
               </button>
             </div>
             <span className="price-suggestions-count">Based on {suggestions.count} similar items</span>
@@ -562,7 +562,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
                 <div className="input-group">
                   <label className="input-label">Sale Price</label>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>$</span>
+                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>₦</span>
                     <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="0" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} />
                   </div>
                 </div>
@@ -598,14 +598,14 @@ export default function AddListing({ editItemId, onEditComplete }) {
                 <div className="input-group">
                   <label className="input-label">Starting Bid</label>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>$</span>
+                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>₦</span>
                     <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="0" value={startingBid} onChange={(e) => setStartingBid(e.target.value)} />
                   </div>
                 </div>
                 <div className="input-group">
                   <label className="input-label">Min. Increment</label>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>$</span>
+                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>₦</span>
                     <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="1" value={minIncrement} onChange={(e) => setMinIncrement(e.target.value)} />
                   </div>
                 </div>
@@ -652,7 +652,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
               </button>
               <button type="button" className={`boost-option ${boostListing ? 'active' : ''}`} onClick={() => setBoostListing(true)}>
                 <span className="boost-option-title">Boosted</span>
-                <span className="boost-option-price">$4.99</span>
+                <span className="boost-option-price">₦5,000</span>
                 <span className="boost-option-desc">Top of search for {boostDuration} days</span>
               </button>
             </div>

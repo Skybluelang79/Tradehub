@@ -1020,7 +1020,7 @@ export default function Profile() {
                         </div>
                         <div className="template-card-meta">
                           <span>{tmpl.category}</span>
-                          <span>${tmpl.price}</span>
+                          <span>₦{Number(tmpl.price).toLocaleString()}</span>
                         </div>
                         <button className="template-card-delete" onClick={() => deleteTemplate(tmpl.id)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
@@ -1039,7 +1039,7 @@ export default function Profile() {
                   <h4 className="analytics-section-title">Request Payout</h4>
                   <div className="payout-form">
                     <label className="payout-label">
-                      Amount ($)
+                      Amount (₦)
                       <input
                         className="input"
                         type="number"
@@ -1284,19 +1284,12 @@ export default function Profile() {
               </select>
             </div>
             <div className="setting-item">
-              <div className="setting-icon"><span className="currency-icon">$</span></div>
+              <div className="setting-icon"><span className="currency-icon">₦</span></div>
               <div className="setting-text">
                 <div className="setting-title">Currency</div>
-                <div className="setting-desc">Display currency for prices</div>
+                <div className="setting-desc">All prices are shown in Nigerian naira</div>
               </div>
-              <select className="setting-select" value={settings.currency} onChange={(e) => handleSettingValue('currency', e.target.value)}>
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="CAD">CAD (C$)</option>
-                <option value="AUD">AUD (A$)</option>
-                <option value="JPY">JPY (¥)</option>
-              </select>
+              <span className="setting-fixed">NGN (₦)</span>
             </div>
             <div className="setting-item">
               <div className="setting-icon"><ShieldIcon size={20} /></div>
@@ -1494,7 +1487,7 @@ export default function Profile() {
         <div className="settings-form">
           <p className="bulk-edit-hint">Only fill in the fields you want to change. Empty fields are left untouched.</p>
           <div className="input-group">
-            <label className="input-label">Price ($)</label>
+            <label className="input-label">Price (₦)</label>
             <input type="number" min="0" className="input" value={bulkForm.price} onChange={(e) => setBulkForm({ ...bulkForm, price: e.target.value })} placeholder="Leave empty to keep" />
           </div>
           <div className="input-group">
@@ -1580,7 +1573,7 @@ export default function Profile() {
                 <ZapIcon size={20} />
                 <div>
                   <strong>{days} Days</strong>
-                  <span>${days === 3 ? '2.99' : days === 7 ? '4.99' : days === 14 ? '8.99' : '14.99'}</span>
+                  <span>₦{days === 3 ? '3,000' : days === 7 ? '5,000' : days === 14 ? '9,000' : '15,000'}</span>
                 </div>
               </button>
             ))}

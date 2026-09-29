@@ -243,7 +243,7 @@ router.post('/issue', adminAuth, (req, res) => {
     const { amountCents, count = 1, note = '', brandId = null, cardType = 'digital', purchaseCents = null, discountPercent = 0 } = req.body;
     const amount = Math.round(Number(amountCents));
     const qty = Math.min(Math.max(parseInt(count, 10) || 1, 1), 100);
-    if (!amount || amount < 100) return res.status(400).json({ error: 'Amount must be at least $1.00' });
+    if (!amount || amount < 100) return res.status(400).json({ error: 'Amount must be at least ₦1' });
     if (!GIFT_CARD_TYPES.includes(cardType)) return res.status(400).json({ error: 'Invalid card type' });
 
     let prefix = 'TRADE';

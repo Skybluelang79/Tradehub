@@ -28,7 +28,7 @@ export default function LivePreview({ title, price, salePrice, description, imag
                 <span className="live-preview-price--original">₦{parseFloat(price).toLocaleString()}</span>
               </>
             ) : (
-              price && <span className="live-preview-price">${parseFloat(price) > 0 ? parseFloat(price).toLocaleString() : '0'}</span>
+              price && <span className="live-preview-price">₦{parseFloat(price) > 0 ? parseFloat(price).toLocaleString() : '0'}</span>
             )}
           </div>
           {condition && <span className="live-preview-condition">{condition}</span>}

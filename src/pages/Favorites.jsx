@@ -130,7 +130,7 @@ export default function Favorites({ onClose }) {
                   </div>
                   <div className="favorite-info">
                     <h3 className="favorite-title">{item.title}</h3>
-                    <p className="favorite-price">${item.price.toLocaleString()}</p>
+                    <p className="favorite-price">₦{item.price.toLocaleString()}</p>
                     <div className="favorite-meta">
                       <span className="favorite-location">
                         <MapPinIcon size={14} />

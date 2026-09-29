@@ -134,7 +134,7 @@ router.put('/:id/resolve', adminAuth, async (req, res) => {
 
     if (action === 'refund_buyer') {
       await refundTxn(txn);
-      notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved. Payment of $${txn.amount} has been refunded.`);
+      notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved. Payment of ₦${Number(txn.amount).toLocaleString('en-NG')} has been refunded.`);
       notify(txn.seller_id, 'system', 'Dispute Resolved', `The dispute for "${txn.item_title}" was resolved in the buyer's favor.`);
     } else if (action === 'release_seller') {
       if (txn.status !== 'completed') {

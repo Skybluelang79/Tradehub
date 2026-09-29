@@ -61,7 +61,7 @@ export default function Referrals() {
       <div className="referrals-hero">
         <div className="referrals-info">
           <h3>Refer &amp; Earn</h3>
-          <p>Share your code and earn <strong>${reward.toFixed(2)}</strong> in store credit for every friend who joins and completes their first purchase.</p>
+          <p>Share your code and earn <strong>₦{reward.toLocaleString()}</strong> in store credit for every friend who joins and completes their first purchase.</p>
         </div>
         <div className="referrals-code-card">
           <span className="referrals-code-label">Your code</span>
@@ -78,7 +78,7 @@ export default function Referrals() {
           <span className="referrals-stat-label">Friends joined</span>
         </div>
         <div className="referrals-stat">
-          <span className="referrals-stat-value">${((data.earnedCents || 0) / 100).toFixed(2)}</span>
+          <span className="referrals-stat-value">₦{((data.earnedCents || 0) / 100).toLocaleString()}</span>
           <span className="referrals-stat-label">Credit earned</span>
         </div>
       </div>

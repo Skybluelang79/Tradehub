@@ -501,7 +501,7 @@ router.post('/:id/bid', authenticateToken, validate(placeBidSchema), (req, res) 
     const currentBid = item.current_bid ?? item.starting_bid ?? 0;
     const minBid = currentBid + (item.min_increment || 1);
     if (amount < minBid) {
-      return res.status(400).json({ error: `Bid must be at least $${minBid.toFixed(2)}` });
+      return res.status(400).json({ error: `Bid must be at least ₦${Number(minBid).toLocaleString('en-NG')}` });
     }
 
     const id = uuidv4();
@@ -512,7 +512,7 @@ router.post('/:id/bid', authenticateToken, validate(placeBidSchema), (req, res) 
       db.prepare(`
         INSERT INTO notifications (id, user_id, type, title, body, data)
         VALUES (?, ?, 'system', "You've been outbid", ?, ?)
-      `).run(uuidv4(), item.current_bidder_id, `A new bid of $${amount.toFixed(2)} was placed on your auction item.`, JSON.stringify({ itemId: item.id }));
+      `).run(uuidv4(), item.current_bidder_id, `A new bid of ₦${Number(amount).toLocaleString('en-NG')} was placed on your auction item.`, JSON.stringify({ itemId: item.id }));
     }
 
     res.status(201).json({

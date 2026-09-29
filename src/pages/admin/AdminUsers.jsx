@@ -407,7 +407,7 @@ const AdminUsers = () => {
                   {detail.listings.map((item) => (
                     <div key={item.id} className="mini-row">
                       <span className="mini-main">{item.title}</span>
-                      <span className="mini-mid">${Number(item.price).toFixed(2)}</span>
+                      <span className="mini-mid">₦{Number(item.price).toLocaleString()}</span>
                       <span className={`status-badge ${getStatusBadge(item.status)}`}>{item.status}</span>
                     </div>
                   ))}
@@ -419,7 +419,7 @@ const AdminUsers = () => {
                   {detail.transactions.map((tx) => (
                     <div key={tx.id} className="mini-row">
                       <span className="mini-main">{tx.item_title}</span>
-                      <span className="mini-mid">${Number(tx.amount).toFixed(2)}</span>
+                      <span className="mini-mid">₦{Number(tx.amount).toLocaleString()}</span>
                       <span className={`status-badge ${getStatusBadge(tx.status)}`}>{tx.status}</span>
                     </div>
                   ))}

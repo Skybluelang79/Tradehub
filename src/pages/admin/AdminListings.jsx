@@ -161,7 +161,7 @@ const AdminListings = () => {
             <div className="listing-content">
               <h3 className="listing-title">{listing.title}</h3>
               <div className="listing-meta">
-                <span className="listing-price">${Number(listing.price).toLocaleString()}</span>
+                <span className="listing-price">₦{Number(listing.price).toLocaleString()}</span>
                 <span className="listing-category">{listing.category}</span>
               </div>
               <div className="listing-info">
@@ -258,7 +258,7 @@ const AdminListings = () => {
               )}
             </div>
             <h3>{selectedListing.title}</h3>
-            <div className="detail-price">${Number(selectedListing.price).toLocaleString()}</div>
+            <div className="detail-price">₦{Number(selectedListing.price).toLocaleString()}</div>
             <div className="detail-grid">
               <div className="detail-item">
                 <span className="label">Category</span>

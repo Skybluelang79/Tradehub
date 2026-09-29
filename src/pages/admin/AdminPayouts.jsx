@@ -309,7 +309,7 @@ export default function AdminPayouts() {
             </div>
             {issuedCodes.length === 0 ? (
               <div className="gift-modal-body">
-                <label className="gift-label">Amount (USD)</label>
+                <label className="gift-label">Amount (₦)</label>
                 <input
                   type="number"
                   className="gift-input"

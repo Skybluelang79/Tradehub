@@ -285,7 +285,7 @@ const AdminReports = () => {
                   </div>
                   <div className="detail-row">
                     <span className="label">Price</span>
-                    <span className="value">${Number(selectedReport.item_price || 0).toLocaleString()}</span>
+                    <span className="value">₦{Number(selectedReport.item_price || 0).toLocaleString()}</span>
                   </div>
                   <div className="detail-row">
                     <span className="label">Seller</span>
@@ -354,7 +354,7 @@ const AdminReports = () => {
                     {userListings.map((item) => (
                       <div key={item.id} className="mini-row">
                         <span className="mini-main">{item.title}</span>
-                        <span className="mini-mid">${Number(item.price || 0).toFixed(2)}</span>
+                        <span className="mini-mid">₦{Number(item.price || 0).toLocaleString()}</span>
                         <span className={`status-badge ${getStatusBadge(item.status)}`}>{item.status}</span>
                       </div>
                     ))}

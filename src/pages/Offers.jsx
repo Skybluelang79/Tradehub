@@ -116,7 +116,7 @@ export default function Offers({ onClose }) {
     <span className={`offer-status offer-status--${status}`}>{STATUS_LABELS[status] || status}</span>
   );
 
-  const formatAmount = (cents) => formatPrice((cents || 0) / 100);
+  const formatCents = (cents) => formatPrice((cents || 0) / 100);
 
   const renderList = (list, role) => {
     if (!list.length) {
@@ -155,7 +155,7 @@ export default function Offers({ onClose }) {
               </div>
               <div className="offer-row">
                 <span className="offer-label">Offer</span>
-                <span className="offer-amount">{formatAmount(o.amount_cents)}</span>
+                <span className="offer-amount">{formatCents(o.amount_cents)}</span>
               </div>
               {o.message && <p className="offer-message">{o.message}</p>}
               {o.responder_note && <p className="offer-note">Note: {o.responder_note}</p>}
@@ -190,7 +190,7 @@ export default function Offers({ onClose }) {
             {o.status === 'accepted' && role === 'outgoing' && (
               <div className="offer-actions">
                 <button className="offer-btn offer-btn--pay" onClick={() => handlePay(o)} disabled={busy === o.id}>
-                  {busy === o.id ? 'Processing…' : `Pay ${formatAmount(o.amount_cents)}`}
+                  {busy === o.id ? 'Processing…' : `Pay ${formatCents(o.amount_cents)}`}
                 </button>
               </div>
             )}
@@ -234,7 +234,7 @@ export default function Offers({ onClose }) {
           <div className="counter-modal-overlay" onClick={() => setCounterModal(null)}>
             <div className="counter-modal" onClick={(e) => e.stopPropagation()}>
               <h3>Counter-Offer</h3>
-              <p className="counter-modal-title">On "{counterModal.item_title}" (offer: {formatAmount(counterModal.amount_cents)})</p>
+              <p className="counter-modal-title">On "{counterModal.item_title}" (offer: {formatCents(counterModal.amount_cents)})</p>
               <input
                 className="input"
                 type="number"

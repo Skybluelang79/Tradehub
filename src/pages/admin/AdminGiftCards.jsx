@@ -311,7 +311,7 @@ export default function AdminGiftCards() {
                   <p className="gc-section-hint">Issue one or many codes. Purchase price defaults to the card value (0% discount) unless you set a purchase price or discount below.</p>
                   <div className="gc-form-row">
                     <div className="gc-form-field">
-                      <label className="gift-label">Face Value (USD)</label>
+                      <label className="gift-label">Face Value (₦)</label>
                       <input className="gift-input" type="number" min="1" value={issueForm.amount} onChange={(e) => setIssueForm({ ...issueForm, amount: e.target.value })} />
                     </div>
                     <div className="gc-form-field">
@@ -337,7 +337,7 @@ export default function AdminGiftCards() {
                   </div>
                   <div className="gc-form-row">
                     <div className="gc-form-field">
-                      <label className="gift-label">Purchase Price (USD, optional)</label>
+                      <label className="gift-label">Purchase Price (₦, optional)</label>
                       <input className="gift-input" type="number" min="0" placeholder="Auto = face value" value={issueForm.purchaseCents} onChange={(e) => setIssueForm({ ...issueForm, purchaseCents: e.target.value })} />
                     </div>
                     <div className="gc-form-field">
@@ -629,7 +629,7 @@ export default function AdminGiftCards() {
             <div className="gift-modal-body">
               <div className="gc-form-row">
                 <div className="gc-form-field">
-                  <label className="gift-label">Face Value (USD)</label>
+                  <label className="gift-label">Face Value (₦)</label>
                   <input className="gift-input" type="number" min="1" value={issueForm.amount} onChange={(e) => setIssueForm({ ...issueForm, amount: e.target.value })} />
                 </div>
                 <div className="gc-form-field">
@@ -655,7 +655,7 @@ export default function AdminGiftCards() {
               </div>
               <div className="gc-form-row">
                 <div className="gc-form-field">
-                  <label className="gift-label">Purchase Price (USD, optional)</label>
+                  <label className="gift-label">Purchase Price (₦, optional)</label>
                   <input className="gift-input" type="number" min="0" placeholder="Auto = face value" value={issueForm.purchaseCents} onChange={(e) => setIssueForm({ ...issueForm, purchaseCents: e.target.value })} />
                 </div>
                 <div className="gc-form-field">

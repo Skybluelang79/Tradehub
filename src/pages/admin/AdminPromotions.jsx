@@ -369,7 +369,7 @@ const AdminPromotions = () => {
               </select>
             </div>
             <div className="promo-form-field">
-              <label>{form.discount_type === 'percentage' ? 'Percent Off' : 'Amount Off ($)'}</label>
+              <label>{form.discount_type === 'percentage' ? 'Percent Off' : 'Amount Off (₦)'}</label>
               <input
                 type="number"
                 min="0"
@@ -390,7 +390,7 @@ const AdminPromotions = () => {
               />
             </div>
             <div className="promo-form-field">
-              <label>Min. Purchase ($)</label>
+              <label>Min. Purchase (₦)</label>
               <input
                 type="number"
                 min="0"

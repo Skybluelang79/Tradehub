@@ -131,11 +131,11 @@ export function AdBanner({ className = '' }) {
                 <span className="thb-card-img" />
                 <span className="thb-card-meta">
                   <span className="thb-card-title">Just Listed</span>
-                  <span className="thb-card-price">$149</span>
+                  <span className="thb-card-price">₦149,000</span>
                 </span>
               </div>
             </div>
-            <span className="thb-coin thb-coin-1">$</span>
+            <span className="thb-coin thb-coin-1">₦</span>
             <span className="thb-coin thb-coin-2">%</span>
           </div>
         ) : (

@@ -48,10 +48,10 @@ router.post('/', authenticateToken, (req, res) => {
     db.prepare(`
       INSERT INTO offers (id, item_id, buyer_id, seller_id, amount_cents, currency, message, status, offered_by)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 'buyer')
-    `).run(id, itemId, req.user.id, item.seller_id, amount, item.currency || 'USD', String(message).trim());
+    `).run(id, itemId, req.user.id, item.seller_id, amount, item.currency || 'NGN', String(message).trim());
 
     notify(item.seller_id, 'offer', 'New Offer Received',
-      `You have a new offer of $${(amount / 100).toFixed(2)} on "${item.title}".`);
+      `You have a new offer of ₦${(amount / 100).toLocaleString('en-NG')} on "${item.title}".`);
 
     res.status(201).json({ offer: getOffer(id) });
   } catch (err) {
@@ -153,8 +153,8 @@ router.post('/:id/accept', authenticateToken, (req, res) => {
 
     notify(offeror, 'offer', 'Offer Accepted',
       isBuyersOffer
-        ? `Your offer of $${(offer.amount_cents / 100).toFixed(2)} on "${offer.item_title}" was accepted. Proceed to payment.`
-        : `Your counter-offer of $${(offer.amount_cents / 100).toFixed(2)} was accepted.`);
+        ? `Your offer of ₦${(offer.amount_cents / 100).toLocaleString('en-NG')} on "${offer.item_title}" was accepted. Proceed to payment.`
+        : `Your counter-offer of ₦${(offer.amount_cents / 100).toLocaleString('en-NG')} was accepted.`);
 
     res.json({ success: true, offer: getOffer(offer.id) });
   } catch (err) {
@@ -172,7 +172,7 @@ router.post('/:id/decline', authenticateToken, (req, res) => {
     const note = String(req.body.note || '').trim().slice(0, 500);
 
     db.prepare("UPDATE offers SET status = 'declined', responder_note = ?, updated_at = datetime('now') WHERE id = ?").run(note, offer.id);
-    notify(offeror, 'offer', 'Offer Declined', `Your offer of $${(offer.amount_cents / 100).toFixed(2)} on "${offer.item_title}" was declined.`);
+    notify(offeror, 'offer', 'Offer Declined', `Your offer of ₦${(offer.amount_cents / 100).toLocaleString('en-NG')} on "${offer.item_title}" was declined.`);
 
     res.json({ success: true, offer: getOffer(offer.id) });
   } catch (err) {
@@ -203,7 +203,7 @@ router.post('/:id/counter', authenticateToken, (req, res) => {
     `).run(id, offer.item_id, offer.buyer_id, offer.seller_id, amount, offer.currency, String(message).trim(), newOfferedBy, offer.id);
 
     notify(offer.buyer_id, 'offer', 'Counter-Offer Received',
-      `You received a counter-offer of $${(amount / 100).toFixed(2)} on "${offer.item_title}".`);
+      `You received a counter-offer of ₦${(amount / 100).toLocaleString('en-NG')} on "${offer.item_title}".`);
 
     res.status(201).json({ offer: getOffer(id) });
   } catch (err) {

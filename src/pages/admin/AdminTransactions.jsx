@@ -106,7 +106,7 @@ const AdminTransactions = () => {
             <DollarIcon size={24} />
           </div>
           <div className="tx-stat-info">
-            <span className="tx-stat-value">${totalAmount.toLocaleString()}</span>
+            <span className="tx-stat-value">₦{totalAmount.toLocaleString()}</span>
             <span className="tx-stat-label">Page Volume</span>
           </div>
         </div>
@@ -117,7 +117,7 @@ const AdminTransactions = () => {
             </svg>
           </div>
           <div className="tx-stat-info">
-            <span className="tx-stat-value">${totalFees.toLocaleString()}</span>
+            <span className="tx-stat-value">₦{totalFees.toLocaleString()}</span>
             <span className="tx-stat-label">Page Fees</span>
           </div>
         </div>
@@ -202,10 +202,10 @@ const AdminTransactions = () => {
                 <td>{tx.buyer_name || '—'}</td>
                 <td>{tx.seller_name || '—'}</td>
                 <td>
-                  <span className="tx-amount">${Number(tx.amount).toLocaleString()}</span>
+                  <span className="tx-amount">₦{Number(tx.amount).toLocaleString()}</span>
                 </td>
                 <td>
-                  <span className="tx-fee">${Number(tx.fee_amount).toFixed(2)}</span>
+                  <span className="tx-fee">₦{Number(tx.fee_amount).toFixed(2)}</span>
                 </td>
                 <td>
                   <span className={`status-badge ${getStatusBadge(tx.status)}`}>
@@ -261,7 +261,7 @@ const AdminTransactions = () => {
       >
         <div className="refund-modal">
           <p>
-            Refund <strong>${Number(refundTarget?.amount).toLocaleString()}</strong> for{' '}
+            Refund <strong>₦{Number(refundTarget?.amount).toLocaleString()}</strong> for{' '}
             <strong>"{refundTarget?.item_title}"</strong> back to the buyer?
           </p>
           <p className="warning-text">

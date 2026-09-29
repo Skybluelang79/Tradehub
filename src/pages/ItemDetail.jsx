@@ -946,7 +946,7 @@ export default function ItemDetail() {
                 </div>
                 <div className="mini-item-info-detail">
                   <span className="mini-item-title-detail">{item.title}</span>
-                  <span className="mini-item-price-detail">${item.price}</span>
+                  <span className="mini-item-price-detail">₦{Number(item.price).toLocaleString()}</span>
                 </div>
               </div>
             ))}
@@ -1362,7 +1362,7 @@ export default function ItemDetail() {
             Listed at <strong>{formatPrice(selectedItem?.price || 0)}</strong>
           </p>
           <div className="input-group" style={{ marginTop: 12 }}>
-            <label className="input-label">Your offer ({selectedItem?.currency || 'USD'})</label>
+            <label className="input-label">Your offer (₦)</label>
             <input
               type="number"
               step="0.01"

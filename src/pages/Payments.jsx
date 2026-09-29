@@ -665,7 +665,7 @@ export default function Payments() {
         }>
         <div className="modal-form">
           <div className="input-group">
-            <label className="input-label">Amount (USD)</label>
+            <label className="input-label">Amount (₦)</label>
             <input
               type="number"
               className="input"
