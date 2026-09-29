@@ -369,3 +369,119 @@ describe('Seller Storefront', () => {
     expect(Array.isArray(response.body.reviews)).toBe(true);
   });
 });
+
+describe('Owner Listing Actions', () => {
+  let sellerToken;
+  let otherToken;
+  let itemId;
+
+  beforeAll(async () => {
+    const sellerLogin = await supertest(app)
+      .post('/api/auth/login')
+      .send({ email: 'analyst@test.com', password: 'password123' });
+    sellerToken = sellerLogin.body.token;
+
+    const signup = await supertest(app)
+      .post('/api/auth/signup')
+      .send({ name: 'Other Buyer', email: 'owner-actions-buyer@test.com', password: 'password123' });
+    if (signup.body.token) otherToken = signup.body.token;
+    else {
+      const login = await supertest(app)
+        .post('/api/auth/login')
+        .send({ email: 'owner-actions-buyer@test.com', password: 'password123' });
+      otherToken = login.body.token;
+    }
+    expect(otherToken).toBeTruthy();
+
+    const created = await supertest(app)
+      .post('/api/items')
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({
+        title: 'Owner Actions Item',
+        description: 'Listing used to exercise the owner controls',
+        price: 40,
+        category: 'home',
+        condition: 'good',
+      });
+    itemId = created.body.item?.id || created.body.id;
+    expect(itemId).toBeTruthy();
+  });
+
+  it('the owner can edit listing fields', async () => {
+    const response = await supertest(app)
+      .put(`/api/items/${itemId}`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ title: 'Owner Actions Item (edited)', price: 55, quantity: 2 });
+
+    expect(response.status).toBe(200);
+    expect(response.body.item.title).toBe('Owner Actions Item (edited)');
+    expect(response.body.item.price).toBe(55);
+    expect(response.body.item.quantity).toBe(2);
+  });
+
+  it('the owner can boost a listing', async () => {
+    const expiresAt = new Date(Date.now() + 7 * 86400000).toISOString();
+    const response = await supertest(app)
+      .put(`/api/items/${itemId}`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ boosted: true, boost_expires_at: expiresAt });
+
+    expect(response.status).toBe(200);
+    expect(response.body.item.boosted).toBe(1);
+  });
+
+  // `status` is not part of the create schema, so Zod used to strip it from the
+  // update body and the mark-as-sold control never persisted.
+  it('the owner can mark a listing as sold', async () => {
+    const response = await supertest(app)
+      .put(`/api/items/${itemId}`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ status: 'sold' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.item.status).toBe('sold');
+
+    const detail = await supertest(app).get(`/api/items/${itemId}`);
+    expect(detail.body.item.status).toBe('sold');
+  });
+
+  it('the owner can unpublish a listing back to draft', async () => {
+    const response = await supertest(app)
+      .put(`/api/items/${itemId}`)
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ status: 'draft' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.item.status).toBe('draft');
+  });
+
+  it('the owner can delete the listing and it leaves the feed', async () => {
+    const response = await supertest(app)
+      .delete(`/api/items/${itemId}`)
+      .set('Authorization', `Bearer ${sellerToken}`);
+
+    expect(response.status).toBe(200);
+
+    const detail = await supertest(app).get(`/api/items/${itemId}`);
+    expect(detail.status).toBe(404);
+  });
+
+  it('a non-owner cannot edit or delete the listing', async () => {
+    const second = await supertest(app)
+      .post('/api/items')
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ title: 'Guarded Item', price: 10, category: 'other' });
+    const guardedId = second.body.item?.id || second.body.id;
+
+    const edit = await supertest(app)
+      .put(`/api/items/${guardedId}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ price: 1 });
+    expect(edit.status).toBe(403);
+
+    const remove = await supertest(app)
+      .delete(`/api/items/${guardedId}`)
+      .set('Authorization', `Bearer ${otherToken}`);
+    expect(remove.status).toBe(403);
+  });
+});

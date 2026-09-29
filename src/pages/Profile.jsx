@@ -300,10 +300,17 @@ export default function Profile() {
     }
   }, [showEditModal, currentUser.name, currentUser.username, currentUser.bio, currentUser.phone, currentUser.location]);
 
-  const handleDeleteItem = (itemId) => {
-    deleteItem(itemId);
-    setShowDeleteConfirm(null);
-    addToast('Listing deleted', 'success');
+  const handleDeleteItem = async (itemId) => {
+    // Bulk delete persists through the API, but a single delete only dropped the
+    // row from local state, so the listing came back on the next fetch.
+    try {
+      await api.items.delete(itemId);
+      deleteItem(itemId);
+      setShowDeleteConfirm(null);
+      addToast('Listing deleted', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not delete listing', 'error');
+    }
   };
 
   const toggleBulkMode = () => {
@@ -355,10 +362,16 @@ export default function Profile() {
     }
   };
 
-  const handleBoostItem = (itemId, days) => {
-    boostItem(itemId, days);
-    setShowBoostModal(null);
-    addToast(`Listing boosted for ${days} days!`, 'success');
+  const handleBoostItem = async (itemId, days) => {
+    const expiresAt = new Date(Date.now() + days * 86400000).toISOString();
+    try {
+      await api.items.update(itemId, { boosted: true, boost_expires_at: expiresAt });
+      boostItem(itemId, days);
+      setShowBoostModal(null);
+      addToast(`Listing boosted for ${days} days!`, 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not boost listing', 'error');
+    }
   };
 
   const handleMenuClick = (action) => {

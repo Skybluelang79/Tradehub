@@ -169,6 +169,73 @@
   opacity: 0.9;
 }
 
+.detail-action-btn.danger-outline {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.detail-action-btn.danger-outline:hover {
+  background: var(--error);
+  color: white;
+  border-color: var(--error);
+}
+
+.detail-action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.owner-actions .detail-action-btn {
+  font-size: 12px;
+  padding: 12px 4px;
+}
+
+.owner-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.owner-edit-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.owner-confirm-text {
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 16px;
+}
+
+.owner-confirm-text strong {
+  color: var(--text-primary);
+}
+
+.boost-days-row {
+  display: flex;
+  gap: 8px;
+}
+
+.boost-days-chip {
+  flex: 1;
+  padding: 10px 0;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.boost-days-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
 .detail-title {
   font-size: 20px;
   font-weight: 600;

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import { Avatar, Rating, Button } from '../components/ui';
+import { Avatar, Rating, Button, Input, Textarea, Select } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
 import { ImageLightbox, PriceChart } from '../components/features';
@@ -21,10 +21,14 @@ import {
   ClockIcon,
   CheckIcon,
   PackageIcon,
+  EditIcon,
+  TrashIcon,
+  ZapIcon,
+  TrendingUpIcon,
 } from '../components/ui/Icons';
 import { AdBanner } from '../components/features';
 import { useApp } from '../context';
-import { currentUser } from '../services/api';
+import { currentUser, categories, conditionOptions } from '../services/api';
 import { formatPrice, formatDistance, formatDate } from '../utils/helpers';
 import '../styles/globals.css';
 import './ItemDetail.css';
@@ -63,6 +67,7 @@ export default function ItemDetail() {
     incrementItemViews,
     markAsSold,
     updateItem,
+    deleteItem,
   } = useApp();
 
   const { addToast } = useToast();
@@ -91,6 +96,16 @@ export default function ItemDetail() {
   const [offerAmount, setOfferAmount] = useState('');
   const [offerMessage, setOfferMessage] = useState('');
   const [offerBusy, setOfferBusy] = useState(false);
+
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [showBoostModal, setShowBoostModal] = useState(false);
+  const [boostDays, setBoostDays] = useState(7);
+  const [boostBusy, setBoostBusy] = useState(false);
+  const [soldBusy, setSoldBusy] = useState(false);
 
   const [bidAmount, setBidAmount] = useState('');
   const [bidBusy, setBidBusy] = useState(false);
@@ -485,6 +500,115 @@ export default function ItemDetail() {
     });
   };
 
+  const openEditModal = () => {
+    setEditForm({
+      title: selectedItem.title || '',
+      description: selectedItem.description || '',
+      price: String(selectedItem.price ?? ''),
+      category: selectedItem.category || 'other',
+      condition: selectedItem.condition || 'good',
+      quantity: String(selectedItem.quantity ?? 1),
+    });
+    setShowEditModal(true);
+  };
+
+  // The context helpers only touch local state, so every owner action has to
+  // persist through the API first. Otherwise the listing silently reverts the
+  // next time the tab reloads and re-fetches the listings.
+  const handleSaveEdit = async () => {
+    if (!editForm.title.trim()) {
+      addToast('Title is required', 'error');
+      return;
+    }
+    const price = Number(editForm.price);
+    if (!price || price <= 0) {
+      addToast('Enter a valid price', 'error');
+      return;
+    }
+    const quantity = Math.max(1, parseInt(editForm.quantity, 10) || 1);
+    setEditBusy(true);
+    try {
+      await api.items.update(selectedItem.id, {
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        price,
+        category: editForm.category,
+        condition: editForm.condition,
+        quantity,
+      });
+      updateItem(selectedItem.id, {
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        price,
+        category: editForm.category,
+        condition: editForm.condition,
+        quantity,
+      });
+      setShowEditModal(false);
+      addToast('Listing updated', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not update listing', 'error');
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    setDeleteBusy(true);
+    try {
+      await api.items.delete(selectedItem.id);
+      deleteItem(selectedItem.id);
+      setShowDeleteConfirm(false);
+      setSelectedItem(null);
+      setActiveTab('profile');
+      addToast('Listing deleted', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not delete listing', 'error');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const handleBoost = async () => {
+    setBoostBusy(true);
+    const expiresAt = new Date(Date.now() + boostDays * 86400000).toISOString();
+    try {
+      await api.items.update(selectedItem.id, { boosted: true, boost_expires_at: expiresAt });
+      updateItem(selectedItem.id, { boosted: true, boostExpiresAt: expiresAt });
+      setShowBoostModal(false);
+      addToast(`Listing boosted for ${boostDays} days`, 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not boost listing', 'error');
+    } finally {
+      setBoostBusy(false);
+    }
+  };
+
+  const handleMarkSold = async () => {
+    setSoldBusy(true);
+    try {
+      await api.items.update(selectedItem.id, { status: 'sold' });
+      markAsSold(selectedItem.id);
+      setSelectedItem(null);
+      setActiveTab('profile');
+      addToast('Listing marked as sold', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not mark as sold', 'error');
+    } finally {
+      setSoldBusy(false);
+    }
+  };
+
+  const handleUnlist = async () => {
+    try {
+      await api.items.update(selectedItem.id, { status: 'draft' });
+      updateItem(selectedItem.id, { status: 'draft' });
+      addToast('Listing unpublished. Find it under Drafts.', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not unpublish listing', 'error');
+    }
+  };
+
   const handleReport = async () => {
     const reason = reportCategory === 'Other' && reportDetails.trim() ? reportDetails.trim() : reportCategory;
     if (!reason) return;
@@ -831,18 +955,47 @@ export default function ItemDetail() {
       )}
 
       {isOwnItem && selectedItem.status === 'active' && (
-        <div className="detail-actions">
-          <button className="detail-action-btn secondary" onClick={() => setShowReportModal(true)}>
-            <FlagIconSvg size={20} />
-            Report
+        <div className="detail-actions owner-actions">
+          <button className="detail-action-btn secondary" onClick={openEditModal}>
+            <EditIcon size={20} />
+            Edit
           </button>
-          <button className="detail-action-btn primary danger-btn" onClick={() => {
-            markAsSold(selectedItem.id);
-            setSelectedItem(null);
-            setActiveTab('profile');
-          }}>
-            <ShieldIcon size={20} />
-            Mark as Sold
+          <button className="detail-action-btn secondary" onClick={() => setShowBoostModal(true)}>
+            <ZapIcon size={20} />
+            Boost
+          </button>
+          <button className="detail-action-btn secondary" onClick={() => setShowShareModal(true)}>
+            <ShareIcon size={20} />
+            Share
+          </button>
+          <button
+            className="detail-action-btn primary"
+            onClick={handleMarkSold}
+            disabled={soldBusy}
+          >
+            <CheckIcon size={20} />
+            {soldBusy ? '…' : 'Sold'}
+          </button>
+          <button className="detail-action-btn secondary danger-outline" onClick={() => setShowDeleteConfirm(true)}>
+            <TrashIcon size={20} />
+            Delete
+          </button>
+        </div>
+      )}
+
+      {isOwnItem && selectedItem.status === 'draft' && (
+        <div className="detail-actions owner-actions">
+          <button className="detail-action-btn secondary" onClick={openEditModal}>
+            <EditIcon size={20} />
+            Edit
+          </button>
+          <button className="detail-action-btn primary" onClick={handleUnlist}>
+            <TrendingUpIcon size={20} />
+            Publish
+          </button>
+          <button className="detail-action-btn secondary danger-outline" onClick={() => setShowDeleteConfirm(true)}>
+            <TrashIcon size={20} />
+            Delete
           </button>
         </div>
       )}
@@ -901,6 +1054,115 @@ export default function ItemDetail() {
           <span>This item has been sold</span>
         </div>
       )}
+
+      <Modal
+        isOpen={showEditModal}
+        onClose={() => setShowEditModal(false)}
+        title="Edit Listing"
+        footer={
+          <Button block onClick={handleSaveEdit} disabled={editBusy}>
+            {editBusy ? 'Saving…' : 'Save Changes'}
+          </Button>
+        }
+      >
+        {editForm && (
+          <div className="owner-edit-form">
+            <Input
+              label="Title"
+              value={editForm.title}
+              maxLength={200}
+              onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+            />
+            <Textarea
+              label="Description"
+              value={editForm.description}
+              maxLength={2000}
+              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+            />
+            <Input
+              label="Price"
+              type="number"
+              min="0"
+              step="0.01"
+              value={editForm.price}
+              onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+            />
+            <Select
+              label="Category"
+              options={categories.filter((c) => c.id !== 'all')}
+              value={editForm.category}
+              onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+            />
+            <Select
+              label="Condition"
+              options={conditionOptions}
+              value={editForm.condition}
+              onChange={(e) => setEditForm({ ...editForm, condition: e.target.value })}
+            />
+            <Input
+              label="Quantity"
+              type="number"
+              min="1"
+              step="1"
+              value={editForm.quantity}
+              onChange={(e) => setEditForm({ ...editForm, quantity: e.target.value })}
+            />
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        title="Delete Listing"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowDeleteConfirm(false)} disabled={deleteBusy}>
+              Cancel
+            </Button>
+            <Button
+              block
+              onClick={handleDelete}
+              disabled={deleteBusy}
+              style={{ background: 'var(--error)', color: 'white' }}
+            >
+              {deleteBusy ? 'Deleting…' : 'Delete Listing'}
+            </Button>
+          </>
+        }
+      >
+        <p className="owner-confirm-text">
+          This permanently removes <strong>{selectedItem.title}</strong>. Any offers and
+          conversations about it stay in your inbox, but the listing cannot be restored.
+        </p>
+      </Modal>
+
+      <Modal
+        isOpen={showBoostModal}
+        onClose={() => setShowBoostModal(false)}
+        title="Boost Listing"
+        footer={
+          <Button block onClick={handleBoost} disabled={boostBusy}>
+            {boostBusy ? 'Boosting…' : `Boost for ${boostDays} days`}
+          </Button>
+        }
+      >
+        <p className="owner-confirm-text">
+          Boosted listings appear at the top of search and category results.
+        </p>
+        <div className="boost-days-row">
+          {[3, 7, 14, 30].map((days) => (
+            <button
+              key={days}
+              type="button"
+              className={`boost-days-chip ${boostDays === days ? 'active' : ''}`}
+              onClick={() => setBoostDays(days)}
+            >
+              {days}d
+            </button>
+          ))}
+        </div>
+      </Modal>
 
       <Modal
         isOpen={showReportModal}

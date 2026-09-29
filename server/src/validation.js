@@ -71,7 +71,13 @@ export const createItemSchema = z.object({
   auction_ends_at: z.string().optional().nullable(),
 });
 
-export const updateItemSchema = createItemSchema.partial();
+// `status` is absent from the create schema on purpose: new listings always start
+// active. It has to be added back for updates, otherwise Zod strips it and the
+// PUT handler's `data.status` is always undefined, so "mark as sold" and
+// unpublish silently do nothing.
+export const updateItemSchema = createItemSchema.partial().extend({
+  status: z.enum(['active', 'draft', 'sold', 'reserved', 'ended']).optional(),
+});
 
 export const placeBidSchema = z.object({
   amount: z.number().positive('Bid must be positive'),

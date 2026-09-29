@@ -205,10 +205,13 @@ const [items, setItems] = useState([]);
           const byId = new Map(prev.map((u) => [u.id, u]));
           for (const c of rows) {
             const otherId = c.buyer_id === authUser.id ? c.seller_id : c.buyer_id;
-            if (!otherId || byId.has(otherId)) continue;
+            // A conversation without a resolved name must not be cached: this
+            // directory is persisted, so a placeholder written once would win
+            // over the real seller data on every later lookup.
+            if (!otherId || !c.other_name || byId.has(otherId)) continue;
             byId.set(otherId, {
               id: otherId,
-              name: c.other_name || 'Unknown user',
+              name: c.other_name,
               avatar: c.other_avatar || null,
               verified: !!c.other_verified,
             });
@@ -313,7 +316,10 @@ const [items, setItems] = useState([]);
 
   const getUser = useCallback((userId) => {
     if (!userId) return null;
-    const found = users.find((u) => u.id === userId);
+    // Skip unresolved entries rather than returning them: the directory is
+    // persisted to localStorage, so a name-less row would otherwise mask the
+    // real profile the listings below already carry.
+    const found = users.find((u) => u.id === userId && u.name);
     if (found) return found;
     const fromItems = items.find(i => i.sellerId === userId);
     if (fromItems?.seller_name) {
