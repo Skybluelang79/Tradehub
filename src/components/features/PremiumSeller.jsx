@@ -38,13 +38,15 @@ const premiumSellers = [
   },
 ];
 
+const PLATFORM_FEE_RATE = 0.03;
+
 const perks = [
   { icon: '👑', title: 'Priority Listing', desc: 'Your items appear first in search results' },
   { icon: '⭐', title: 'Premium Badge', desc: 'Stand out with a gold verified badge' },
   { icon: '📊', title: 'Seller Analytics', desc: 'Track views, clicks, and conversion rates' },
   { icon: '🚀', title: 'Free Boosts', desc: '2 free listing boosts per month' },
   { icon: '💬', title: 'Priority Support', desc: 'Direct line to our seller success team' },
-  { icon: '🏷️', title: 'Lower Fees', desc: '2% fee instead of 3% on all transactions' },
+  { icon: '🏷️', title: 'Flat 3% Fee', desc: 'Every plan keeps the same 3% transaction fee' },
 ];
 
 const plans = [
@@ -64,10 +66,9 @@ const plans = [
     price: 2500,
     period: '/mo',
     color: '#FBBF24',
-    features: ['Unlimited listings', '2% transaction fee', 'Priority search ranking', 'Premium badge', '2 free boosts/mo', 'Analytics dashboard'],
+    features: ['Unlimited listings', '3% transaction fee', 'Priority search ranking', 'Premium badge', '2 free boosts/mo', 'Analytics dashboard'],
     cta: 'Start Free Trial',
     badge: 'Most Popular',
-    savings: 'Save 1% per sale',
   },
   {
     id: 'pro',
@@ -75,10 +76,9 @@ const plans = [
     price: 6000,
     period: '/mo',
     color: '#A78BFA',
-    features: ['Everything in Premium', '1.5% transaction fee', 'Featured on homepage', 'API access', 'Priority support', 'Custom storefront'],
+    features: ['Everything in Premium', '3% transaction fee', 'Featured on homepage', 'API access', 'Priority support', 'Custom storefront'],
     cta: 'Start Free Trial',
     badge: 'For Power Sellers',
-    savings: 'Save 1.5% per sale',
   },
 ];
 
@@ -121,9 +121,8 @@ export default function PremiumSeller() {
   }, []);
 
   const monthlyRevenue = monthlySales * avgPrice;
-  const freeFee = monthlyRevenue * 0.03;
-  const premiumFee = monthlyRevenue * 0.02;
-  const premiumSavings = useAnimatedCounter(Math.round(freeFee - premiumFee), 1200, showUpgrade);
+  const platformFee = monthlyRevenue * PLATFORM_FEE_RATE;
+  const sellerPayout = useAnimatedCounter(Math.round(monthlyRevenue - platformFee), 1200, showUpgrade);
 
   const spawnParticles = useCallback(() => {
     const newParticles = Array.from({ length: 12 }, (_, i) => ({
@@ -283,16 +282,12 @@ export default function PremiumSeller() {
                   <span className="premium-calc-result-value">{formatPrice(monthlyRevenue)}</span>
                 </div>
                 <div className="premium-calc-result free">
-                  <span className="premium-calc-result-label">Free fees (3%)</span>
-                  <span className="premium-calc-result-value">-{formatPrice(freeFee)}</span>
-                </div>
-                <div className="premium-calc-result premium">
-                  <span className="premium-calc-result-label">Premium fees (2%)</span>
-                  <span className="premium-calc-result-value">-{formatPrice(premiumFee)}</span>
+                  <span className="premium-calc-result-label">TradeHub fee (3%)</span>
+                  <span className="premium-calc-result-value">-{formatPrice(platformFee)}</span>
                 </div>
                 <div className="premium-calc-result savings">
-                  <span className="premium-calc-result-label">You save</span>
-                  <span className="premium-calc-result-value">{formatPrice(premiumSavings)}/mo</span>
+                  <span className="premium-calc-result-label">You keep</span>
+                  <span className="premium-calc-result-value">{formatPrice(sellerPayout)}/mo</span>
                 </div>
               </div>
             </div>

@@ -13,10 +13,12 @@ import logger from '../src/logger.js';
 
 const router = Router();
 
+// Flat 3% seller fee on every plan. `fee` here is what the plan/benefit
+// screens display, so it has to match PLAN_FEES in payments.js.
 const PLANS = {
   free: { name: 'Free', price: 0, fee: 0.03, boosts: 0, maxListings: 5, badge: null },
-  premium: { name: 'Premium', price: 9.99, fee: 0.02, boosts: 2, maxListings: -1, badge: 'Premium Seller' },
-  pro: { name: 'Pro', price: 24.99, fee: 0.015, boosts: 5, maxListings: -1, badge: 'Pro Seller' },
+  premium: { name: 'Premium', price: 9.99, fee: 0.03, boosts: 2, maxListings: -1, badge: 'Premium Seller' },
+  pro: { name: 'Pro', price: 24.99, fee: 0.03, boosts: 5, maxListings: -1, badge: 'Pro Seller' },
 };
 
 const IS_PROD = process.env.NODE_ENV === 'production';

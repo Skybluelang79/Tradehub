@@ -36,7 +36,9 @@ const router = Router();
 // crediting sellers.
 const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production';
 
-const PLAN_FEES = { free: 0.03, premium: 0.02, pro: 0.015 };
+// Every plan charges the same 3% seller fee. Keep in sync with the `fee`
+// values on PLANS in subscriptions.js, which back the plan/benefit screens.
+const PLAN_FEES = { free: 0.03, premium: 0.03, pro: 0.03 };
 
 // Fees, refunds and subscription commissions share this public helper so the
 // admin Paystack settings page can render the same numbers as the checkout.
