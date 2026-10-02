@@ -651,7 +651,49 @@ function applySchema() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    -- One-time codes for signing in with a phone number instead of an email.
+    -- The code itself is never stored, only a peppered hash.
+    CREATE TABLE IF NOT EXISTS phone_otp_codes (
+      id TEXT PRIMARY KEY,
+      phone TEXT NOT NULL,
+      purpose TEXT NOT NULL DEFAULT 'login',
+      code_hash TEXT NOT NULL,
+      attempts INTEGER DEFAULT 0,
+      consumed INTEGER DEFAULT 0,
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    -- Passkeys (WebAuthn) registered against a user's fingerprint, face or
+    -- device PIN. Public keys are stored base64-encoded.
+    CREATE TABLE IF NOT EXISTS webauthn_credentials (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      credential_id TEXT UNIQUE NOT NULL,
+      public_key TEXT NOT NULL,
+      counter INTEGER DEFAULT 0,
+      transports TEXT DEFAULT '',
+      device_label TEXT DEFAULT '',
+      backed_up INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      last_used_at TEXT
+    );
+
+    -- Short-lived WebAuthn challenges, so a response can only be verified
+    -- against the exact challenge that was issued for it.
+    CREATE TABLE IF NOT EXISTS webauthn_challenges (
+      id TEXT PRIMARY KEY,
+      challenge TEXT UNIQUE NOT NULL,
+      user_id TEXT,
+      purpose TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id);
+    CREATE INDEX IF NOT EXISTS idx_phone_otp_phone ON phone_otp_codes(phone);
+    CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user ON webauthn_credentials(user_id);
+    CREATE INDEX IF NOT EXISTS idx_webauthn_challenges_expiry ON webauthn_challenges(expires_at);
 
   `);
 
@@ -746,7 +788,8 @@ ensureColumn('messages', 'type', "TEXT DEFAULT 'text'");
 ensureColumn('messages', 'delivered', 'INTEGER DEFAULT 0');
 ensureColumn('messages', 'reply_to_id', 'TEXT');
 ensureColumn('messages', 'deleted_for_sender', 'INTEGER DEFAULT 0');
-  ensureColumn('conversations', 'is_secure', 'INTEGER DEFAULT 0');
+ensureColumn('conversations', 'is_secure', 'INTEGER DEFAULT 0');
+  ensureColumn('users', 'phone_verified', 'INTEGER DEFAULT 0');
 
   db.exec(`
     UPDATE user_settings SET currency = 'NGN' WHERE currency IS NULL OR currency = '' OR currency = 'USD';
@@ -754,7 +797,37 @@ ensureColumn('messages', 'deleted_for_sender', 'INTEGER DEFAULT 0');
     UPDATE platform_settings SET value = 'NGN' WHERE key = 'currency' AND (value IS NULL OR value = '' OR value = 'USD');
   `);
 
+  ensureUniquePhoneIndex();
   seedPlatformSettings();
+}
+
+// Phone sign-in looks a user up by number, so two accounts must never share
+// one. The index is created best-effort: an older database may already hold
+// duplicates from before phone was an identifier, and failing to start would
+// take the whole app down rather than just the feature. Blank numbers are
+// excluded because every account has one by default.
+function ensureUniquePhoneIndex() {
+  const clashes = db.prepare(`
+    SELECT phone FROM users
+    WHERE phone IS NOT NULL AND phone != ''
+    GROUP BY phone HAVING COUNT(*) > 1
+  `).all();
+
+  for (const { phone } of clashes) {
+    console.warn(
+      `Duplicate phone ${phone}: keeping the oldest account, clearing the rest so phone sign-in stays unambiguous`
+    );
+    db.prepare(`
+      UPDATE users SET phone = '', phone_verified = 0 WHERE phone = ? AND id NOT IN (
+        SELECT id FROM users WHERE phone = ? ORDER BY created_at ASC, id ASC LIMIT 1
+      )
+    `).run(phone, phone);
+  }
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique
+    ON users(phone) WHERE phone IS NOT NULL AND phone != '';
+  `);
 }
 
 function seedPlatformSettings() {

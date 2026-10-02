@@ -74,6 +74,24 @@ export const api = {
     deleteAccount: (data) => request('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
   },
 
+  phoneAuth: {
+    requestCode: (phone) => request('/phone-auth/request-code', { method: 'POST', body: JSON.stringify({ phone }) }),
+    verify: (data) => request('/phone-auth/verify', { method: 'POST', body: JSON.stringify(data) }),
+    link: (phone) => request('/phone-auth/link', { method: 'POST', body: JSON.stringify({ phone }) }),
+    linkVerify: (data) => request('/phone-auth/link/verify', { method: 'POST', body: JSON.stringify(data) }),
+    unlink: () => request('/phone-auth/link', { method: 'DELETE' }),
+    status: () => request('/phone-auth/status'),
+  },
+
+  webauthn: {
+    registerOptions: () => request('/webauthn/register/options', { method: 'POST' }),
+    registerVerify: (payload) => request('/webauthn/register/verify', { method: 'POST', body: JSON.stringify(payload) }),
+    loginOptions: (email) => request('/webauthn/login/options', { method: 'POST', body: JSON.stringify({ email }) }),
+    loginVerify: (payload) => request('/webauthn/login/verify', { method: 'POST', body: JSON.stringify(payload) }),
+    credentials: () => request('/webauthn/credentials'),
+    removeCredential: (id) => request(`/webauthn/credentials/${id}`, { method: 'DELETE' }),
+  },
+
   settings: {
     get: () => request('/settings'),
     update: (data) => request('/settings', { method: 'PUT', body: JSON.stringify(data) }),

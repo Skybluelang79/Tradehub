@@ -144,6 +144,39 @@ export const blockUserSchema = z.object({
   userId: z.string().min(1),
 });
 
+// Phone sign-in. The number is normalised to digits before it is stored or
+// looked up; this only rejects input that cannot possibly become one.
+const phoneField = z
+  .string()
+  .trim()
+  .min(7, 'Enter a valid phone number')
+  .max(24, 'Enter a valid phone number')
+  .regex(/^[+0-9][0-9\s\-().]{5,23}$/, 'Enter a valid phone number');
+
+export const requestPhoneCodeSchema = z.object({
+  phone: phoneField,
+});
+
+export const verifyPhoneCodeSchema = z.object({
+  phone: phoneField,
+  code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+});
+
+export const webauthnLoginSchema = z.object({
+  // Optional: with an email we can scope the prompt to that account's
+  // passkeys, otherwise the browser offers every passkey for this site.
+  email: z.string().email().optional(),
+});
+
+export const webauthnResponseSchema = z.object({
+  id: z.string().min(1),
+  rawId: z.string().min(1),
+  type: z.string().min(1),
+  clientExtensionResults: z.record(z.any()).optional().default({}),
+  response: z.record(z.any()),
+  authenticatorAttachment: z.string().optional(),
+});
+
 export const createPromotionSchema = z.object({
   code: z.string().min(3).max(20),
   discount_type: z.enum(['percentage', 'fixed']),

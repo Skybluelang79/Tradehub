@@ -18,7 +18,7 @@ const router = Router();
 const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
 const REFRESH_SECRET = requiredEnv('REFRESH_SECRET', 'tradehub-refresh-secret-change-in-production-2026');
 
-function generateRefreshToken(userId) {
+export function generateRefreshToken(userId) {
   const token = uuidv4();
   const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   db.prepare(`

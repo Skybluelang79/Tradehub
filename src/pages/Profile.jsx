@@ -4,6 +4,7 @@ import { Avatar, Rating, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { api } from '../services/client';
+import { isPasskeySupported } from '../services/webauthn';
 import {
   PinIcon, SettingsIcon, LogOutIcon, EditIcon, ShieldIcon, HelpIcon,
   BellIcon, MoonIcon, GlobeIcon, MapPinIcon, EyeIcon, HeartIcon,
@@ -14,7 +15,7 @@ import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LanguageContext';
-import { formatDate, formatPrice } from '../utils/helpers';
+import { formatDate, formatPrice, formatPhone } from '../utils/helpers';
 import { categories } from '../services/api';
 import AddListing from './AddListing';
 import Offers from './Offers';
@@ -60,10 +61,12 @@ export default function Profile() {
     conversations, getSoldItems, getTotalRevenue,
     deleteTemplate, templates,
   } = useApp();
-  const { user: authUser, logout, updateProfile, changePassword, deleteAccount, resendVerification } = useAuth();
+  const { user: authUser, logout, updateProfile, changePassword, deleteAccount, resendVerification, listPasskeys, registerPasskey, removePasskey, phoneStatus, linkPhone, verifyPhoneLink, unlinkPhone } = useAuth();
   const { toggleTheme, setTheme } = useTheme();
   const { setLang } = useTranslation();
   const { addToast } = useToast();
+
+  const passkeySupported = isPasskeySupported();
 
   const normalizeUser = (u) => {
     if (!u) return null;
@@ -140,6 +143,7 @@ export default function Profile() {
   const SETTINGS_TABS = [
     { id: 'general', label: 'General', icon: '⚙' },
     { id: 'notifications', label: 'Notifications', icon: '🔔' },
+    { id: 'security', label: 'Security', icon: '🔐' },
     { id: 'preferences', label: 'Preferences', icon: '✨' },
     { id: 'searches', label: 'Saved Searches', icon: '🔍' },
   ];
@@ -172,6 +176,119 @@ export default function Profile() {
       addToast('Search removed', 'success');
     } catch (err) {
       addToast(err.message, 'error');
+    }
+  };
+
+  // --- Security: passkeys and phone number sign-in --------------------------
+  const [passkeys, setPasskeys] = useState([]);
+  const [phoneInfo, setPhoneInfo] = useState({ phone: '', phoneVerified: false, available: false });
+  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneCode, setPhoneCode] = useState('');
+  const [phoneCodeSent, setPhoneCodeSent] = useState(false);
+  const [securityBusy, setSecurityBusy] = useState(false);
+
+  const loadSecurity = useCallback(async () => {
+    const [keys, phone] = await Promise.all([
+      listPasskeys(),
+      phoneStatus(),
+    ]);
+    if (keys.success) setPasskeys(keys.credentials);
+    if (phone.success) {
+      setPhoneInfo({ phone: phone.phone, phoneVerified: phone.phoneVerified, available: phone.available });
+      setPhoneInput(phone.phone || '');
+    }
+  }, [listPasskeys, phoneStatus]);
+
+  useEffect(() => {
+    if (showSettingsModal && settingsTab === 'security') loadSecurity();
+  }, [showSettingsModal, settingsTab, loadSecurity]);
+
+  const handleAddPasskey = async () => {
+    setSecurityBusy(true);
+    try {
+      const result = await registerPasskey();
+      if (result.success) {
+        addToast('Passkey added. You can now sign in with your fingerprint.', 'success');
+        loadSecurity();
+      } else {
+        addToast(result.error, 'error');
+      }
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
+  const handleRemovePasskey = async (id) => {
+    setSecurityBusy(true);
+    try {
+      const result = await removePasskey(id);
+      if (result.success) {
+        addToast('Passkey removed', 'success');
+        loadSecurity();
+      } else {
+        addToast(result.error, 'error');
+      }
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
+  const handleSendPhoneCode = async () => {
+    if (!phoneInput.trim()) {
+      addToast('Enter a phone number', 'error');
+      return;
+    }
+    setSecurityBusy(true);
+    try {
+      const result = await linkPhone(phoneInput.trim());
+      if (result.success) {
+        setPhoneCodeSent(true);
+        if (result.devCode) {
+          setPhoneCode(result.devCode);
+          addToast(`Dev mode: your code is ${result.devCode}`, 'info');
+        } else {
+          addToast(result.message || 'Code sent', 'success');
+        }
+      } else {
+        addToast(result.error, 'error');
+      }
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
+  const handleConfirmPhone = async () => {
+    setSecurityBusy(true);
+    try {
+      const result = await verifyPhoneLink(phoneInput.trim(), phoneCode.trim());
+      if (result.success) {
+        addToast('Phone number linked. You can now sign in with it.', 'success');
+        setPhoneCode('');
+        setPhoneCodeSent(false);
+        loadSecurity();
+      } else {
+        addToast(result.error, 'error');
+      }
+    } finally {
+      setSecurityBusy(false);
+    }
+  };
+
+  const handleUnlinkPhone = async () => {
+    setSecurityBusy(true);
+    try {
+      const result = await unlinkPhone();
+      if (result.success) {
+        addToast('Phone number removed', 'success');
+        setPhoneInput('');
+        setPhoneCode('');
+        setPhoneCodeSent(false);
+        loadSecurity();
+      } else {
+        addToast(result.error, 'error');
+      }
+    } finally {
+      setSecurityBusy(false);
     }
   };
 
@@ -1245,6 +1362,133 @@ export default function Profile() {
                 <div className={`toggle ${notifPrefs[key] ? 'active' : ''}`} />
               </div>
             ))}
+          </div>
+        )}
+
+        {settingsTab === 'security' && (
+          <div className="settings-list">
+            <div className="settings-group-title">Fingerprint &amp; Passkeys</div>
+            {!passkeySupported && (
+              <div className="setting-item">
+                <div className="setting-icon"><ShieldIcon size={20} /></div>
+                <div className="setting-text">
+                  <div className="setting-title">Not supported on this browser</div>
+                  <div className="setting-desc">Passkeys need a fingerprint, face unlock or device PIN.</div>
+                </div>
+              </div>
+            )}
+            {passkeys.length === 0 ? (
+              <div className="setting-item">
+                <div className="setting-icon"><ShieldIcon size={20} /></div>
+                <div className="setting-text">
+                  <div className="setting-title">No passkeys yet</div>
+                  <div className="setting-desc">Add one to sign in with your fingerprint instead of a password.</div>
+                </div>
+              </div>
+            ) : (
+              passkeys.map((key) => (
+                <div key={key.id} className="setting-item">
+                  <div className="setting-icon"><ShieldIcon size={20} /></div>
+                  <div className="setting-text">
+                    <div className="setting-title">{key.deviceLabel}</div>
+                    <div className="setting-desc">
+                      Added {new Date(key.createdAt).toLocaleDateString()}
+                      {key.lastUsedAt && ` · last used ${new Date(key.lastUsedAt).toLocaleDateString()}`}
+                    </div>
+                  </div>
+                  <button
+                    className="delete-search-btn"
+                    onClick={() => handleRemovePasskey(key.id)}
+                    disabled={securityBusy}
+                    aria-label="Remove passkey"
+                  >
+                    <TrashIcon size={16} />
+                  </button>
+                </div>
+              ))
+            )}
+            {passkeySupported && (
+              <button className="auth-passkey-btn" onClick={handleAddPasskey} disabled={securityBusy}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" />
+                  <path d="M14 13.12c0 2.38 0 6.38-1 8.88" />
+                  <path d="M2 12a4 4 0 0 1 7.464-1.465" />
+                  <path d="M2 15.598A6.5 6.5 0 0 1 6.5 21a6.47 6.47 0 0 0 1.965-.403" />
+                  <path d="M12 13a4 4 0 1 1 4 4" />
+                  <path d="M21.801 10A10 10 0 1 0 22 14" />
+                </svg>
+                Add a passkey
+              </button>
+            )}
+
+            <div className="settings-group-title">Phone Number</div>
+            {phoneInfo.phoneVerified ? (
+              <>
+                <div className="setting-item">
+                  <div className="setting-icon"><BellIcon size={20} /></div>
+                  <div className="setting-text">
+                    <div className="setting-title">{formatPhone(phoneInfo.phone)}</div>
+                    <div className="setting-desc">You can sign in with this number.</div>
+                  </div>
+                  <button className="delete-search-btn" onClick={handleUnlinkPhone} disabled={securityBusy} aria-label="Remove phone number">
+                    <TrashIcon size={16} />
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {!phoneInfo.available && (
+                  <div className="setting-item">
+                    <div className="setting-icon"><ShieldIcon size={20} /></div>
+                    <div className="setting-text">
+                      <div className="setting-title">Phone sign-in is not switched on</div>
+                      <div className="setting-desc">The admin needs to add an SMS provider key before numbers can be used to sign in.</div>
+                    </div>
+                  </div>
+                )}
+                <div className="form-group">
+                  <label htmlFor="security-phone">Phone number</label>
+                  <div className="input-wrapper">
+                    <input
+                      type="tel"
+                      id="security-phone"
+                      placeholder="0803 123 4567"
+                      value={phoneInput}
+                      onChange={(e) => setPhoneInput(e.target.value)}
+                      disabled={securityBusy || !phoneInfo.available}
+                    />
+                  </div>
+                </div>
+                {phoneCodeSent && (
+                  <div className="form-group">
+                    <label htmlFor="security-phone-code">Verification code</label>
+                    <div className="input-wrapper">
+                      <input
+                        type="text"
+                        id="security-phone-code"
+                        inputMode="numeric"
+                        maxLength={6}
+                        placeholder="6-digit code"
+                        value={phoneCode}
+                        onChange={(e) => setPhoneCode(e.target.value)}
+                        disabled={securityBusy}
+                      />
+                    </div>
+                    <button type="button" className="auth-link-btn" onClick={() => { setPhoneCodeSent(false); setPhoneCode(''); }}>
+                      Use a different number
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  className="auth-passkey-btn"
+                  onClick={phoneCodeSent ? handleConfirmPhone : handleSendPhoneCode}
+                  disabled={securityBusy || !phoneInfo.available}
+                >
+                  {securityBusy ? <span className="loading-spinner"></span> : (phoneCodeSent ? 'Confirm number' : 'Send code')}
+                </button>
+              </>
+            )}
           </div>
         )}
 

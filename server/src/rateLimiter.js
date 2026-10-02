@@ -75,3 +75,27 @@ export const chatSearchLimiter = RATE_LIMIT_ENABLED
       message: { error: 'Search too frequently. Try again in a minute.' },
     })
   : passThrough();
+
+// Phone codes cost real money per message and each request can be brute-forced
+// six digits, so this is tighter than the shared authLimiter. Kept separate
+// from it so passkey and phone traffic never eats the budget of the email
+// login form (and vice versa).
+export const otpLimiter = RATE_LIMIT_ENABLED
+  ? rateLimit({
+      ...base,
+      windowMs: 15 * 60 * 1000,
+      max: 6,
+      message: { error: 'Too many codes requested. Try again in 15 minutes.' },
+    })
+  : passThrough();
+
+// Passkey ceremonies each involve two round trips, so allow more headroom
+// than a single password submission.
+export const webauthnLimiter = RATE_LIMIT_ENABLED
+  ? rateLimit({
+      ...base,
+      windowMs: 15 * 60 * 1000,
+      max: 30,
+      message: { error: 'Too many passkey attempts. Try again in 15 minutes.' },
+    })
+  : passThrough();

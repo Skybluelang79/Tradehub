@@ -290,6 +290,100 @@
   to { transform: rotate(360deg); }
 }
 
+/* Email / Phone tab switcher */
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 20px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-tab:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+.auth-tab.active {
+  background: var(--bg-primary);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.auth-passkey-btn {
+  width: 100%;
+  padding: 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.auth-passkey-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(15, 138, 99, 0.05);
+}
+
+.auth-passkey-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.auth-link-btn {
+  align-self: flex-start;
+  margin-top: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-link-btn:hover {
+  text-decoration: underline;
+}
+
 .auth-footer {
   margin-top: 24px;
   text-align: center;

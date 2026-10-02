@@ -36,6 +36,8 @@ import offerRoutes from './routes/offers.js';
 import verificationRoutes from './routes/verification.js';
 import referralRoutes from './routes/referrals.js';
 import aiRoutes from './routes/ai.js';
+import phoneAuthRoutes from './routes/phoneAuth.js';
+import webauthnRoutes from './routes/webauthn.js';
 
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, '..', 'uploads');
 const USE_BLOB = process.env.NETLIFY === 'true' || process.env.DB_BLOB === 'true' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
@@ -105,6 +107,10 @@ app.use('/api/offers', offerRoutes);
 app.use('/api/verification', verificationRoutes);
 app.use('/api/referrals', referralRoutes);
 app.use('/api/ai', aiRoutes);
+// Phone OTP and passkey sign-in hang off their own paths so they never
+// collide with the /api/auth/:userId/profile route pattern.
+app.use('/api/phone-auth', phoneAuthRoutes);
+app.use('/api/webauthn', webauthnRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });

@@ -62,6 +62,16 @@ export const validatePhone = (phone) => {
   return /^[\d\s\-+()]{10,}$/.test(phone);
 };
 
+// Group a stored 10-digit Nigerian number for display, e.g. 8031234567 ->
+// "803 123 4567". Anything else is returned untouched.
+export const formatPhone = (phone) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (digits.length === 10) {
+    return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+  }
+  return String(phone || '');
+};
+
 export const generateId = () => {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
