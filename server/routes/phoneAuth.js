@@ -12,7 +12,15 @@ import logger from '../src/logger.js';
 
 const router = Router();
 
-const CODE_PEPPER = requiredEnv('OTP_PEPPER', 'tradehub-otp-pepper-change-in-production-2026');
+// Pepper for hashing one-time codes. It falls back to a value derived from
+// JWT_SECRET rather than being mandatory: JWT_SECRET is already required in
+// production, and demanding a second secret here would mean a deploy with
+// OTP_PEPPER unset boots the API straight into a 502 instead of disabling
+// just this feature. The ":otp" suffix keeps the derived key distinct from
+// the one JWTs are signed with. Set OTP_PEPPER explicitly to rotate the
+// pepper independently.
+const CODE_PEPPER =
+  process.env.OTP_PEPPER || `${requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026')}:otp`;
 const CODE_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
 const IS_PROD = process.env.NODE_ENV === 'production';
