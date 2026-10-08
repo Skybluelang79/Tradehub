@@ -172,7 +172,7 @@ export default function Cart({ onClose }) {
             <p>Your payment is being processed and will be held in escrow until you confirm receipt.</p>
             <div className="cart-success-actions">
               <button className="cart-btn-primary" onClick={() => { if (onClose) onClose(); setActiveTab('home'); }}>Continue Browsing</button>
-              <button className="cart-btn-secondary" onClick={() => { if (onClose) onClose(); setActiveTab('profile'); }}>View Purchases</button>
+              <button className="cart-btn-secondary" onClick={() => { if (onClose) onClose(); setActiveTab('payments'); }}>View Purchases</button>
             </div>
           </div>
         )}

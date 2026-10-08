@@ -28,6 +28,148 @@ function readMessages() {
   return out;
 }
 
+// The API answers with snake_case rows; the whole UI reads camelCase. Every
+// path that takes an item from the server (list, create, update) goes through
+// this one mapper so the shapes can never drift apart.
+function normalizeItem(item) {
+  return {
+    ...item,
+    sellerId: item.seller_id,
+    location: {
+      lat: item.location_lat || 40.7128,
+      lng: item.location_lng || -74.006,
+      address: item.location_address || '',
+    },
+    salePrice: item.sale_price,
+    saleEndsAt: item.sale_ends_at,
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+    images: item.images || [],
+    isAuction: !!item.is_auction,
+    startingBid: item.starting_bid,
+    minIncrement: item.min_increment,
+    auctionEndsAt: item.auction_ends_at,
+    auctionStatus: item.auction_status,
+    currentBid: item.current_bid,
+    currentBidderId: item.current_bidder_id,
+  };
+}
+
+// Build the POST /api/items payload from the form-shaped object AddListing
+// produces (camelCase, strings for numbers).
+function toServerItem(item, images, status = 'active') {
+  const payload = {
+    title: item.title,
+    description: item.description || '',
+    price: Number(item.price),
+    category: item.category,
+    condition: item.condition || 'good',
+    images,
+    quantity: parseInt(item.quantity, 10) || 1,
+    currency: item.currency || 'NGN',
+    boosted: !!item.boosted,
+    is_auction: !!item.isAuction,
+    status,
+  };
+  if (item.salePrice != null && item.salePrice !== '') payload.sale_price = Number(item.salePrice);
+  if (item.saleEndsAt) payload.sale_ends_at = item.saleEndsAt;
+  if (item.location) {
+    payload.location = {
+      lat: Number(item.location.lat) || undefined,
+      lng: Number(item.location.lng) || undefined,
+      address: item.location.address || '',
+    };
+  }
+  if (Array.isArray(item.variants)) {
+    payload.variants = item.variants
+      .filter((v) => v && v.name)
+      .map((v) => ({ name: v.name, values: (v.values || []).map(String) }));
+  }
+  if (item.boostExpiresAt) payload.boost_expires_at = item.boostExpiresAt;
+  if (item.isAuction) {
+    if (item.startingBid != null) payload.starting_bid = Number(item.startingBid);
+    if (item.minIncrement != null) payload.min_increment = Number(item.minIncrement);
+    if (item.auctionEndsAt) payload.auction_ends_at = item.auctionEndsAt;
+  }
+  return payload;
+}
+
+// Partial updates (mark sold, boost, unpublish, edit listing) map from the
+// camelCase shapes used across the UI onto the snake_case PUT schema. Keys
+// that are absent stay absent so the server keeps its current values.
+const UPDATE_FIELD_MAP = {
+  title: 'title',
+  description: 'description',
+  price: 'price',
+  category: 'category',
+  condition: 'condition',
+  images: 'images',
+  quantity: 'quantity',
+  status: 'status',
+  boosted: 'boosted',
+  currency: 'currency',
+  salePrice: 'sale_price',
+  saleEndsAt: 'sale_ends_at',
+  boostExpiresAt: 'boost_expires_at',
+  isAuction: 'is_auction',
+  startingBid: 'starting_bid',
+  minIncrement: 'min_increment',
+  auctionEndsAt: 'auction_ends_at',
+  auctionStatus: 'auction_status',
+};
+
+function toServerUpdates(updates) {
+  const out = {};
+  for (const [key, serverKey] of Object.entries(UPDATE_FIELD_MAP)) {
+    if (key in updates) out[serverKey] = updates[key];
+  }
+  if ('variants' in updates) {
+    out.variants = (updates.variants || [])
+      .filter((v) => v && v.name)
+      .map((v) => ({ name: v.name, values: (v.values || []).map(String) }));
+  }
+  if ('location' in updates && updates.location) {
+    out.location = {
+      lat: Number(updates.location.lat) || undefined,
+      lng: Number(updates.location.lng) || undefined,
+      address: updates.location.address || '',
+    };
+  }
+  return out;
+}
+
+async function dataUrlToFile(dataUrl, index) {
+  const blob = await (await fetch(dataUrl)).blob();
+  const type = (dataUrl.slice(5, dataUrl.indexOf(';')) || 'image/png');
+  const ext = (type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+  return new File([blob], `listing-${index}.${ext}`, { type });
+}
+
+// Listings are edited in the browser as compressed data URLs. They have to be
+// uploaded before the item is saved: the API stores URLs, not payloads.
+async function persistImages(images) {
+  const list = (images || []).filter(Boolean);
+  if (!list.length) return [];
+
+  const out = new Array(list.length);
+  const pending = [];
+  list.forEach((src, i) => {
+    if (typeof src === 'string' && src.startsWith('data:image/')) pending.push(i);
+    else out[i] = src;
+  });
+
+  if (pending.length) {
+    const files = await Promise.all(pending.map((i, idx) => dataUrlToFile(list[i], idx)));
+    const res = await api.upload.images(files);
+    if (!res || !Array.isArray(res.files) || res.files.length !== pending.length) {
+      throw new Error(res?.error || 'Could not upload listing images');
+    }
+    pending.forEach((imageIndex, idx) => { out[imageIndex] = res.files[idx].url; });
+  }
+
+  return out.filter(Boolean);
+}
+
 export function AppProvider({ children }) {
   const { user: authUser } = useAuth();
   // Deliberately null when signed out. Defaulting to the demo account's id
@@ -98,6 +240,38 @@ const [items, setItems] = useState([]);
     return () => { cancelled = true; };
   }, [authUser]);
 
+  // Notifications are server state (offers, sales, saved-search alerts...).
+  // The localStorage copy only seeds the UI before the first response lands,
+  // and a light poll keeps alerts arriving while the app is open.
+  useEffect(() => {
+    if (!authUser?.id) return undefined;
+    let alive = true;
+    const loadNotifications = () =>
+      api.notifications.list()
+        .then((data) => {
+          if (!alive) return;
+          setNotifications((data.notifications || []).map((n) => {
+            let parsed = n.data;
+            if (typeof parsed === 'string') {
+              try { parsed = JSON.parse(parsed); } catch { parsed = null; }
+            }
+            return {
+              id: n.id,
+              type: n.type,
+              title: n.title,
+              body: n.body || '',
+              data: parsed && parsed !== '{}' ? parsed : null,
+              read: !!n.read,
+              createdAt: n.created_at,
+            };
+          }));
+        })
+        .catch(() => {});
+    loadNotifications();
+    const timer = setInterval(loadNotifications, 45000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [authUser?.id]);
+
   useEffect(() => {
     storage.set('notifications', notifications);
   }, [notifications]);
@@ -147,27 +321,7 @@ const [items, setItems] = useState([]);
     const fetchItems = async () => {
       try {
         const data = await api.items.list({ limit: 100 });
-        const normalized = (data.items || []).map(item => ({
-            ...item,
-            sellerId: item.seller_id,
-            location: {
-              lat: item.location_lat || 40.7128,
-              lng: item.location_lng || -74.006,
-              address: item.location_address || '',
-            },
-            salePrice: item.sale_price,
-            saleEndsAt: item.sale_ends_at,
-            createdAt: item.created_at,
-            updatedAt: item.updated_at,
-            images: item.images || [],
-            isAuction: !!item.is_auction,
-            startingBid: item.starting_bid,
-            minIncrement: item.min_increment,
-            auctionEndsAt: item.auction_ends_at,
-            auctionStatus: item.auction_status,
-            currentBid: item.current_bid,
-            currentBidderId: item.current_bidder_id,
-        }));
+        const normalized = (data.items || []).map(normalizeItem);
         setItems(normalized);
       } catch (err) {
         console.log('Could not load listings:', err?.message);
@@ -362,29 +516,19 @@ const [items, setItems] = useState([]);
     setNotifications((prev) => [newNotification, ...prev]);
   }, []);
 
-  const addItem = useCallback((item, status = 'active') => {
+  const addItem = useCallback(async (item, status = 'active') => {
+    const images = await persistImages(item.images);
+    const created = await api.items.create(toServerItem(item, images, status));
     const newItem = {
-      ...item,
-      id: generateId(),
-      sellerId: currentUserId,
-      // The list endpoint joins the users table and returns these. A listing
-      // built locally has to carry them too, otherwise getUser() has no name
-      // to resolve and the seller card renders a placeholder.
+      ...normalizeItem(created.item),
+      variants: item.variants || [],
+      // The list endpoint joins the users table and returns these; the create
+      // response does not, so carry them over from the signed-in account.
       seller_name: item.seller_name || authUser?.name || '',
       seller_avatar: item.seller_avatar || authUser?.avatar || '',
       seller_rating: item.seller_rating ?? authUser?.rating ?? 0,
       seller_verified: item.seller_verified ?? !!authUser?.verified,
       seller_identity_verified: item.seller_identity_verified ?? !!authUser?.identity_verified,
-      createdAt: new Date().toISOString(),
-      status,
-      views: 0,
-      favorites: 0,
-      boosted: false,
-      boostExpiresAt: null,
-      quantity: item.quantity || 1,
-      salePrice: item.salePrice || null,
-      saleEndsAt: item.saleEndsAt || null,
-      variants: item.variants || [],
     };
     setItems((prev) => [newItem, ...prev]);
     if (status === 'active') {
@@ -395,15 +539,31 @@ const [items, setItems] = useState([]);
       });
     }
     return newItem;
-  }, [addNotification, currentUserId, authUser]);
+  }, [addNotification, authUser]);
 
-  const updateItem = useCallback((itemId, updates) => {
-    setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, ...updates } : item));
+  const updateItem = useCallback(async (itemId, updates) => {
+    const applied = updates.images
+      ? { ...updates, images: await persistImages(updates.images).catch((err) => {
+          console.warn('Could not upload listing images:', err?.message);
+          return updates.images;
+        }) }
+      : updates;
+    setItems((prev) => prev.map((item) => item.id === itemId ? { ...item, ...applied } : item));
+    try {
+      await api.items.update(itemId, toServerUpdates(applied));
+    } catch (err) {
+      // Keep the local change so the UI still reflects the tap, but say so:
+      // silently losing "mark as sold" is how stale listings happen.
+      console.warn('Could not save listing change:', err?.message);
+    }
   }, []);
 
   const deleteItem = useCallback((itemId) => {
     const item = items.find((i) => i.id === itemId);
     setItems((prev) => prev.filter((item) => item.id !== itemId));
+    api.items.delete(itemId).catch((err) => {
+      console.warn('Could not delete listing:', err?.message);
+    });
     if (item) {
       addNotification({
         type: 'system',
@@ -741,10 +901,12 @@ const [items, setItems] = useState([]);
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
     );
+    api.notifications.markRead(notificationId).catch(() => {});
   }, []);
 
   const markAllNotificationsRead = useCallback(() => {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    api.notifications.markAllRead().catch(() => {});
   }, []);
 
   const unreadNotificationsCount = notifications.filter((n) => !n.read).length;

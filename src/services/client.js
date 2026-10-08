@@ -77,6 +77,8 @@ export const api = {
   phoneAuth: {
     requestCode: (phone) => request('/phone-auth/request-code', { method: 'POST', body: JSON.stringify({ phone }) }),
     verify: (data) => request('/phone-auth/verify', { method: 'POST', body: JSON.stringify(data) }),
+    signupRequestCode: (phone) => request('/phone-auth/signup/request-code', { method: 'POST', body: JSON.stringify({ phone }) }),
+    signupVerify: (data) => request('/phone-auth/signup/verify', { method: 'POST', body: JSON.stringify(data) }),
     link: (phone) => request('/phone-auth/link', { method: 'POST', body: JSON.stringify({ phone }) }),
     linkVerify: (data) => request('/phone-auth/link/verify', { method: 'POST', body: JSON.stringify(data) }),
     unlink: () => request('/phone-auth/link', { method: 'DELETE' }),
@@ -177,6 +179,8 @@ export const api = {
     createIntent: (data) => request('/payments/create-intent', { method: 'POST', body: JSON.stringify(data) }),
     verify: (reference) => request(`/payments/verify/${reference}`, { method: 'POST' }),
     confirm: (txnId) => request(`/payments/confirm/${txnId}`, { method: 'POST' }),
+    confirmReceipt: (txnId) => request(`/payments/transactions/${txnId}/confirm-receipt`, { method: 'POST' }),
+    receipt: (txnId) => request(`/payments/transactions/${txnId}`),
     transactions: (filter) => request(`/payments/transactions?filter=${filter || 'all'}`),
     sellerAnalytics: () => request('/payments/analytics/seller'),
     refund: (txnId) => request(`/payments/refund/${txnId}`, { method: 'POST' }),

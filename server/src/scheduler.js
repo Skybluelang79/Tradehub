@@ -68,12 +68,12 @@ export function runAuctionFinalize() {
         db.prepare(`
           INSERT INTO notifications (id, user_id, type, title, body, data)
           VALUES (?, ?, 'sale', 'You won the auction!', ?, ?)
-        `).run(uuidv4(), item.current_bidder_id, `Your winning bid of $${item.current_bid.toFixed(2)} for "${item.title}" is held in escrow.`, JSON.stringify({ itemId: item.id }));
+        `        ).run(uuidv4(), item.current_bidder_id, `Your winning bid of ₦${Number(item.current_bid).toLocaleString('en-NG')} for "${item.title}" is held in escrow.`, JSON.stringify({ itemId: item.id }));
         db.prepare(`
           INSERT INTO notifications (id, user_id, type, title, body, data)
           VALUES (?, ?, 'sale', 'Auction ended with a sale', ?, ?)
-        `).run(uuidv4(), item.seller_id, `"${item.title}" sold at auction for $${item.current_bid.toFixed(2)}.`, JSON.stringify({ itemId: item.id }));
-        logger.info(`Auction sold: ${item.title} (${item.id}) for $${item.current_bid}`);
+        `        ).run(uuidv4(), item.seller_id, `"${item.title}" sold at auction for ₦${Number(item.current_bid).toLocaleString('en-NG')}.`, JSON.stringify({ itemId: item.id }));
+        logger.info(`Auction sold: ${item.title} (${item.id}) for ₦${item.current_bid}`);
       } else {
         db.prepare("UPDATE items SET auction_status = 'ended' WHERE id = ?").run(item.id);
         db.prepare(`
@@ -117,7 +117,7 @@ export function runSavedSearchAlerts() {
           uuidv4(),
           s.user_id,
           `New match for "${s.name}"`,
-          `${item.title} is now $${price.toFixed(2)}`,
+          `${item.title} is now ₦${Number(price).toLocaleString('en-NG')}`,
           JSON.stringify({ itemId: item.id, searchId: s.id })
         );
         notified++;
@@ -153,7 +153,7 @@ export function runPriceDropAlerts() {
         uuidv4(),
         fav.user_id,
         `Price dropped on "${fav.title}"`,
-        `The item you favorited is now $${newPrice.toFixed(2)}`,
+        `The item you favorited is now ₦${Number(newPrice).toLocaleString('en-NG')}`,
         JSON.stringify({ itemId: fav.item_id })
       );
       db.prepare('UPDATE favorites SET price_at_add = ? WHERE user_id = ? AND item_id = ?').run(newPrice, fav.user_id, fav.item_id);

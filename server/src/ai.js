@@ -144,7 +144,7 @@ export async function generateListing({ title = '', description = '', category =
     },
     {
       role: 'user',
-      content: `Title so far: "${title || '(not given)'}"\nCategory: ${category || 'other'}\nCondition: ${condition || 'good'}\nExisting description: "${description || '(empty)'}"${imageHints ? `\nVisual hints: ${imageHints}` : ''}${stats ? `\nMarket reference for the category: median $${stats.median}, range $${stats.min}-$${stats.max} across ${stats.count} similar items.` : ''}`,
+      content: `Title so far: "${title || '(not given)'}"\nCategory: ${category || 'other'}\nCondition: ${condition || 'good'}\nExisting description: "${description || '(empty)'}"${imageHints ? `\nVisual hints: ${imageHints}` : ''}${stats ? `\nMarket reference for the category: median ₦${stats.median}, range ₦${stats.min}-₦${stats.max} across ${stats.count} similar items.` : ''}`,
     },
   ], { json: true, maxTokens: 400 });
 
@@ -227,7 +227,7 @@ export async function answerListingQuestion({ item, sellerName = '', question = 
     {
       role: 'user',
       content:
-        `Item: ${item.title}\nPrice: $${item.price}${item.sale_price ? ` (on sale: $${item.sale_price})` : ''}\nCondition: ${CONDITION_LABELS[item.condition] || item.condition || 'good'}\n` +
+        `Item: ${item.title}\nPrice: ₦${item.price}${item.sale_price ? ` (on sale: ₦${item.sale_price})` : ''}\nCondition: ${CONDITION_LABELS[item.condition] || item.condition || 'good'}\n` +
         `Location: ${item.location_address || 'local'}\nSeller: ${sellerName || 'a local seller'}\nDescription: ${String(item.description || '').slice(0, 600)}\n---\nBuyer question: ${question}`,
     },
   ], { maxTokens: 220, temperature: 0.4 });
@@ -242,7 +242,7 @@ export async function answerListingQuestion({ item, sellerName = '', question = 
     return `The item is listed in ${CONDITION_LABELS[item.condition] || item.condition || 'good'} condition. ${String(item.description).slice(0, 200) || ''} For precise details, send the seller a message from this listing.`;
   }
   if (/price|negotiate|discount|offer|cheaper|deal/.test(q)) {
-    return `The listed price is $${Number(item.price).toLocaleString()}. You can make an offer through the app — the seller can accept, decline, or counter. Escrow keeps your money safe until the item is delivered to your satisfaction.`;
+    return `The listed price is ₦${Number(item.price).toLocaleString()}. You can make an offer through the app — the seller can accept, decline, or counter. Escrow keeps your money safe until the item is delivered to your satisfaction.`;
   }
   if (/ship|delivery|mail|deliver|post/.test(q)) {
     return `Shipping availability depends on the seller. Use the message button to ask about delivery options — if you agree on terms, TradeHub escrow protects your payment until the deal is completed.`;
@@ -250,7 +250,7 @@ export async function answerListingQuestion({ item, sellerName = '', question = 
   if (/meet|pickup|location|where/.test(q)) {
     return `This item is listed near ${item.location_address || 'the seller'}. Reach out to the seller to arrange a local meetup — and check the safe-trading tips in the app before meeting.`;
   }
-  return `"${item.title}" is listed for $${Number(item.price).toLocaleString()} in ${CONDITION_LABELS[item.condition] || 'good'} condition. For anything specific, the best next step is to message the seller through the app — every TradeHub transaction is protected by escrow.`;
+  return `"${item.title}" is listed for ₦${Number(item.price).toLocaleString()} in ${CONDITION_LABELS[item.condition] || 'good'} condition. For anything specific, the best next step is to message the seller through the app — every TradeHub transaction is protected by escrow.`;
 }
 
 export function priceGuide({ category = 'other', price, title = '', excludeId = '' } = {}) {
@@ -261,24 +261,24 @@ export function priceGuide({ category = 'other', price, title = '', excludeId = 
     return {
       stats: null,
       advice: p
-        ? `Not enough similar listings to compare yet. At $${p.toLocaleString()}, pricing ~10% above or below similar new-in-category items is a safe starting point.`
+        ? `Not enough similar listings to compare yet. At ₦${p.toLocaleString()}, pricing ~10% above or below similar new-in-category items is a safe starting point.`
         : `Not enough similar listings to compare yet. Check what similar items sell for nearby, then set a fair price.`,
     };
   }
 
-  const range = `$${stats.min.toLocaleString()} – $${stats.max.toLocaleString()}`;
+  const range = `₦${stats.min.toLocaleString()} – ₦${stats.max.toLocaleString()}`;
   let advice;
   if (!p) {
-    advice = `Similar items range ${range} (median $${stats.median.toLocaleString()}, avg $${stats.avg.toLocaleString()}). Listing around the median is your best shot at a quick sale.`;
+    advice = `Similar items range ${range} (median ₦${stats.median.toLocaleString()}, avg ₦${stats.avg.toLocaleString()}). Listing around the median is your best shot at a quick sale.`;
   } else {
     const diff = Math.round(((p - stats.median) / stats.median) * 100);
     const closeness = stats.median > 0 ? Math.abs(diff) : 100;
     if (closeness <= 10) {
-      advice = `Your $${p.toLocaleString()} is right in line with ${stats.count} similar items (median $${stats.median.toLocaleString()}). Fairly priced.`;
+      advice = `Your ₦${p.toLocaleString()} is right in line with ${stats.count} similar items (median ₦${stats.median.toLocaleString()}). Fairly priced.`;
     } else if (diff < 0) {
-      advice = `Your $${p.toLocaleString()} is ~${Math.abs(diff)}% below the median $${stats.median.toLocaleString()} — priced to sell fast. Consider $${stats.median.toLocaleString()} if you want top value.`;
+      advice = `Your ₦${p.toLocaleString()} is ~${Math.abs(diff)}% below the median ₦${stats.median.toLocaleString()} — priced to sell fast. Consider ₦${stats.median.toLocaleString()} if you want top value.`;
     } else {
-      advice = `Your $${p.toLocaleString()} is ~${diff}% above the median $${stats.median.toLocaleString()}. You may need to negotiate; a sweet spot is around $${stats.median.toLocaleString()} (range ${range}).`;
+      advice = `Your ₦${p.toLocaleString()} is ~${diff}% above the median ₦${stats.median.toLocaleString()}. You may need to negotiate; a sweet spot is around ₦${stats.median.toLocaleString()} (range ${range}).`;
     }
   }
   return { stats: { ...stats, range }, advice };

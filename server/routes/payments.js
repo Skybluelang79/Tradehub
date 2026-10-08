@@ -15,7 +15,9 @@ import {
   toMajorUnits,
   DEFAULT_CURRENCY,
   isValidCurrency,
+  isPaystackCurrency,
 } from '../src/paystack.js';
+import { convert } from '../../shared/currencies.js';
 
 const router = Router();
 
@@ -36,20 +38,33 @@ const router = Router();
 // crediting sellers.
 const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production';
 
-// Every plan charges the same 3% seller fee. Keep in sync with the `fee`
+// Every plan charges the same 4% seller fee. Keep in sync with the `fee`
 // values on PLANS in subscriptions.js, which back the plan/benefit screens.
-const PLAN_FEES = { free: 0.03, premium: 0.03, pro: 0.03 };
+const PLAN_FEES = { free: 0.04, premium: 0.04, pro: 0.04 };
 
 // Fees, refunds and subscription commissions share this public helper so the
 // admin Paystack settings page can render the same numbers as the checkout.
+//
+// Source of truth: the admin `platform_fee_percent` setting defines the
+// platform-wide rate. A seller's plan only ever lowers that rate — plans are
+// discounts, never surcharges — and only while the plan is paid-up (an
+// unexpired trial or an active subscription).
 export function getFeeRateForSeller(sellerId) {
+  const adminPercent = platformFeePercent();
+  const platformRate = Number.isFinite(adminPercent) && adminPercent >= 0 ? adminPercent / 100 : 0.04;
   try {
-    const sub = db.prepare("SELECT plan FROM subscriptions WHERE user_id = ? AND status != 'cancelled'").get(sellerId);
-    if (sub && PLAN_FEES[sub.plan] != null) return PLAN_FEES[sub.plan];
+    const sub = db.prepare(
+      "SELECT plan, status, trial_end FROM subscriptions WHERE user_id = ? AND status IN ('trial', 'active') LIMIT 1"
+    ).get(sellerId);
+    if (sub && PLAN_FEES[sub.plan] != null) {
+      const inTrial = sub.status === 'trial' && sub.trial_end && new Date(sub.trial_end) > new Date();
+      if (sub.status === 'active' || inTrial) {
+        const planRate = PLAN_FEES[sub.plan];
+        if (planRate < platformRate) return planRate;
+      }
+    }
   } catch {}
-  const adminFee = platformFeePercent();
-  if (Number.isFinite(adminFee) && adminFee >= 0) return adminFee / 100;
-  return 0.03;
+  return platformRate;
 }
 
 function platformFeePercent() {
@@ -58,7 +73,7 @@ function platformFeePercent() {
     const v = parseFloat(row?.value);
     if (Number.isFinite(v) && v >= 0) return v;
   } catch {}
-  return 3;
+  return 4;
 }
 
 function notify(userId, type, title, body, data = {}) {
@@ -77,6 +92,15 @@ function getWallet(userId) {
   return w;
 }
 
+// Escrow holds the money AND the listing: once a payment enters `pending`
+// the item leaves the marketplace, so a second buyer can't check out the same
+// listing while the first payment is still held. `refundTxn` re-activates it
+// and `finalizeCompleted` marks it sold for good.
+export function reserveItem(itemId) {
+  if (!itemId) return;
+  db.prepare("UPDATE items SET status = 'sold' WHERE id = ? AND status = 'active'").run(itemId);
+}
+
 function insertTransaction({ txnId, item, amount, currency, buyerId, sellerId, method, status, paystackRef, paymentMethodId, promoCode, discountAmount, originalAmount, creditCents = 0 }) {
   const image = db.prepare('SELECT url FROM item_images WHERE item_id = ? ORDER BY sort_order LIMIT 1').get(item.id)?.url || '';
   db.prepare(`
@@ -89,6 +113,7 @@ function insertTransaction({ txnId, item, amount, currency, buyerId, sellerId, m
     promoCode || '', discountAmount || 0, originalAmount || amount,
     creditCents || 0
   );
+  if (status === 'pending') reserveItem(item.id);
 }
 
 // ---- Credit helpers ---------------------------------------------------------
@@ -260,7 +285,7 @@ router.get('/options', authenticateToken, (req, res) => {
 // Builds the common parts of a checkout: item validation, promo discount and
 // store-credit allocation. Returns the items passed validation plus totals.
 function buildCheckout(req) {
-  const { itemId, offerId, giftCardCode, promoCode, useCredit, currency } = req.body;
+  const { itemId, offerId, giftCardCode, promoCode, useCredit } = req.body;
   const offer = offerId ? db.prepare('SELECT * FROM offers WHERE id = ?').get(offerId) : null;
   const actualItemId = offer ? offer.item_id : itemId;
   const item = db.prepare('SELECT * FROM items WHERE id = ?').get(actualItemId);
@@ -274,10 +299,21 @@ function buildCheckout(req) {
     if (item.status === 'sold') { const err = new Error('Item is already sold'); err.status = 400; throw err; }
   }
 
-  const curr = currency || offer?.currency || DEFAULT_CURRENCY;
-  if (!isValidCurrency(curr)) { const err = new Error('Unsupported currency'); err.status = 400; throw err; }
+  const itemCurrency = isValidCurrency(offer?.currency) ? offer.currency
+    : (isValidCurrency(item.currency) ? item.currency : DEFAULT_CURRENCY);
 
-  const baseAmount = offer ? (offer.amount_cents / 100) : (item.sale_price || item.price);
+  const wantsCredit = req.body.method === 'credit' || req.body.method === 'gift_card' || !!giftCardCode || useCredit === true;
+  const usesPromo = !!promoCode && String(promoCode).trim() !== '';
+  // Store credit, gift cards and promo codes are NGN instruments, and Paystack
+  // can only charge a subset of currencies. When any of those apply — or the
+  // item is priced in a currency Paystack can't charge — the order settles in
+  // NGN; otherwise we charge in the item's own supported currency.
+  const settlementCurrency = (!wantsCredit && !usesPromo && isPaystackCurrency(itemCurrency))
+    ? itemCurrency
+    : DEFAULT_CURRENCY;
+
+  const baseAmountItem = offer ? (offer.amount_cents / 100) : (item.sale_price || item.price);
+  const baseAmount = convert(baseAmountItem, itemCurrency, settlementCurrency);
   let promoDiscount = 0;
   let promoCodeUsed = null;
   if (promoCode) {
@@ -289,7 +325,6 @@ function buildCheckout(req) {
   const amountCents = Math.round(amount * 100);
   const promoInfo = promoCodeUsed ? { code: promoCodeUsed, discount: promoDiscount } : null;
 
-  const wantsCredit = req.body.method === 'credit' || req.body.method === 'gift_card' || !!giftCardCode || useCredit === true;
   let creditCents = 0;
   let giftCard = null;
   if (wantsCredit) {
@@ -306,19 +341,19 @@ function buildCheckout(req) {
     }
   }
   const chargeCents = amountCents - creditCents;
-  return { item, amount, amountCents, currency: curr, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents, offerId: offer?.id || null };
+  return { item, amount, amountCents, currency: settlementCurrency, baseAmount, itemCurrency, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents, offerId: offer?.id || null };
 }
 
 router.post('/create-intent', authenticateToken, async (req, res) => {
   try {
-    const { item, amount, amountCents, currency, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents } = buildCheckout(req);
+    const { item, amount, amountCents, currency, baseAmount, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents } = buildCheckout(req);
     const method = req.body.method === 'bank' || req.body.method === 'paystack_bank' ? 'bank' : (req.body.method || 'card');
     const txnId = uuidv4();
 
     // Fully covered by store credit / gift card — nothing to charge.
     if (chargeCents === 0) {
       applyCredit({ userId: req.user.id, giftCard, creditCents });
-      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: 'credit', status: 'pending', paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: item.sale_price || item.price, creditCents });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: 'credit', status: 'pending', paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
       return res.json({ transactionId: txnId, status: 'pending', method: 'credit', paid: true, amountCents, creditCents, promo: promoInfo, currency });
     }
 
@@ -328,7 +363,7 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
         return res.status(503).json({ error: 'Payments are not configured. Set PAYSTACK_SECRET_KEY or enable DEMO_MODE.' });
       }
       applyCredit({ userId: req.user.id, giftCard, creditCents });
-      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: method === 'bank' ? 'bank' : 'card', status: 'pending', paystackRef: `demo_${txnId}`, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: item.sale_price || item.price, creditCents });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: method === 'bank' ? 'bank' : 'card', status: 'pending', paystackRef: `demo_${txnId}`, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
       return res.json({ demo: true, transactionId: txnId, status: 'pending', paid: true, amountCents, creditCents, promo: promoInfo, currency });
     }
 
@@ -345,7 +380,7 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
 
     // Reserve the buyer's credit now; it is restored if the payment is abandoned.
     applyCredit({ userId: req.user.id, giftCard, creditCents });
-    insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: method === 'bank' ? 'bank' : 'card', status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: item.sale_price || item.price, creditCents });
+    insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: method === 'bank' ? 'bank' : 'card', status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
 
     res.json({
       transactionId: txnId,
@@ -372,7 +407,7 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
 function getCart(userId) {
   return db.prepare(`
     SELECT c.item_id, c.quantity, c.created_at,
-      i.title, i.price, i.sale_price, i.category, i.condition, i.status,
+      i.title, i.price, i.sale_price, i.currency, i.category, i.condition, i.status,
       i.seller_id, i.quantity AS stock,
       (SELECT url FROM item_images WHERE item_id = i.id ORDER BY sort_order LIMIT 1) AS image,
       u.name AS seller_name, u.avatar AS seller_avatar
@@ -487,13 +522,12 @@ router.delete('/cart', authenticateToken, (req, res) => {
 
 router.post('/cart/checkout', authenticateToken, async (req, res) => {
   try {
-    const { method: rawMethod = 'card', giftCardCode, promoCode, currency: reqCurrency } = req.body;
-    const currency = isValidCurrency(reqCurrency) ? reqCurrency : DEFAULT_CURRENCY;
+    const { method: rawMethod = 'card', giftCardCode, promoCode } = req.body;
     const method = rawMethod === 'bank' || rawMethod === 'paystack_bank' ? 'bank' : 'card';
     const cartItems = getCart(req.user.id);
     if (!cartItems.length) return res.status(400).json({ error: 'Your cart is empty' });
 
-    const lines = [];
+    const rawLines = [];
     for (const line of cartItems) {
       const item = db.prepare('SELECT * FROM items WHERE id = ?').get(line.item_id);
       if (!item) { const e = new Error('Item no longer exists'); e.status = 400; throw e; }
@@ -502,9 +536,28 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       if (item.quantity != null && item.quantity > 0 && line.quantity > item.quantity) {
         const e = new Error(`Only ${item.quantity} of "${item.title}" available`); e.status = 400; throw e;
       }
-      const baseAmount = (item.sale_price || item.price) * line.quantity;
-      lines.push({ item, quantity: line.quantity, baseAmount });
+      rawLines.push({
+        item,
+        quantity: line.quantity,
+        itemCurrency: isValidCurrency(item.currency) ? item.currency : DEFAULT_CURRENCY,
+        baseAmountItem: (item.sale_price || item.price) * line.quantity,
+      });
     }
+
+    // A cart settles in one currency. Use the shared supported currency when
+    // every line agrees and no NGN-denominated instrument (credit/promo) is in
+    // play; otherwise convert every line to NGN.
+    const wantsCredit = method === 'credit' || method === 'gift_card' || !!giftCardCode;
+    const usesPromo = !!promoCode && String(promoCode).trim() !== '';
+    const lineCurrencies = [...new Set(rawLines.map((l) => l.itemCurrency))];
+    const singleSupported = lineCurrencies.length === 1 && isPaystackCurrency(lineCurrencies[0]);
+    const currency = (!wantsCredit && !usesPromo && singleSupported) ? lineCurrencies[0] : DEFAULT_CURRENCY;
+
+    const lines = rawLines.map((l) => ({
+      item: l.item,
+      quantity: l.quantity,
+      baseAmount: convert(l.baseAmountItem, l.itemCurrency, currency),
+    }));
 
     const subtotalCents = Math.round(lines.reduce((s, l) => s + l.baseAmount, 0) * 100);
     const subtotal = subtotalCents / 100;
@@ -626,6 +679,7 @@ router.post('/verify/:reference', authenticateToken, async (req, res) => {
     if (!isPaystackConfigured() && txn.paystack_reference?.startsWith('demo_')) {
       // Demo transactions are already paid; verify locally without Paystack.
       db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
+      reserveItem(txn.item_id);
       notify(txn.buyer_id, 'payment', 'Payment Received', `Demo payment for "${txn.item_title}" is held in escrow.`);
       return res.json({ status: 'pending', success: true, transactionId: txn.id, demo: true });
     }
@@ -637,6 +691,7 @@ router.post('/verify/:reference', authenticateToken, async (req, res) => {
     }
 
     db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
+    reserveItem(txn.item_id);
     // Save the reusable authorization code so buyers can check out faster next time.
     const auth = verified.authorization;
     if (auth?.authorization_code && auth.reusable) {
@@ -688,7 +743,9 @@ export function finalizeCompleted(txn) {
   db.prepare("UPDATE transactions SET status = 'completed', completed_at = datetime('now') WHERE id = ?").run(txn.id);
   db.prepare("UPDATE items SET status = 'sold' WHERE id = ?").run(txn.item_id);
 
-  const amountCents = Math.round(txn.amount * 100);
+  // Wallets are held in NGN, so a transaction charged in a foreign currency is
+  // converted at the static rates before the seller's balance is credited.
+  const amountCents = Math.round(convert(txn.amount, txn.currency || DEFAULT_CURRENCY, DEFAULT_CURRENCY) * 100);
   const feeCents = Math.round(amountCents * getFeeRateForSeller(txn.seller_id));
   const netCents = amountCents - feeCents;
   db.prepare('UPDATE transactions SET fee_amount = ?, net_amount = ? WHERE id = ?').run(feeCents / 100, netCents / 100, txn.id);
@@ -734,7 +791,7 @@ export async function refundTxn(txn, opts = {}) {
   if (wasCompleted) {
     const w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(txn.seller_id);
     if (w && (w.lifetime_cents > 0 || w.available_cents > 0)) {
-      const amountCents = Math.round(txn.amount * 100);
+      const amountCents = Math.round(convert(txn.amount, txn.currency || DEFAULT_CURRENCY, 'NGN') * 100);
       const feeCents = Math.round(amountCents * getFeeRateForSeller(txn.seller_id));
       const netCents = amountCents - feeCents;
       const available = Math.max(0, w.available_cents - netCents);

@@ -30,6 +30,7 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
   const [validationErrors, setValidationErrors] = useState({});
   const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
 
   const passkeySupported = isPasskeySupported();
   const activeBusy = busy || isLoading;
@@ -126,7 +127,7 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
 
   const handlePasskey = async () => {
     clearError();
-    setBusy(true);
+    setPasskeyBusy(true);
     try {
       // Passing the email scopes the fingerprint prompt to this account when
       // the user is on the email tab.
@@ -141,7 +142,7 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
         addToast(result.error || 'Fingerprint sign-in failed', 'error');
       }
     } finally {
-      setBusy(false);
+      setPasskeyBusy(false);
     }
   };
 
@@ -385,28 +386,36 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
         </form>
 
         {passkeySupported && (
-          <>
+          <div className="auth-passkey">
             <div className="auth-divider">
               <span>or</span>
             </div>
             <button
               type="button"
-              className="auth-passkey-btn"
+              className="auth-passkey-img-btn"
               onClick={handlePasskey}
-              disabled={activeBusy}
+              disabled={passkeyBusy}
+              aria-label="Sign in with your fingerprint"
+              title="Sign in with your fingerprint"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4" />
-                <path d="M14 13.12c0 2.38 0 6.38-1 8.88" />
-                <path d="M17.29 21.02c.12-.6.43-2.3.5-3.02" />
-                <path d="M2 12a4 4 0 0 1 7.464-1.465" />
-                <path d="M2 15.598A6.5 6.5 0 0 1 6.5 21a6.47 6.47 0 0 0 1.965-.403" />
-                <path d="M12 13a4 4 0 1 1 4 4" />
-                <path d="M21.801 10A10 10 0 1 0 22 14" />
-              </svg>
-              Sign in with your fingerprint
+              {passkeyBusy ? (
+                <span className="loading-spinner"></span>
+              ) : (
+                <img
+                  src="/images/fingerprint.svg"
+                  alt=""
+                  className="auth-passkey-img"
+                  width="84"
+                  height="84"
+                  draggable={false}
+                />
+              )}
             </button>
-          </>
+            <p className="auth-passkey-caption">
+              Sign in with your fingerprint
+              <span>Tap the thumbprint to use your phone or device unlock</span>
+            </p>
+          </div>
         )}
 
         <SocialAuthButtons onClose={onClose} />

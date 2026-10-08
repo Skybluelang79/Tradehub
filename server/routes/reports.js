@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
+import { writeLimiter } from '../src/rateLimiter.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -18,7 +19,7 @@ const SUPPORT_CATEGORIES = new Set([
 
 // General problem reports that are not tied to a specific item or user, which
 // the item/user report endpoints cannot represent.
-router.post('/support', authenticateToken, (req, res) => {
+router.post('/support', authenticateToken, writeLimiter, (req, res) => {
   try {
     const { category, subject, message, contactEmail } = req.body || {};
 
@@ -101,7 +102,7 @@ router.get('/', authenticateToken, (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, writeLimiter, (req, res) => {
   try {
     const { itemId, reason, description } = req.body;
     if (!itemId || !reason) {
@@ -133,7 +134,7 @@ router.post('/', authenticateToken, (req, res) => {
   }
 });
 
-router.post('/user', authenticateToken, (req, res) => {
+router.post('/user', authenticateToken, writeLimiter, (req, res) => {
   try {
     const { userId, reason, description } = req.body;
     if (!userId || !reason) {

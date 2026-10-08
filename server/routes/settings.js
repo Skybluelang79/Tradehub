@@ -2,6 +2,7 @@ import { Router } from 'express';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import logger from '../src/logger.js';
+import { isValidCurrency } from '../../shared/currencies.js';
 
 const router = Router();
 
@@ -46,6 +47,9 @@ router.put('/', authenticateToken, (req, res) => {
 
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
+        if (key === 'currency' && !isValidCurrency(req.body[key])) {
+          return res.status(400).json({ error: 'Unsupported currency' });
+        }
         const value = booleanKeys.includes(key) ? (req.body[key] ? 1 : 0) : req.body[key];
         db.prepare(`UPDATE user_settings SET ${key} = ?, updated_at = datetime('now') WHERE user_id = ?`).run(value, req.user.id);
       }

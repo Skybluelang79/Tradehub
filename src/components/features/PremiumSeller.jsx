@@ -38,7 +38,7 @@ const premiumSellers = [
   },
 ];
 
-const PLATFORM_FEE_RATE = 0.03;
+const PLATFORM_FEE_RATE = 0.04;
 
 const perks = [
   { icon: '👑', title: 'Priority Listing', desc: 'Your items appear first in search results' },
@@ -46,7 +46,7 @@ const perks = [
   { icon: '📊', title: 'Seller Analytics', desc: 'Track views, clicks, and conversion rates' },
   { icon: '🚀', title: 'Free Boosts', desc: '2 free listing boosts per month' },
   { icon: '💬', title: 'Priority Support', desc: 'Direct line to our seller success team' },
-  { icon: '🏷️', title: 'Flat 3% Fee', desc: 'Every plan keeps the same 3% transaction fee' },
+  { icon: '🏷️', title: 'Flat 4% Fee', desc: 'Every plan keeps the same 4% transaction fee' },
 ];
 
 const plans = [
@@ -56,7 +56,7 @@ const plans = [
     price: 0,
     period: '',
     color: '#6B6B7B',
-    features: ['5 listings', '3% transaction fee', 'Basic search visibility', 'Standard support'],
+    features: ['5 listings', '4% transaction fee', 'Basic search visibility', 'Standard support'],
     cta: 'Current Plan',
     current: true,
   },
@@ -66,7 +66,7 @@ const plans = [
     price: 2500,
     period: '/mo',
     color: '#FBBF24',
-    features: ['Unlimited listings', '3% transaction fee', 'Priority search ranking', 'Premium badge', '2 free boosts/mo', 'Analytics dashboard'],
+    features: ['Unlimited listings', '4% transaction fee', 'Priority search ranking', 'Premium badge', '2 free boosts/mo', 'Analytics dashboard'],
     cta: 'Start Free Trial',
     badge: 'Most Popular',
   },
@@ -76,7 +76,7 @@ const plans = [
     price: 6000,
     period: '/mo',
     color: '#A78BFA',
-    features: ['Everything in Premium', '3% transaction fee', 'Featured on homepage', 'API access', 'Priority support', 'Custom storefront'],
+    features: ['Everything in Premium', '4% transaction fee', 'Featured on homepage', 'API access', 'Priority support', 'Custom storefront'],
     cta: 'Start Free Trial',
     badge: 'For Power Sellers',
   },
@@ -282,7 +282,7 @@ export default function PremiumSeller() {
                   <span className="premium-calc-result-value">{formatPrice(monthlyRevenue)}</span>
                 </div>
                 <div className="premium-calc-result free">
-                  <span className="premium-calc-result-label">TradeHub fee (3%)</span>
+                  <span className="premium-calc-result-label">TradeHub fee (4%)</span>
                   <span className="premium-calc-result-value">-{formatPrice(platformFee)}</span>
                 </div>
                 <div className="premium-calc-result savings">

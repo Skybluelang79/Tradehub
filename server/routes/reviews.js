@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import validate, { createReviewSchema } from '../src/validation.js';
+import { writeLimiter } from '../src/rateLimiter.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -23,7 +24,7 @@ router.get('/user/:userId', (req, res) => {
   }
 });
 
-router.post('/', authenticateToken, validate(createReviewSchema), (req, res) => {
+router.post('/', authenticateToken, writeLimiter, validate(createReviewSchema), (req, res) => {
   try {
     const { revieweeId, itemId, rating, text } = req.validatedBody;
 

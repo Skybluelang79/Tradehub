@@ -27,7 +27,7 @@ export function validateAndApplyPromo(code, amount) {
   }
 
   if (promo.min_purchase && amount < promo.min_purchase) {
-    const err = new Error(`Minimum purchase of $${promo.min_purchase} required`);
+    const err = new Error(`Minimum purchase of ₦${promo.min_purchase} required`);
     err.status = 400;
     throw err;
   }
@@ -118,7 +118,7 @@ router.post('/validate', (req, res) => {
 
     if (promo.min_purchase && amount && amount < promo.min_purchase) {
       return res.status(400).json({
-        error: `Minimum purchase of $${promo.min_purchase} required`,
+        error: `Minimum purchase of ₦${promo.min_purchase} required`,
         min_purchase: promo.min_purchase,
       });
     }

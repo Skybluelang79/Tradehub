@@ -1,3 +1,4 @@
+import './ensure-prod-env.js';
 import serverless from 'serverless-http';
 import { connectLambda } from '@netlify/blobs';
 import app from '../../server/app.js';

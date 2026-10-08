@@ -15,7 +15,7 @@ import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LanguageContext';
-import { formatDate, formatPrice, formatPhone } from '../utils/helpers';
+import { formatDate, formatPrice, formatPhone, normalizeReview } from '../utils/helpers';
 import { categories } from '../services/api';
 import AddListing from './AddListing';
 import Offers from './Offers';
@@ -334,8 +334,27 @@ export default function Profile() {
     }).catch(() => {});
   }, [authUser, setTheme, setLang]);
 
-  const userReviews = useMemo(() => getReviewsForUser(currentUser.id), [getReviewsForUser, currentUser.id]);
-  const userRating = useMemo(() => getUserRating(currentUser.id), [getUserRating, currentUser.id]);
+  // Reviews and rating come from the API so the profile reflects the same
+  // reputation the rest of the site sees; local fixtures are only a fallback
+  // while the request is in flight or offline.
+  const [apiReviews, setApiReviews] = useState(null);
+  useEffect(() => {
+    if (!authUser) return undefined;
+    let cancelled = false;
+    api.reviews.forUser(authUser.id)
+      .then((data) => { if (!cancelled) setApiReviews((data.reviews || []).map(normalizeReview)); })
+      .catch(() => { if (!cancelled) setApiReviews([]); });
+    return () => { cancelled = true; };
+  }, [authUser]);
+
+  const localReviews = useMemo(() => getReviewsForUser(currentUser.id), [getReviewsForUser, currentUser.id]);
+  const userReviews = apiReviews !== null ? apiReviews : localReviews;
+  const userRating = useMemo(() => {
+    if (userReviews.length) {
+      return Math.round((userReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / userReviews.length) * 10) / 10;
+    }
+    return getUserRating(currentUser.id);
+  }, [userReviews, getUserRating, currentUser.id]);
 
   const totalItemViews = userActiveItems.reduce((sum, i) => sum + (i.views || 0), 0);
   const totalItemFavorites = userActiveItems.reduce((sum, i) => sum + (i.favorites || 0), 0);
@@ -1215,9 +1234,13 @@ export default function Profile() {
                 userReviews.map((review) => (
                   <div key={review.id} className="review-card">
                     <div className="review-header">
-                      <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${review.reviewerId}`} alt="Reviewer" className="review-avatar" />
+                      <img
+                        src={review.reviewerAvatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${review.reviewerId}`}
+                        alt="Reviewer"
+                        className="review-avatar"
+                      />
                       <div className="review-user-info">
-                        <div className="review-user-name">User {review.reviewerId.slice(-4)}</div>
+                        <div className="review-user-name">{review.reviewerName || `User ${String(review.reviewerId || '').slice(-4)}`}</div>
                         <div className="review-date">{formatDate(review.createdAt)}</div>
                       </div>
                       <Rating value={review.rating} size="sm" />

@@ -4,6 +4,7 @@ import db from '../db.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 import validate, { createItemSchema, updateItemSchema, placeBidSchema } from '../src/validation.js';
 import logger from '../src/logger.js';
+import { formatMoney } from '../../shared/currencies.js';
 
 const router = Router();
 
@@ -252,20 +253,22 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
       category, condition, images, location, quantity,
       variants, boosted, boost_expires_at,
       is_auction, starting_bid, min_increment, auction_ends_at,
+      status, currency,
     } = req.validatedBody;
 
     const id = uuidv4();
     const auction = is_auction === true;
 
     db.prepare(`
-      INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, boosted, boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, current_bid, current_bidder_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, current_bid, current_bidder_id, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, title, description, price,
       sale_price || null, sale_ends_at || null,
       category, condition, req.user.id,
       location?.lat || null, location?.lng || null,
       location?.address || '', quantity || 1,
+      currency || 'NGN',
       boosted ? 1 : 0, boost_expires_at || null,
       auction ? 1 : 0,
       auction ? (starting_bid ?? price) : null,
@@ -273,7 +276,8 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
       auction ? (auction_ends_at || null) : null,
       auction ? 'active' : 'pending',
       auction ? (starting_bid ?? price) : null,
-      null
+      null,
+      status || 'active'
     );
 
     if (images && images.length > 0) {
@@ -319,7 +323,8 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
       UPDATE items SET title = ?, description = ?, price = ?, sale_price = ?, sale_ends_at = ?,
         category = ?, condition = ?, location_lat = ?, location_lng = ?, location_address = ?,
         quantity = ?, status = ?, boosted = ?, boost_expires_at = ?, updated_at = datetime('now'),
-        is_auction = ?, starting_bid = ?, min_increment = ?, auction_ends_at = ?, auction_status = ?
+        is_auction = ?, starting_bid = ?, min_increment = ?, auction_ends_at = ?, auction_status = ?,
+        currency = ?
       WHERE id = ?
     `).run(
       data.title ?? item.title, data.description ?? item.description,
@@ -337,6 +342,7 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
       data.min_increment !== undefined ? (data.min_increment || 1) : item.min_increment,
       data.auction_ends_at !== undefined ? data.auction_ends_at : item.auction_ends_at,
       data.auction_status ?? item.auction_status,
+      data.currency ?? item.currency,
       req.params.id
     );
 
@@ -489,7 +495,7 @@ router.get('/:id/bids', (req, res) => {
 router.post('/:id/bid', authenticateToken, validate(placeBidSchema), (req, res) => {
   try {
     const item = db.prepare(
-      'SELECT id, seller_id, is_auction, starting_bid, min_increment, current_bid, current_bidder_id, auction_ends_at, auction_status, status FROM items WHERE id = ?'
+      'SELECT id, seller_id, is_auction, starting_bid, min_increment, current_bid, current_bidder_id, auction_ends_at, auction_status, status, currency FROM items WHERE id = ?'
     ).get(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
     if (!item.is_auction) return res.status(400).json({ error: 'Item is not an auction' });
@@ -501,7 +507,7 @@ router.post('/:id/bid', authenticateToken, validate(placeBidSchema), (req, res) 
     const currentBid = item.current_bid ?? item.starting_bid ?? 0;
     const minBid = currentBid + (item.min_increment || 1);
     if (amount < minBid) {
-      return res.status(400).json({ error: `Bid must be at least ₦${Number(minBid).toLocaleString('en-NG')}` });
+      return res.status(400).json({ error: `Bid must be at least ${formatMoney(minBid, item.currency || 'NGN')}` });
     }
 
     const id = uuidv4();
@@ -512,7 +518,7 @@ router.post('/:id/bid', authenticateToken, validate(placeBidSchema), (req, res) 
       db.prepare(`
         INSERT INTO notifications (id, user_id, type, title, body, data)
         VALUES (?, ?, 'system', "You've been outbid", ?, ?)
-      `).run(uuidv4(), item.current_bidder_id, `A new bid of ₦${Number(amount).toLocaleString('en-NG')} was placed on your auction item.`, JSON.stringify({ itemId: item.id }));
+      `).run(uuidv4(), item.current_bidder_id, `A new bid of ${formatMoney(amount, item.currency || 'NGN')} was placed on your auction item.`, JSON.stringify({ itemId: item.id }));
     }
 
     res.status(201).json({

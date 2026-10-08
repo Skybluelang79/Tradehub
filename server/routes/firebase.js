@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import db from '../db.js';
 import { verifyFirebaseToken, sendPushNotification } from '../src/firebase.js';
-import { generateToken } from '../middleware/auth.js';
+import { generateToken, authenticateToken } from '../middleware/auth.js';
 import { sendNotificationEmail } from '../src/email.js';
 
 const router = Router();
@@ -76,7 +76,10 @@ router.post('/link', async (req, res) => {
   }
 });
 
-router.post('/send-email', async (req, res) => {
+// Both outbound-notification endpoints require a signed-in caller: without a
+// guard they are an open relay (anyone could mail arbitrary addresses or push
+// to arbitrary device tokens).
+router.post('/send-email', authenticateToken, async (req, res) => {
   try {
     const { to, subject, body } = req.body;
     if (!to || !subject || !body) {
@@ -90,7 +93,7 @@ router.post('/send-email', async (req, res) => {
   }
 });
 
-router.post('/push', async (req, res) => {
+router.post('/push', authenticateToken, async (req, res) => {
   try {
     const { tokens, title, body, image, data } = req.body;
     if (!tokens || !title || !body) {

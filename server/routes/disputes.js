@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { convert, formatMoney } from '../../shared/currencies.js';
+import { DEFAULT_CURRENCY } from '../src/paystack.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import validate, { createDisputeSchema } from '../src/validation.js';
 import { refundTxn, getFeeRateForSeller } from './payments.js';
@@ -128,13 +130,13 @@ router.put('/:id/resolve', adminAuth, async (req, res) => {
     const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(dispute.transaction_id);
     if (!txn) return res.status(404).json({ error: 'Transaction not found' });
 
-    const amountCents = Math.round(txn.amount * 100);
+    const amountCents = Math.round(convert(txn.amount, txn.currency || DEFAULT_CURRENCY, 'NGN') * 100);
     const feeCents = Math.round(amountCents * getFeeRateForSeller(txn.seller_id));
     const netCents = amountCents - feeCents;
 
     if (action === 'refund_buyer') {
       await refundTxn(txn);
-      notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved. Payment of ₦${Number(txn.amount).toLocaleString('en-NG')} has been refunded.`);
+      notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved. Payment of ${formatMoney(txn.amount, txn.currency)} has been refunded.`);
       notify(txn.seller_id, 'system', 'Dispute Resolved', `The dispute for "${txn.item_title}" was resolved in the buyer's favor.`);
     } else if (action === 'release_seller') {
       if (txn.status !== 'completed') {

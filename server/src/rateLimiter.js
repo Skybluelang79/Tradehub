@@ -67,6 +67,18 @@ export const uploadLimiter = RATE_LIMIT_ENABLED
     })
   : passThrough();
 
+// User-generated submissions (reviews, abuse reports) are cheaper to spam
+// than to browse, so they get their own bucket instead of only sharing the
+// global apiLimiter.
+export const writeLimiter = RATE_LIMIT_ENABLED
+  ? rateLimit({
+      ...base,
+      windowMs: 60 * 60 * 1000,
+      max: 20,
+      message: { error: 'Too many submissions. Try again later.' },
+    })
+  : passThrough();
+
 export const chatSearchLimiter = RATE_LIMIT_ENABLED
   ? rateLimit({
       ...base,

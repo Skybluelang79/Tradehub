@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { generateToken, authenticateToken } from '../middleware/auth.js';
 import { generateRefreshToken } from './auth.js';
-import validate, { requestPhoneCodeSchema, verifyPhoneCodeSchema } from '../src/validation.js';
+import validate, { requestPhoneCodeSchema, verifyPhoneCodeSchema, phoneSignupSchema } from '../src/validation.js';
 import { otpLimiter } from '../src/rateLimiter.js';
 import { requiredEnv } from '../src/env.js';
 import { isSmsConfigured, normalizePhone, sendOtpSms } from '../src/sms.js';
+import { applyReferral } from './referrals.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -66,13 +68,24 @@ function issueCode(phone, purpose) {
 function consumeCode(phone, code, purpose) {
   const row = db.prepare(`
     SELECT * FROM phone_otp_codes
-    WHERE phone = ? AND purpose = ? AND code_hash = ? AND consumed = 0
-  `).get(phone, purpose, hashCode(code));
+    WHERE phone = ? AND purpose = ? AND consumed = 0
+    ORDER BY expires_at DESC LIMIT 1
+  `).get(phone, purpose);
 
   if (!row) return null;
 
   if (new Date(row.expires_at) < new Date() || row.attempts >= MAX_ATTEMPTS) {
     db.prepare('UPDATE phone_otp_codes SET consumed = 1 WHERE id = ?').run(row.id);
+    return null;
+  }
+
+  if (row.code_hash !== hashCode(code)) {
+    const attempts = (row.attempts || 0) + 1;
+    if (attempts >= MAX_ATTEMPTS) {
+      db.prepare('UPDATE phone_otp_codes SET attempts = ?, consumed = 1 WHERE id = ?').run(attempts, row.id);
+    } else {
+      db.prepare('UPDATE phone_otp_codes SET attempts = ? WHERE id = ?').run(attempts, row.id);
+    }
     return null;
   }
 
@@ -170,6 +183,104 @@ router.post('/verify', otpLimiter, validate(verifyPhoneCodeSchema), (req, res) =
     res.json({ token, refreshToken: generateRefreshToken(user.id), user: publicUser(user) });
   } catch (err) {
     logger.error('Verify phone code error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Start a phone sign-up. The account does not exist yet, so unlike the
+ * sign-in flow the response says plainly whether the number is free.
+ */
+router.post('/signup/request-code', otpLimiter, validate(requestPhoneCodeSchema), async (req, res) => {
+  try {
+    const phone = normalizePhone(req.validatedBody.phone);
+    if (!phone) return res.status(400).json({ error: 'Enter a valid phone number' });
+
+    if (!isSmsConfigured()) {
+      if (IS_PROD) return res.status(503).json({ error: 'Phone sign-up is not available right now' });
+      logger.warn('SMS provider not configured; sign-up code will only be returned in the response');
+    }
+
+    const existing = db.prepare('SELECT id FROM users WHERE phone = ? AND phone_verified = 1').get(phone);
+    if (existing) {
+      return res.status(409).json({ error: 'That number already has a TradeHub account' });
+    }
+
+    const code = issueCode(phone, 'signup');
+
+    try {
+      await sendOtpSms(phone, code);
+    } catch (err) {
+      logger.warn(`Could not deliver sign-up code to ${phone}: ${err.message}`);
+      return res.status(503).json({ error: 'Could not send the code. Try again shortly.' });
+    }
+
+    const payload = {
+      message: 'Verification code sent to your phone.',
+      expiresInSeconds: CODE_TTL_MINUTES * 60,
+    };
+    if (DEV_MODE) payload.devCode = code;
+
+    res.json(payload);
+  } catch (err) {
+    logger.error('Request phone sign-up code error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+/**
+ * Finish a phone sign-up: consume the OTP, create the account with the number
+ * already verified, and hand back the usual token pair.
+ *
+ * users.email is NOT NULL UNIQUE, so a phone-only account gets a synthetic
+ * address derived from the number. It never receives mail (nothing sends to
+ * it) and cannot be signed into, because the password is random and unknown.
+ */
+router.post('/signup/verify', otpLimiter, validate(phoneSignupSchema), (req, res) => {
+  try {
+    const { code, name, username, referralCode } = req.validatedBody;
+    const phone = normalizePhone(req.validatedBody.phone);
+    if (!phone) return res.status(400).json({ error: 'Enter a valid phone number' });
+
+    if (!consumeCode(phone, code, 'signup')) {
+      return res.status(401).json({ error: 'That code is wrong or has expired' });
+    }
+
+    const existing = db.prepare('SELECT id FROM users WHERE phone = ? AND phone_verified = 1').get(phone);
+    if (existing) {
+      return res.status(409).json({ error: 'That number already has a TradeHub account' });
+    }
+
+    const id = uuidv4();
+    const email = `phone-${phone}@users.tradehub.app`;
+    if (db.prepare('SELECT id FROM users WHERE email = ?').get(email)) {
+      return res.status(409).json({ error: 'That number already has a TradeHub account' });
+    }
+
+    const trimmedName = (name || '').trim();
+    const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(trimmedName)}`;
+    const unusablePassword = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), 10);
+
+    db.prepare(`
+      INSERT INTO users (id, name, username, email, password, avatar, phone, phone_verified, auth_provider)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'phone')
+    `).run(id, trimmedName, (username || '').trim(), email, unusablePassword, avatar, phone);
+
+    if (referralCode) {
+      try { applyReferral(id, referralCode); } catch (err) { logger.warn(`Referral apply failed: ${err.message}`); }
+    }
+
+    db.prepare('INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)').run(id);
+    db.prepare(`
+      INSERT OR IGNORE INTO subscriptions (id, user_id, plan, status, trial_end)
+      VALUES (?, ?, 'premium', 'trial', datetime('now', '+90 days'))
+    `).run(uuidv4(), id);
+
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, created_at FROM users WHERE id = ?').get(id);
+
+    res.status(201).json({ token: generateToken(id), refreshToken: generateRefreshToken(id), user });
+  } catch (err) {
+    logger.error('Phone signup error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

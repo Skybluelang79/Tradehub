@@ -84,6 +84,34 @@ describe('Phone sign-in', () => {
     expect(res.status).toBe(401);
   });
 
+  it('burns an attempt per wrong code and locks the code out', async () => {
+    const phone = '0803 555 0042';
+    const sent = await requestCode(phone);
+    expect(sent.body.devCode).toMatch(/^\d{6}$/);
+    const wrong = sent.body.devCode === '000000' ? '111111' : '000000';
+
+    for (let i = 0; i < 5; i++) {
+      const res = await supertest(app)
+        .post('/api/phone-auth/verify')
+        .send({ phone, code: wrong });
+      expect(res.status).toBe(401);
+    }
+
+    // The code is burned: even the correct value is refused now.
+    const locked = await supertest(app)
+      .post('/api/phone-auth/verify')
+      .send({ phone, code: sent.body.devCode });
+    expect(locked.status).toBe(401);
+
+    // A freshly issued code works again (404 because the number has no
+    // account — the code itself was accepted).
+    const fresh = await requestCode(phone);
+    const ok = await supertest(app)
+      .post('/api/phone-auth/verify')
+      .send({ phone, code: fresh.body.devCode });
+    expect(ok.status).toBe(404);
+  });
+
   it('will not sign in a number that is not linked to any account', async () => {
     const sent = await requestCode('0809 888 7777');
     const res = await supertest(app)
@@ -141,5 +169,83 @@ describe('Phone sign-in', () => {
       .set('Authorization', `Bearer ${userToken.main}`);
     expect(after.body.phoneVerified).toBe(false);
     expect(after.body.phone).toBe('');
+  });
+});
+
+describe('Phone sign-up', () => {
+  const phone = '0807 444 1111';
+
+  async function requestSignupCode(number = phone) {
+    return supertest(app).post('/api/phone-auth/signup/request-code').send({ phone: number });
+  }
+
+  it('rejects a malformed number as a validation error', async () => {
+    const res = await requestSignupCode('nope');
+    expect(res.status).toBe(400);
+  });
+
+  it('sends back a code in development', async () => {
+    const sent = await requestSignupCode();
+    expect(sent.status).toBe(200);
+    expect(sent.body.devCode).toMatch(/^\d{6}$/);
+    expect(sent.body.message).toMatch(/verification code/i);
+  });
+
+  it('rejects a wrong code', async () => {
+    await requestSignupCode();
+    const res = await supertest(app)
+      .post('/api/phone-auth/signup/verify')
+      .send({ phone, code: '000000', name: 'Test Person', username: 'test_person' });
+    expect(res.status).toBe(401);
+  });
+
+  it('requires a name', async () => {
+    const sent = await requestSignupCode();
+    const res = await supertest(app)
+      .post('/api/phone-auth/signup/verify')
+      .send({ phone, code: sent.body.devCode, name: '', username: 'test_person' });
+    expect(res.status).toBe(400);
+  });
+
+  it('creates a phone-verified account and lets it sign in by phone', async () => {
+    const sent = await requestSignupCode();
+    const created = await supertest(app)
+      .post('/api/phone-auth/signup/verify')
+      .send({ phone, code: sent.body.devCode, name: 'Mobile Native', username: 'mobile_native' });
+    expect(created.status).toBe(201);
+    expect(created.body.token).toBeTruthy();
+    expect(created.body.refreshToken).toBeTruthy();
+    expect(created.body.user.phone).toBe('8074441111');
+    expect(created.body.user.password).toBeUndefined();
+
+    const signinCode = await supertest(app)
+      .post('/api/phone-auth/request-code')
+      .send({ phone });
+    expect(signinCode.status).toBe(200);
+    const signin = await supertest(app)
+      .post('/api/phone-auth/verify')
+      .send({ phone, code: signinCode.body.devCode });
+    expect(signin.status).toBe(200);
+    expect(signin.body.user.email).toBe('phone-8074441111@users.tradehub.app');
+  });
+
+  it('will not issue a sign-up code for a number that already has an account', async () => {
+    const res = await requestSignupCode();
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/already has a TradeHub account/i);
+  });
+
+  it('the same number cannot sign up twice even with a fresh code', async () => {
+    // Codes for a taken number are still written so timing/shape stays
+    // identical, but verify must refuse to mint a second account.
+    const sent = await requestSignupCode();
+    if (sent.status === 200 && sent.body.devCode) {
+      const res = await supertest(app)
+        .post('/api/phone-auth/signup/verify')
+        .send({ phone, code: sent.body.devCode, name: 'Impostor', username: 'impostor_x' });
+      expect([401, 409]).toContain(res.status);
+    } else {
+      expect(sent.status).toBe(409);
+    }
   });
 });

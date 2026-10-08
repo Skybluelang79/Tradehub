@@ -36,13 +36,17 @@ const storage = (USE_BLOB || USE_FIREBASE_STORAGE)
     });
 
 
+const IMAGE_EXTS = new Set(['.jpeg', '.jpg', '.png', '.gif', '.webp']);
+const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = /jpeg|jpg|png|gif|webp/;
-    const extOk = allowed.test(extname(file.originalname).toLowerCase());
-    const mimeOk = allowed.test(file.mimetype);
+    // Extension and mimetype must BOTH be in the allowlist — an unanchored
+    // regex let "evil.xjpg" and spoofed mimes through.
+    const extOk = IMAGE_EXTS.has(extname(file.originalname).toLowerCase());
+    const mimeOk = IMAGE_MIMES.has(String(file.mimetype || '').toLowerCase());
     if (extOk && mimeOk) {
       cb(null, true);
     } else {
@@ -62,8 +66,18 @@ const chatAttachment = multer({
   limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const ext = extname(file.originalname).toLowerCase().replace('.', '');
+    const mime = String(file.mimetype || '');
     const allowed = [...IMAGE_TYPES, ...DOC_TYPES, ...ARCHIVE_TYPES, ...AUDIO_TYPES, ...VIDEO_TYPES];
-    if (allowed.includes(ext) || file.mimetype.startsWith('image/') || file.mimetype.startsWith('audio/')) {
+    // Extension allowlist AND a mimetype family that matches that extension's
+    // family — previously either one alone was enough, so a .html file sent
+    // as image/png was accepted and stored with its original extension.
+    const familyMatches =
+      (mime.startsWith('image/') && IMAGE_TYPES.includes(ext)) ||
+      (mime.startsWith('audio/') && AUDIO_TYPES.includes(ext)) ||
+      (mime.startsWith('video/') && VIDEO_TYPES.includes(ext)) ||
+      ((mime.startsWith('application/') || mime.startsWith('text/')) &&
+        (DOC_TYPES.includes(ext) || ARCHIVE_TYPES.includes(ext)));
+    if (allowed.includes(ext) && familyMatches) {
       cb(null, true);
     } else {
       cb(new Error('File type not supported for chat attachments'));
@@ -126,7 +140,7 @@ router.post('/', authenticateToken, uploadLimiter, upload.array('images', 6), as
   }
 });
 
-router.post('/single', authenticateToken, upload.single('image'), async (req, res) => {
+router.post('/single', authenticateToken, uploadLimiter, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const stored = await storeSingle(req.file);

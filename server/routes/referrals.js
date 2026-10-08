@@ -79,7 +79,7 @@ export function creditFirstPurchase(userId) {
   try {
     db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
       .run(uuidv4(), referral.referrer_id, 'referral', 'Referral Reward Earned',
-        `You earned $${(referral.reward_cents / 100).toFixed(2)} store credit from your referral!`);
+        `You earned ₦${(referral.reward_cents / 100).toFixed(2)} store credit from your referral!`);
   } catch (err) {
     logger.error('Referral credit notify error:', err);
   }

@@ -56,6 +56,14 @@ app.use(cors({
 app.use('/api/webhooks', webhookRoutes);
 app.use(express.json({ limit: '1mb' }));
 
+// Uploaded files are user-controlled, so anything served from /uploads gets
+// headers that keep a stored HTML/SVG payload from executing scripts in the
+// site's origin when someone opens the file directly.
+function hardenUploadResponse(res) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox");
+}
+
 if (USE_BLOB) {
   app.get('/uploads/:filename', async (req, res, next) => {
     try {
@@ -63,6 +71,7 @@ if (USE_BLOB) {
       const store = getStore({ name: 'tradehub-uploads' });
       const data = await store.get(`uploads/${req.params.filename}`, { type: 'arrayBuffer' });
       if (!data || data.byteLength === 0) return res.status(404).json({ error: 'File not found' });
+      hardenUploadResponse(res);
       res.type(getContentType(req.params.filename));
       res.send(Buffer.from(data));
     } catch (err) {
@@ -76,7 +85,10 @@ if (USE_BLOB) {
       if (!fs.existsSync(p)) fs.mkdirSync(p, { recursive: true });
     } catch {}
   });
-  app.use('/uploads', express.static(UPLOADS_DIR));
+  app.use('/uploads', (req, res, next) => {
+    hardenUploadResponse(res);
+    next();
+  }, express.static(UPLOADS_DIR));
 }
 
 app.use('/api', apiLimiter);

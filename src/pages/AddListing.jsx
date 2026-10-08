@@ -327,21 +327,25 @@ export default function AddListing({ editItemId, onEditComplete }) {
     addToast(`Template "${tmpl.name}" loaded`, 'success');
   };
 
-  const handleSaveDraft = () => {
+  const handleSaveDraft = async () => {
     if (!title) {
       addToast('Please add a title to save draft', 'error');
       return;
     }
-    if (editingItem) {
-      updateItem(editingItem.id, { ...buildItemData(), status: editingItem.status });
-      addToast('Draft updated!', 'success');
-      if (onEditComplete) onEditComplete();
-    } else {
-      addItem(buildItemData(), 'draft');
-      addToast('Draft saved!', 'success');
+    try {
+      if (editingItem) {
+        await updateItem(editingItem.id, { ...buildItemData(), status: editingItem.status });
+        addToast('Draft updated!', 'success');
+        if (onEditComplete) onEditComplete();
+      } else {
+        await addItem(buildItemData(), 'draft');
+        addToast('Draft saved!', 'success');
+      }
+      resetForm();
+      setActiveTab('home');
+    } catch (err) {
+      addToast(err?.message || 'Could not save the draft', 'error');
     }
-    resetForm();
-    setActiveTab('home');
   };
 
   const handleSubmit = async (e) => {
@@ -351,28 +355,37 @@ export default function AddListing({ editItemId, onEditComplete }) {
       return;
     }
     setIsSubmitting(true);
-    if (editingItem) {
-      updateItem(editingItem.id, buildItemData());
-      addToast('Listing updated successfully!', 'success');
-      if (onEditComplete) onEditComplete();
-    } else {
-      addItem(buildItemData(), 'active');
-      addToast('Listing published successfully!', 'success');
+    try {
+      if (editingItem) {
+        await updateItem(editingItem.id, buildItemData());
+        addToast('Listing updated successfully!', 'success');
+        if (onEditComplete) onEditComplete();
+      } else {
+        await addItem(buildItemData(), 'active');
+        addToast('Listing published successfully!', 'success');
+      }
+      resetForm();
+      setActiveTab('home');
+    } catch (err) {
+      addToast(err?.message || 'Could not save the listing', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
-    resetForm();
-    setActiveTab('home');
   };
 
-  const handleBulkAdd = () => {
+  const handleBulkAdd = async () => {
     if (!title || !price || !category) {
       addToast('Please fill in all required fields', 'error');
       return;
     }
-    const newItem = addItem(buildItemData(), 'active');
-    setBulkItems((prev) => [...prev, newItem]);
-    resetForm();
-    addToast(`Item added (${bulkItems.length + 1}) — add another or finish`, 'success');
+    try {
+      const newItem = await addItem(buildItemData(), 'active');
+      setBulkItems((prev) => [...prev, newItem]);
+      resetForm();
+      addToast(`Item added (${bulkItems.length + 1}) — add another or finish`, 'success');
+    } catch (err) {
+      addToast(err?.message || 'Could not add the listing', 'error');
+    }
   };
 
   const resetForm = () => {

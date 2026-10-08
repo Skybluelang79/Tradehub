@@ -3,7 +3,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import db from '../db.js';
 import { verifyPaystackWebhook } from '../src/paystack.js';
-import { refundTxn } from './payments.js';
+import { refundTxn, reserveItem } from './payments.js';
 import { activatePlan } from './subscriptions.js';
 import logger from '../src/logger.js';
 
@@ -48,6 +48,7 @@ router.post('/paystack', express.raw({ type: 'application/json' }), async (req, 
         ).all(reference);
         for (const txn of txns) {
           db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
+          reserveItem(txn.item_id);
           notify(txn.buyer_id, 'payment', 'Payment Received', `Payment for "${txn.item_title}" was received and is held in escrow.`);
         }
 

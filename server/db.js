@@ -219,6 +219,7 @@ function applySchema() {
       boosted INTEGER DEFAULT 0,
       boost_expires_at TEXT,
       quantity INTEGER DEFAULT 1,
+      currency TEXT DEFAULT 'NGN',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -773,6 +774,7 @@ function migrate() {
   ensureColumn('items', 'auction_status', "TEXT DEFAULT 'pending'");
   ensureColumn('items', 'current_bid', 'REAL');
   ensureColumn('items', 'current_bidder_id', 'TEXT');
+  ensureColumn('items', 'currency', "TEXT DEFAULT 'NGN'");
 
   ensureColumn('users', 'firebase_uid', "TEXT DEFAULT ''");
   ensureColumn('users', 'auth_provider', "TEXT DEFAULT 'local'");
@@ -835,7 +837,7 @@ function seedPlatformSettings() {
     site_name: 'TradeHub',
     support_email: 'support@tradehub.app',
     maintenance_mode: '0',
-    platform_fee_percent: '10',
+    platform_fee_percent: '4',
     currency: 'NGN',
     terms_url: '',
     privacy_url: '',

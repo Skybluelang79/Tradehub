@@ -30,7 +30,7 @@ function formatCents(cents) {
 }
 
 export default function Payments() {
-  const { paymentMethods, addPaymentMethod, removePaymentMethod, setDefaultPaymentMethod, transactions } = useApp();
+  const { paymentMethods, addPaymentMethod, removePaymentMethod, setDefaultPaymentMethod, transactions, items, setSelectedItem, setActiveTab } = useApp();
   const { isAuthenticated, user: authUser } = useAuth();
   const { addToast } = useToast();
 
@@ -143,14 +143,24 @@ export default function Payments() {
     }
   };
 
-  const handleReleasePayment = async (txnId) => {
+  const handleConfirmReceipt = async (txnId) => {
     try {
-      await api.payments.confirm(txnId);
-      addToast('Payment released to seller!', 'success');
+      await api.payments.confirmReceipt(txnId);
+      addToast('Delivery confirmed — funds released. You can now review the seller.', 'success');
       refresh();
     } catch (err) {
-      addToast(err.message || 'Could not release payment', 'error');
+      addToast(err.message || 'Could not confirm delivery', 'error');
     }
+  };
+
+  const openItemForReview = (itemId) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) {
+      addToast('This listing is no longer available', 'info');
+      return;
+    }
+    setSelectedItem(item);
+    setActiveTab('home');
   };
 
   const handleRequestRefund = async (txn) => {
@@ -267,6 +277,7 @@ export default function Payments() {
 
   const filteredTransactions = activeTransactions.filter((t) => {
     if (filter === 'all') return true;
+    if (filter === 'pending') return t.status === 'pending';
     const type = t.buyer_id !== undefined && myId ? (t.seller_id === myId ? 'received' : 'sent') : t.type;
     return type === filter;
   });
@@ -513,10 +524,10 @@ export default function Payments() {
                     {isReceived ? '+' : '-'}{formatPrice(txn.amount)}
                   </div>
                   {status === 'pending' && isReceived && (
-                    <button className="release-btn" onClick={() => handleReleasePayment(txn.id)}>
-                      <CheckIcon size={14} />
-                      Release
-                    </button>
+                    <span className="escrow-badge">
+                      <ShieldIcon size={12} />
+                      Awaiting Buyer
+                    </span>
                   )}
                   {status === 'pending' && !isReceived && (
                     <>
@@ -524,6 +535,10 @@ export default function Payments() {
                         <ShieldIcon size={12} />
                         In Escrow
                       </span>
+                      <button className="release-btn" onClick={() => handleConfirmReceipt(txn.id)}>
+                        <CheckIcon size={14} />
+                        Confirm Delivery
+                      </button>
                       <div style={{ display: 'flex', gap: 6 }}>
                         <button className="dispute-btn" onClick={() => openDispute(txn)}>
                           Dispute
@@ -533,6 +548,11 @@ export default function Payments() {
                         </button>
                       </div>
                     </>
+                  )}
+                  {status === 'completed' && !isReceived && (
+                    <button className="dispute-btn" onClick={() => openItemForReview(txn.item_id)}>
+                      Leave a Review
+                    </button>
                   )}
                   {status === 'awaiting_payment' && !isReceived && (
                     <button className="dispute-btn" onClick={() => openDispute(txn)}>

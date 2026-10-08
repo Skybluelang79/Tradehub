@@ -473,6 +473,13 @@ router.post('/resend-verification', authenticateToken, (req, res) => {
       return res.json({ message: 'Email already verified' });
     }
 
+    // Same gate as forgot-password: in production, report the missing SMTP
+    // configuration instead of accepting a request we cannot fulfil.
+    const devMode = process.env.NODE_ENV !== 'production' && !isEmailConfigured();
+    if (!isEmailConfigured() && !devMode) {
+      return res.status(503).json({ error: 'Verification email is not configured' });
+    }
+
     const token = uuidv4();
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     db.prepare(`

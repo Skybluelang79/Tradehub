@@ -368,6 +368,64 @@
   cursor: not-allowed;
 }
 
+.auth-passkey {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.auth-passkey .auth-divider {
+  width: 100%;
+}
+
+.auth-passkey-img-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+  padding: 16px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 35%, rgba(15, 138, 99, 0.08), transparent 70%);
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-passkey-img-btn:hover:not(:disabled) {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 8px rgba(15, 138, 99, 0.08);
+  transform: translateY(-2px);
+}
+
+.auth-passkey-img-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.auth-passkey-img {
+  width: 84px;
+  height: 84px;
+  display: block;
+  pointer-events: none;
+}
+
+.auth-passkey-caption {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.auth-passkey-caption span {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
 .auth-link-btn {
   align-self: flex-start;
   margin-top: 8px;

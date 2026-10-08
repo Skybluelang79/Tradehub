@@ -1,6 +1,7 @@
 import axios from 'axios';
 import crypto from 'node:crypto';
 import logger from './logger.js';
+import { isValidCurrency as isValidAfricanCurrency, isPaystackCurrency as isPaystackChargeable, PAYSTACK_CURRENCIES } from '../../shared/currencies.js';
 
 const BASE_URL = 'https://api.paystack.co';
 
@@ -15,10 +16,16 @@ export const isPaystackConfigured = () => !!PAYSTACK_SECRET_KEY;
 
 export const DEFAULT_CURRENCY = process.env.PAYSTACK_CURRENCY || 'NGN';
 
-export const SUPPORTED_CURRENCIES = ['NGN', 'GHS', 'KES', 'ZAR', 'USD'];
+// The app accepts any of the supported African currencies (see shared/currencies.js);
+// Paystack itself can only charge a subset, so those fall back to NGN at checkout.
+export const SUPPORTED_CURRENCIES = PAYSTACK_CURRENCIES;
 
 export function isValidCurrency(c) {
-  return SUPPORTED_CURRENCIES.includes(String(c || '').toUpperCase());
+  return isValidAfricanCurrency(c);
+}
+
+export function isPaystackCurrency(c) {
+  return isPaystackChargeable(c);
 }
 
 // Paystack always charges in the minor unit (kobo for NGN, pesewas for GHS,

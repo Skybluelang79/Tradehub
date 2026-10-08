@@ -75,3 +75,18 @@ export const formatPhone = (phone) => {
 export const generateId = () => {
   return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 };
+
+// The reviews API returns snake_case rows; every UI that renders reviews
+// expects camelCase, so both the item page and the profile page reshape
+// through here to stay in sync.
+export const normalizeReview = (r) => ({
+  id: r.id,
+  rating: r.rating,
+  text: r.text || '',
+  createdAt: r.created_at || r.createdAt,
+  reviewerId: r.reviewer_id || r.reviewerId,
+  revieweeId: r.reviewee_id || r.revieweeId,
+  reviewerName: r.reviewer_name || r.reviewerName || '',
+  reviewerAvatar: r.reviewer_avatar || r.reviewerAvatar || '',
+  verified: !!(r.verified ?? r.isVerified),
+});

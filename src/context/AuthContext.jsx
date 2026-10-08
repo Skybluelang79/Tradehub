@@ -76,6 +76,30 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // --- Phone number sign-up ---------------------------------------------------
+  const requestSignupPhoneCode = useCallback(async (phone) => {
+    const data = await api.phoneAuth.signupRequestCode(phone);
+    return { success: true, message: data.message, devCode: data.devCode };
+  }, []);
+
+  const signupWithPhone = useCallback(async ({ name, username, phone, code, referralCode }) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.phoneAuth.signupVerify({ name, username, phone, code, referralCode });
+      setToken(data.token);
+      localStorage.setItem('tradehub_token', data.token);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Signup failed');
+      return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   // --- Fingerprint (passkey) sign-in ------------------------------------------
   const signInWithPasskey = useCallback(async (email) => {
     setIsLoading(true);
@@ -364,6 +388,8 @@ export function AuthProvider({ children }) {
     firebaseEmailLogin,
     requestPhoneCode,
     loginWithPhone,
+    requestSignupPhoneCode,
+    signupWithPhone,
     signInWithPasskey,
     registerPasskey,
     listPasskeys,

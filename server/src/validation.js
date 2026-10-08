@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isValidCurrency, AFRICAN_CURRENCIES } from '../../shared/currencies.js';
 
 export const signupSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -59,9 +60,15 @@ export const createItemSchema = z.object({
   sale_ends_at: z.string().optional().nullable(),
   category: z.string().min(1, 'Category is required'),
   condition: z.string().optional().default('good'),
-  images: z.array(z.string().url()).max(20).optional().default([]),
+  images: z.array(
+    z.string().min(1).max(5000).refine(
+      (s) => /^https?:\/\//.test(s) || s.startsWith('/') || s.startsWith('data:image/'),
+      'Images must be an uploaded file path or a valid URL'
+    )
+  ).max(20).optional().default([]),
   location: locationSchema,
   quantity: z.number().int().positive().optional().default(1),
+  currency: z.string().optional().default('NGN').refine(isValidCurrency, 'Unsupported currency'),
   variants: z.array(variantSchema).optional().default([]),
   boosted: z.boolean().optional().default(false),
   boost_expires_at: z.string().optional().nullable(),
@@ -69,11 +76,12 @@ export const createItemSchema = z.object({
   starting_bid: z.number().positive().optional().nullable(),
   min_increment: z.number().positive().optional().nullable(),
   auction_ends_at: z.string().optional().nullable(),
+  status: z.enum(['active', 'draft', 'sold', 'reserved', 'ended']).optional().default('active'),
 });
 
-// `status` is absent from the create schema on purpose: new listings always start
-// active. It has to be added back for updates, otherwise Zod strips it and the
-// PUT handler's `data.status` is always undefined, so "mark as sold" and
+// `status` defaults to `active` so the normal "publish listing" path always
+// starts live, while the draft flow can opt in explicitly. The PUT handler
+// needs the field too, otherwise Zod strips it and "mark as sold" and
 // unpublish silently do nothing.
 export const updateItemSchema = createItemSchema.partial().extend({
   status: z.enum(['active', 'draft', 'sold', 'reserved', 'ended']).optional(),
@@ -160,6 +168,14 @@ export const requestPhoneCodeSchema = z.object({
 export const verifyPhoneCodeSchema = z.object({
   phone: phoneField,
   code: z.string().trim().regex(/^\d{6}$/, 'Enter the 6-digit code'),
+});
+
+// Creating an account with a phone number: the OTP proves ownership of the
+// number, and the profile fields are the same ones email sign-up collects.
+export const phoneSignupSchema = verifyPhoneCodeSchema.extend({
+  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(100),
+  username: z.string().trim().regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores').min(3, 'Username must be at least 3 characters').max(30).optional().or(z.literal('')),
+  referralCode: z.string().max(30).optional().or(z.literal('')),
 });
 
 export const webauthnLoginSchema = z.object({

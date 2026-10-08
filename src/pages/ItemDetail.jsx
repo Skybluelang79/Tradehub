@@ -29,7 +29,7 @@ import {
 import { AdBanner } from '../components/features';
 import { useApp } from '../context';
 import { categories, conditionOptions } from '../services/api';
-import { formatPrice, formatDistance, formatDate } from '../utils/helpers';
+import { formatPrice, formatDistance, formatDate, normalizeReview } from '../utils/helpers';
 import '../styles/globals.css';
 import './ItemDetail.css';
 
@@ -59,7 +59,6 @@ export default function ItemDetail() {
     addConversation,
     getReviewsForUser,
     getUserRating,
-    addReview,
     getDistanceFromUser,
     isFavorite,
     toggleFavorite,
@@ -76,6 +75,10 @@ export default function ItemDetail() {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewText, setReviewText] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
+  // null until the API answers; the local fixtures are only a fallback for
+  // the in-flight window or an offline load.
+  const [apiReviews, setApiReviews] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [touchStart, setTouchStart] = useState(null);
   const [showReportModal, setShowReportModal] = useState(false);
@@ -112,6 +115,31 @@ export default function ItemDetail() {
   const [bids, setBids] = useState(null);
   const [now, setNow] = useState(() => Date.now());
   const auctionRef = useRef(null);
+
+  // The seller card and reviews section show what the API recorded, not the
+  // demo fixtures. Rows arrive snake_case and are reshaped to the camelCase
+  // shape the rest of the page already renders. The monotonic fetch id keeps
+  // a slow response from overwriting a newer seller's reviews.
+  const reviewsFetchIdRef = useRef(0);
+  const fetchSellerReviews = useCallback(() => {
+    const sellerId = selectedItem?.sellerId;
+    if (!sellerId) return Promise.resolve();
+    const fetchId = ++reviewsFetchIdRef.current;
+    return api.reviews.forUser(sellerId)
+      .then((data) => {
+        if (fetchId !== reviewsFetchIdRef.current) return;
+        setApiReviews((data.reviews || []).map(normalizeReview));
+      })
+      .catch(() => {
+        if (fetchId !== reviewsFetchIdRef.current) return;
+        setApiReviews([]);
+      });
+  }, [selectedItem?.sellerId]);
+
+  useEffect(() => {
+    setApiReviews(null);
+    fetchSellerReviews();
+  }, [fetchSellerReviews]);
 
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
@@ -250,17 +278,13 @@ export default function ItemDetail() {
       }
       const res = await api.payments.createIntent(payload);
 
-      // Demo mode / store credit: the charge is already recorded.
+      // Store credit / demo charges land in escrow as `pending` — the buyer
+      // releases them from Payments once they confirm delivery, which is also
+      // what unlocks leaving a review for the seller.
       if (checkoutMethod === 'gift_card') {
-        if (res.paid) {
-          await api.payments.confirm(res.transactionId);
+        if (res.paid || res.demo) {
           markAsSold(selectedItem.id);
-          addToast('Purchase complete! Payment is in escrow.', 'success');
-          resetCheckout();
-        } else if (res.demo) {
-          await api.payments.confirm(res.transactionId);
-          markAsSold(selectedItem.id);
-          addToast('Purchase complete! Payment is in escrow.', 'success');
+          addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
           resetCheckout();
         } else {
           setCheckoutResult(res);
@@ -269,9 +293,8 @@ export default function ItemDetail() {
       }
 
       if (res.demo) {
-        await api.payments.confirm(res.transactionId);
         markAsSold(selectedItem.id);
-        addToast('Purchase complete! Payment is in escrow.', 'success');
+        addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
         resetCheckout();
         return;
       }
@@ -289,7 +312,7 @@ export default function ItemDetail() {
           const verified = await api.payments.verify(res.reference || res.transactionId);
           if (verified?.status === 'pending') {
             markAsSold(selectedItem.id);
-            addToast('Purchase complete! Payment is in escrow.', 'success');
+            addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
             resetCheckout();
           }
         },
@@ -397,8 +420,12 @@ export default function ItemDetail() {
   }
 
   const seller = getUser(selectedItem.sellerId);
-  const sellerReviews = getReviewsForUser(seller.id);
-  const sellerRating = getUserRating(seller.id);
+
+  const sellerReviews = apiReviews !== null ? apiReviews : getReviewsForUser(seller.id);
+  const sellerRating = selectedItem.seller_rating
+    || (sellerReviews.length
+      ? Math.round((sellerReviews.reduce((sum, r) => sum + (r.rating || 0), 0) / sellerReviews.length) * 10) / 10
+      : getUserRating(seller.id));
   // Ownership has to be judged against the signed-in account. `currentUser` from
   // services/api is a fixed demo fixture with id 'user-1', so comparing against
   // it never matched a real seller and the owner always saw the buyer actions.
@@ -631,17 +658,28 @@ export default function ItemDetail() {
     setReportDetails('');
   };
 
-  const handleSubmitReview = () => {
-    if (reviewText.trim()) {
-      addReview({
+  const handleSubmitReview = async () => {
+    if (reviewBusy) return;
+    setReviewBusy(true);
+    try {
+      await api.reviews.create({
         revieweeId: seller.id,
-        transactionId: `txn-${Date.now()}`,
+        itemId: selectedItem?.id,
         rating: reviewRating,
         text: reviewText.trim(),
       });
+      addToast('Review posted — thanks for sharing!', 'success');
       setShowReviewModal(false);
       setReviewText('');
       setReviewRating(5);
+      fetchSellerReviews();
+    } catch (err) {
+      // The server enforces real transactions between reviewer and reviewee;
+      // its message (e.g. "You can only review a user after a completed
+      // transaction") is what the user needs to see.
+      addToast(err?.message || 'Could not post the review', 'error');
+    } finally {
+      setReviewBusy(false);
     }
   };
 
@@ -733,13 +771,17 @@ export default function ItemDetail() {
         />
 
         {selectedItem.images.length > 1 && (
-          <div className="detail-image-nav">
-            {selectedItem.images.map((_, index) => (
+          <div className="detail-image-thumbs">
+            {selectedItem.images.map((img, index) => (
               <button
                 key={index}
-                className={`detail-image-dot ${index === currentImageIndex ? 'active' : ''}`}
+                type="button"
+                className={`detail-image-thumb ${index === currentImageIndex ? 'active' : ''}`}
                 onClick={() => setCurrentImageIndex(index)}
-              />
+                aria-label={`View photo ${index + 1} of ${selectedItem.images.length}`}
+              >
+                <img src={img} alt="" />
+              </button>
             ))}
           </div>
         )}
@@ -901,6 +943,12 @@ export default function ItemDetail() {
           <div className="seller-info">
             <div className="seller-name">
               {seller.name}
+              {selectedItem.seller_identity_verified && (
+                <span className="seller-verified-badge" title="Identity verified by TradeHub">
+                  <CheckIcon size={13} />
+                  Verified
+                </span>
+              )}
             </div>
             <div className="seller-rating">
               <Rating value={sellerRating} size="sm" />
@@ -923,11 +971,14 @@ export default function ItemDetail() {
             {(showAllReviews ? sellerReviews : sellerReviews.slice(0, 2)).map((review) => (
               <div key={review.id} className="mini-review-card">
                 <div className="mini-review-header">
-                  <span className="mini-review-name">User {review.reviewerId.slice(-4)}</span>
+                  <span className="mini-review-name">
+                    {review.reviewerName || `User ${String(review.reviewerId || '').slice(-4)}`}
+                  </span>
                   <Rating value={review.rating} size="sm" />
+                  {review.verified && <span className="mini-review-verified">Verified purchase</span>}
                   <span className="mini-review-date">{formatDate(review.createdAt)}</span>
                 </div>
-                <p className="mini-review-text">{review.text}</p>
+                {review.text && <p className="mini-review-text">{review.text}</p>}
               </div>
             ))}
           </div>
@@ -1213,8 +1264,8 @@ export default function ItemDetail() {
         onClose={() => setShowReviewModal(false)}
         title={`Review ${seller.name}`}
         footer={
-          <Button block onClick={handleSubmitReview} disabled={!reviewText.trim()}>
-            Submit Review
+          <Button block onClick={handleSubmitReview} disabled={reviewBusy}>
+            {reviewBusy ? 'Submitting…' : 'Submit Review'}
           </Button>
         }
       >

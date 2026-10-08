@@ -37,6 +37,52 @@
   border-radius: 4px;
 }
 
+/* Thumbnail strip: lets buyers jump straight to a photo instead of tapping
+   through the whole gallery one image at a time. */
+.detail-image-thumbs {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  max-width: calc(100% - 24px);
+  overflow-x: auto;
+  padding: 4px;
+  scrollbar-width: none;
+  z-index: 5;
+}
+
+.detail-image-thumbs::-webkit-scrollbar {
+  display: none;
+}
+
+.detail-image-thumb {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.2s ease);
+}
+
+.detail-image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  pointer-events: none;
+}
+
+.detail-image-thumb.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6);
+}
+
 .detail-content {
   padding: 20px 16px;
 }
@@ -420,6 +466,19 @@
   color: var(--text-tertiary);
 }
 
+.seller-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--background);
+  border: 1px solid var(--border);
+}
+
 .seller-view-btn {
   padding: 10px 16px;
   background: var(--background);
@@ -490,6 +549,17 @@
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+.mini-review-verified {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 6px;
+  white-space: nowrap;
 }
 
 .detail-actions {

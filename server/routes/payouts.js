@@ -98,12 +98,12 @@ router.put('/:id/status', adminAuth, (req, res) => {
     if (status === 'rejected' && payout.status !== 'rejected') {
       db.prepare('UPDATE wallets SET available_cents = available_cents + ?, pending_cents = pending_cents - ?, updated_at = datetime(\'now\') WHERE user_id = ?')
         .run(payout.amount_cents, payout.amount_cents, payout.user_id);
-      notify(payout.user_id, 'payment', 'Payout Rejected', `Your payout of $${(payout.amount_cents / 100).toFixed(2)} was rejected.`);
+      notify(payout.user_id, 'payment', 'Payout Rejected', `Your payout of ₦${(payout.amount_cents / 100).toFixed(2)} was rejected.`);
     }
     if (status === 'completed') {
       db.prepare("UPDATE wallets SET pending_cents = pending_cents - ?, updated_at = datetime('now') WHERE user_id = ?")
         .run(payout.amount_cents, payout.user_id);
-      notify(payout.user_id, 'payment', 'Payout Sent', `Your payout of $${(payout.amount_cents / 100).toFixed(2)} has been sent.`);
+      notify(payout.user_id, 'payment', 'Payout Sent', `Your payout of ₦${(payout.amount_cents / 100).toFixed(2)} has been sent.`);
     }
 
     db.prepare("UPDATE payouts SET status = ?, admin_notes = ?, processed_at = datetime('now') WHERE id = ?")
