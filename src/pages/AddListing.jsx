@@ -7,6 +7,7 @@ import { LivePreview } from '../components/features';
 import { categories } from '../services/api';
 import { api } from '../services/client';
 import { compressToDataUrl } from '../utils/imageCompression';
+import { AFRICAN_CURRENCIES, getDisplayCurrency, getCurrencySymbol, convert } from '../utils/currency.js';
 import '../styles/globals.css';
 import './AddListing.css';
 
@@ -39,14 +40,16 @@ const SUGGESTED_CATEGORIES = {
   car: 'vehicles', truck: 'vehicles', motorcycle: 'vehicles',
 };
 
-function getPriceSuggestions(items, selectedCategory) {
+function getPriceSuggestions(items, selectedCategory, currency = 'NGN') {
   const catItems = items.filter((i) =>
     i.category.toLowerCase() === selectedCategory?.toLowerCase() &&
     i.status === 'active' &&
     i.price > 0
   );
   if (catItems.length < 2) return null;
-  const prices = catItems.map((i) => i.price).sort((a, b) => a - b);
+  const prices = catItems
+    .map((i) => convert(i.price, i.currency || 'NGN', currency))
+    .sort((a, b) => a - b);
   const avg = prices.reduce((s, p) => s + p, 0) / prices.length;
   const mid = Math.floor(prices.length / 2);
   const median = prices.length % 2 ? prices[mid] : (prices[mid - 1] + prices[mid]) / 2;
@@ -77,6 +80,7 @@ function useEditItem(editItemId, items) {
     initialStartingBid: item?.startingBid ? String(item.startingBid) : '',
     initialMinIncrement: item?.minIncrement ? String(item.minIncrement) : '',
     initialAuctionEndsAt: item?.auctionEndsAt || '',
+    initialCurrency: item?.currency || getDisplayCurrency(),
   };
 }
 
@@ -94,6 +98,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
     initialPrice, initialCategory, initialCondition, initialLocation,
     initialQuantity, initialSalePrice, initialSaleEndsAt,
     initialIsAuction, initialStartingBid, initialMinIncrement, initialAuctionEndsAt,
+    initialCurrency,
   } = useEditItem(editItemId, items);
 
   const [images, setImages] = useState(initialImages);
@@ -102,6 +107,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
   const [price, setPrice] = useState(initialPrice);
   const [category, setCategory] = useState(initialCategory);
   const [condition, setCondition] = useState(initialCondition);
+  const [currency, setCurrency] = useState(initialCurrency);
   const [location, setLocation] = useState(initialLocation);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [boostListing, setBoostListing] = useState(false);
@@ -135,8 +141,8 @@ export default function AddListing({ editItemId, onEditComplete }) {
 
   const suggestions = useMemo(() => {
     if (!category || category === 'all') return null;
-    return getPriceSuggestions(items, category);
-  }, [category, items]);
+    return getPriceSuggestions(items, category, currency);
+  }, [category, items, currency]);
 
   const discountPercent = useMemo(() => {
     if (!saleEnabled || !salePrice || !price) return 0;
@@ -148,7 +154,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
 
   const handleApplySuggestion = (value) => {
     setPrice(String(value));
-    addToast(`Price set to $${value.toLocaleString()}`, 'success');
+    addToast(`Price set to ${getCurrencySymbol(currency)}${value.toLocaleString()}`, 'success');
   };
 
   const handleImageUpload = async (e) => {
@@ -263,8 +269,9 @@ export default function AddListing({ editItemId, onEditComplete }) {
     price: parseFloat(price),
     salePrice: saleEnabled && salePrice ? parseFloat(salePrice) : null,
     saleEndsAt: saleEnabled && saleEndsEnabled && saleEndsAt ? saleEndsAt : null,
-    category,
-    condition: condition || 'good',
+category,
+      condition: condition || 'good',
+      currency,
     images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400'],
     location: {
       lat: userLocation?.lat || 40.7128,
@@ -408,6 +415,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
       setStartingBid('');
       setMinIncrement('1');
       setAuctionEndsAt('');
+        setCurrency(getDisplayCurrency());
     }
   };
 
@@ -427,6 +435,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
           salePrice={saleEnabled ? salePrice : null}
           description={description}
           images={images}
+          currency={currency}
           condition={conditions.find(c => c.value === condition)?.label}
         />
 
@@ -496,11 +505,20 @@ export default function AddListing({ editItemId, onEditComplete }) {
           <div className="input-group">
             <label className="input-label">Price *</label>
             <div style={{ position: 'relative' }}>
-              <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>₦</span>
+              <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>{getCurrencySymbol(currency)}</span>
               <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
             </div>
           </div>
           <Select label="Category *" options={categories.filter((c) => c.id !== 'all')} placeholder="Select..." value={category} onChange={(e) => setCategory(e.target.value)} />
+        </div>
+
+        <div className="input-group">
+          <label className="input-label">Currency</label>
+          <Select
+            options={AFRICAN_CURRENCIES.map((c) => ({ id: c.code, name: `${c.code} (${c.symbol}) — ${c.name}` }))}
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value)}
+          />
         </div>
 
         {suggestions && !price && (
@@ -511,13 +529,13 @@ export default function AddListing({ editItemId, onEditComplete }) {
             </div>
             <div className="price-suggestions-chips">
               <button type="button" className="suggestion-chip" onClick={() => handleApplySuggestion(suggestions.median)}>
-                Median ₦{suggestions.median.toLocaleString()}
+                Median {getCurrencySymbol(currency)}{suggestions.median.toLocaleString()}
               </button>
               <button type="button" className="suggestion-chip" onClick={() => handleApplySuggestion(suggestions.avg)}>
-                Avg ₦{suggestions.avg.toLocaleString()}
+                Avg {getCurrencySymbol(currency)}{suggestions.avg.toLocaleString()}
               </button>
               <button type="button" className="suggestion-chip" onClick={() => handleApplySuggestion(suggestions.min)}>
-                Min ₦{suggestions.min.toLocaleString()}
+                Min {getCurrencySymbol(currency)}{suggestions.min.toLocaleString()}
               </button>
             </div>
             <span className="price-suggestions-count">Based on {suggestions.count} similar items</span>
@@ -575,7 +593,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
                 <div className="input-group">
                   <label className="input-label">Sale Price</label>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>₦</span>
+                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>{getCurrencySymbol(currency)}</span>
                     <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="0" value={salePrice} onChange={(e) => setSalePrice(e.target.value)} />
                   </div>
                 </div>
@@ -611,14 +629,14 @@ export default function AddListing({ editItemId, onEditComplete }) {
                 <div className="input-group">
                   <label className="input-label">Starting Bid</label>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>₦</span>
+                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>{getCurrencySymbol(currency)}</span>
                     <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="0" value={startingBid} onChange={(e) => setStartingBid(e.target.value)} />
                   </div>
                 </div>
                 <div className="input-group">
                   <label className="input-label">Min. Increment</label>
                   <div style={{ position: 'relative' }}>
-                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>₦</span>
+                    <span style={{ position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-primary)', fontWeight: 600 }}>{getCurrencySymbol(currency)}</span>
                     <input type="number" className="input" style={{ paddingLeft: 32 }} placeholder="1" value={minIncrement} onChange={(e) => setMinIncrement(e.target.value)} />
                   </div>
                 </div>

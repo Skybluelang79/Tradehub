@@ -4,6 +4,7 @@ import { loginWithPasskey, registerPasskey as createPasskey, listPasskeys as fet
 import { auth as firebaseAuth } from '../config/firebase';
 import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile as fbUpdateProfile } from 'firebase/auth';
 import { initializeFCM, cleanupFCM } from '../services/fcm';
+import { setDisplayCurrency, DEFAULT_CURRENCY } from '../utils/currency.js';
 
 const AuthContext = createContext();
 
@@ -31,6 +32,20 @@ export function AuthProvider({ children }) {
     };
     initAuth();
   }, []);
+
+  // Keep the display currency in sync with the signed-in user's preference so
+  // formatPrice converts prices everywhere. Signed-out visitors see NGN.
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setDisplayCurrency(DEFAULT_CURRENCY);
+      return undefined;
+    }
+    let cancelled = false;
+    api.settings.get()
+      .then(({ settings }) => { if (!cancelled && settings?.currency) setDisplayCurrency(settings.currency); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isAuthenticated]);
 
   const login = useCallback(async (email, password) => {
     setIsLoading(true);

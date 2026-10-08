@@ -16,6 +16,7 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../context/LanguageContext';
 import { formatDate, formatPrice, formatPhone, normalizeReview } from '../utils/helpers';
+import { AFRICAN_CURRENCIES, getCurrencySymbol, setDisplayCurrency } from '../utils/currency.js';
 import { categories } from '../services/api';
 import AddListing from './AddListing';
 import Offers from './Offers';
@@ -331,6 +332,7 @@ export default function Profile() {
       if (s.dark_mode === 1) setTheme(true);
       const langCode = LANGUAGE_TO_CODE[s.language];
       if (langCode) setLang(langCode);
+      if (s.currency) setDisplayCurrency(s.currency);
     }).catch(() => {});
   }, [authUser, setTheme, setLang]);
 
@@ -580,6 +582,7 @@ export default function Profile() {
       const langCode = LANGUAGE_TO_CODE[value];
       if (langCode) setLang(langCode);
     }
+    if (key === 'currency') setDisplayCurrency(value);
     addToast('Preference saved', 'success');
   };
 
@@ -1551,12 +1554,16 @@ export default function Profile() {
               </select>
             </div>
             <div className="setting-item">
-              <div className="setting-icon"><span className="currency-icon">₦</span></div>
+              <div className="setting-icon"><span className="currency-icon">{getCurrencySymbol(settings.currency)}</span></div>
               <div className="setting-text">
                 <div className="setting-title">Currency</div>
-                <div className="setting-desc">All prices are shown in Nigerian naira</div>
+                <div className="setting-desc">Prices are shown in this currency</div>
               </div>
-              <span className="setting-fixed">NGN (₦)</span>
+              <select className="setting-select" value={settings.currency} onChange={(e) => handleSettingValue('currency', e.target.value)}>
+                {AFRICAN_CURRENCIES.map((c) => (
+                  <option key={c.code} value={c.code}>{c.code} ({c.symbol}) — {c.name}</option>
+                ))}
+              </select>
             </div>
             <div className="setting-item">
               <div className="setting-icon"><ShieldIcon size={20} /></div>

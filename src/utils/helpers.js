@@ -5,14 +5,7 @@ export const formatDistance = (km) => {
   return `${km.toFixed(1)}km`;
 };
 
-export const formatPrice = (amount) => {
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency: 'NGN',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
-};
+export { formatPrice } from './currency.js';
 
 export const formatDate = (dateString) => {
   const date = new Date(dateString);

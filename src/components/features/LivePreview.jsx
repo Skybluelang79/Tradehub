@@ -1,4 +1,6 @@
-export default function LivePreview({ title, price, salePrice, description, images, condition }) {
+import { formatMoney } from '../../utils/currency.js';
+
+export default function LivePreview({ title, price, salePrice, description, images, condition, currency = 'NGN' }) {
   const hasContent = title || price || description || images.length > 0;
   const showSale = salePrice && parseFloat(salePrice) > 0 && parseFloat(price) > 0 && parseFloat(salePrice) < parseFloat(price);
 
@@ -24,11 +26,11 @@ export default function LivePreview({ title, price, salePrice, description, imag
           <div className="live-preview-price-row">
             {showSale ? (
               <>
-                <span className="live-preview-price live-preview-price--sale">₦{parseFloat(salePrice).toLocaleString()}</span>
-                <span className="live-preview-price--original">₦{parseFloat(price).toLocaleString()}</span>
+                <span className="live-preview-price live-preview-price--sale">{formatMoney(parseFloat(salePrice), currency)}</span>
+                <span className="live-preview-price--original">{formatMoney(parseFloat(price), currency)}</span>
               </>
             ) : (
-              price && <span className="live-preview-price">₦{parseFloat(price) > 0 ? parseFloat(price).toLocaleString() : '0'}</span>
+              price && <span className="live-preview-price">{formatMoney(parseFloat(price) > 0 ? parseFloat(price) : 0, currency)}</span>
             )}
           </div>
           {condition && <span className="live-preview-condition">{condition}</span>}
