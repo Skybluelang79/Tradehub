@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import config
-from .routers import auth, health
+from .routers import auth, follows, health, items, offers, reviews, searches, verification
 
 app = FastAPI(title="TradeHub API", version="py-0.1.0")
 
@@ -36,3 +36,9 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth")
+app.include_router(items.router, prefix="/api/items")
+app.include_router(reviews.router, prefix="/api/reviews")
+app.include_router(offers.router, prefix="/api/offers")
+app.include_router(searches.router, prefix="/api/searches")
+app.include_router(follows.router, prefix="/api/follows")
+app.include_router(verification.router, prefix="/api/verification")

@@ -130,6 +130,10 @@ def apply():
     ensure_column("conversations", "is_secure", "INTEGER DEFAULT 0")
     ensure_column("users", "phone_verified", "INTEGER DEFAULT 0")
 
+    ensure_column("verification_requests", "ai_verdict", "TEXT DEFAULT ''")
+    ensure_column("verification_requests", "ai_extracted", "TEXT DEFAULT ''")
+    ensure_column("verification_requests", "ai_checks", "TEXT DEFAULT ''")
+
     db.exec(
         """
         UPDATE user_settings SET currency = 'NGN' WHERE currency IS NULL OR currency = '' OR currency = 'USD';

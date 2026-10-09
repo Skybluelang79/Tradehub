@@ -35,3 +35,19 @@ def current_user(token: str) -> dict:
 
 def require_user(token: str = Depends(bearer_token)) -> dict:
     return current_user(token)
+
+
+def optional_user(authorization: str | None = Header(default=None)) -> dict | None:
+    if not authorization:
+        return None
+    parts = authorization.split(" ")
+    if len(parts) != 2 or not parts[1]:
+        return None
+    try:
+        security.decode_token(parts[1])
+    except Exception:
+        return None
+    try:
+        return current_user(parts[1])
+    except Exception:
+        return None
