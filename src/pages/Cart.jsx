@@ -3,6 +3,7 @@ import { Header } from '../components/layout';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
+import { BankTransferPanel } from '../components/features';
 import { payWithCard } from '../services/paystack';
 import api from '../services/client';
 import { formatPrice } from '../utils/helpers';
@@ -21,6 +22,7 @@ export default function Cart({ onClose }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [bankIntent, setBankIntent] = useState(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -33,7 +35,7 @@ export default function Cart({ onClose }) {
         const methods = (r.methods || []).filter((m) => m.enabled !== false);
         setAvailableMethods(methods);
         if (methods.length) {
-          const preferred = ['card', 'paystack_bank', 'bank', 'gift_card'].filter((id) => methods.some((m) => m.id === id));
+          const preferred = ['card', 'bank_transfer', 'paystack_bank', 'bank', 'ussd', 'mobile_money', 'qr', 'gift_card'].filter((id) => methods.some((m) => m.id === id));
           if (preferred.length) setMethod(preferred[0]);
         }
       })
@@ -84,6 +86,7 @@ export default function Cart({ onClose }) {
     setBusy(true);
     setError('');
     setSuccess(false);
+    setBankIntent(null);
     try {
       const payload = { method: method === 'gift_card' ? 'card' : method };
       if (method === 'gift_card' && giftCode.trim()) payload.giftCardCode = giftCode.trim();
@@ -91,17 +94,18 @@ export default function Cart({ onClose }) {
 
       const res = await api.payments.cart.checkout(payload);
 
-      if (res.paid) {
+      if (res.paid || res.demo) {
         setSuccess(true);
         await refreshCart();
         addToast('Purchase complete! Payment is held in escrow.', 'success');
         return;
       }
 
-      if (res.demo) {
-        setSuccess(true);
-        await refreshCart();
-        addToast('Purchase complete! Payment is held in escrow.', 'success');
+      // In-app bank transfer: no popup, we show the account number instead and
+      // let the webhook confirm it.
+      if (res.bankTransfer) {
+        setBankIntent({ reference: res.reference, bankTransfer: res.bankTransfer });
+        setBusy(false);
         return;
       }
 
@@ -112,6 +116,7 @@ export default function Cart({ onClose }) {
         currency: res.currency,
         reference: res.reference,
         accessCode: res.accessCode,
+        channels: res.channels,
         authorizationUrl: res.authorizationUrl,
         onSuccess: async () => {
           await api.payments.verify(res.reference);
@@ -137,10 +142,18 @@ export default function Cart({ onClose }) {
   const methodLabel = (id) => {
     switch (id) {
       case 'card':
-        return 'Card / Paystack';
+        return 'Card';
+      case 'bank_transfer':
+        return 'Bank Transfer';
       case 'bank':
       case 'paystack_bank':
-        return 'Bank Transfer';
+        return 'Paystack Bank';
+      case 'ussd':
+        return 'USSD';
+      case 'mobile_money':
+        return 'Mobile Money';
+      case 'qr':
+        return 'QR Code';
       case 'gift_card':
         return 'Gift Card / Store Credit';
       default:
@@ -277,13 +290,32 @@ export default function Cart({ onClose }) {
 
               {error && <p className="cart-error">{error}</p>}
 
-              <button
-                className="cart-checkout-btn"
-                onClick={handleCheckout}
-                disabled={busy}
-              >
-                {busy ? 'Processing…' : `Checkout · ${formatPrice(subtotalCents / 100)}`}
-              </button>
+              {bankIntent ? (
+                <>
+                  <BankTransferPanel
+                    reference={bankIntent.reference}
+                    details={bankIntent.bankTransfer}
+                    onPaid={async () => {
+                      setSuccess(true);
+                      await refreshCart();
+                    }}
+                  />
+                  <button
+                    className="cart-btn-secondary"
+                    onClick={() => setBankIntent(null)}
+                  >
+                    Choose another method
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="cart-checkout-btn"
+                  onClick={handleCheckout}
+                  disabled={busy}
+                >
+                  {busy ? 'Processing…' : `Checkout · ${formatPrice(subtotalCents / 100)}`}
+                </button>
+              )}
               <p className="cart-escrow-note">Payments are held in escrow until you confirm you received your item.</p>
             </div>
           </>

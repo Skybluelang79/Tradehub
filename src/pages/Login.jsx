@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { isPasskeySupported } from '../services/webauthn';
+import { isPasskeySupported, passkeySupport } from '../services/webauthn';
 import { useToast } from '../components/ui/Toast';
 import { TradeHubLogo } from '../components/ui';
 import { SocialAuthButtons } from '../components/features';
@@ -31,9 +31,42 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
   const [codeSent, setCodeSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
+  const [passkeyInfo, setPasskeyInfo] = useState({ supported: false, platform: false, conditional: false });
 
   const passkeySupported = isPasskeySupported();
   const activeBusy = busy || isLoading;
+  // A fingerprint/face sensor is present, so we can honestly call this
+  // "fingerprint sign-in" rather than the vaguer "passkey".
+  const fingerprint = passkeyInfo.platform;
+  const conditionalStarted = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    passkeySupport().then((support) => {
+      if (active) setPasskeyInfo(support);
+    });
+    return () => { active = false; };
+  }, []);
+
+  // WebAuthn autofill: when the browser supports conditional mediation, start
+  // a background ceremony so the saved passkey (fingerprint) shows up inline in
+  // the email field without any modal until the user picks it.
+  useEffect(() => {
+    if (!passkeySupported || !passkeyInfo.conditional || method !== 'email') return undefined;
+    if (conditionalStarted.current) return undefined;
+    conditionalStarted.current = true;
+
+    let cancelled = false;
+    (async () => {
+      const result = await signInWithPasskey(undefined, { mediation: 'conditional' });
+      if (!cancelled && result?.success) {
+        addToast('Signed in with your fingerprint', 'success');
+        if (onClose) onClose();
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [passkeySupported, passkeyInfo.conditional, method, signInWithPasskey, addToast, onClose]);
 
   const validateEmailForm = () => {
     const errors = {};
@@ -297,7 +330,7 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
                     type="email"
                     id="email"
                     name="email"
-                    autoComplete="email"
+                    autoComplete={passkeyInfo.conditional ? 'username webauthn' : 'email'}
                     placeholder="Enter your email"
                     value={formData.email}
                     onChange={handleChange}
@@ -395,8 +428,8 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
               className="auth-passkey-img-btn"
               onClick={handlePasskey}
               disabled={passkeyBusy}
-              aria-label="Sign in with your fingerprint"
-              title="Sign in with your fingerprint"
+              aria-label={fingerprint ? 'Sign in with your fingerprint' : 'Sign in with a passkey'}
+              title={fingerprint ? 'Sign in with your fingerprint' : 'Sign in with a passkey'}
             >
               {passkeyBusy ? (
                 <span className="loading-spinner"></span>
@@ -412,8 +445,14 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
               )}
             </button>
             <p className="auth-passkey-caption">
-              Sign in with your fingerprint
-              <span>Tap the thumbprint to use your phone or device unlock</span>
+              {fingerprint ? 'Sign in with your fingerprint' : 'Sign in with a passkey'}
+              <span>
+                {fingerprint
+                  ? 'Tap the thumbprint to use your phone or device unlock'
+                  : passkeyInfo.conditional
+                    ? 'Look for your passkey in the email field, or tap to choose one'
+                    : 'Tap to use your phone or device unlock'}
+              </span>
             </p>
           </div>
         )}

@@ -4,7 +4,7 @@ import crypto from 'node:crypto';
 import db from '../db.js';
 import { verifyPaystackWebhook } from '../src/paystack.js';
 import { refundTxn, reserveItem } from './payments.js';
-import { activatePlan } from './subscriptions.js';
+import { activatePlan, planIdForCode } from './subscriptions.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -74,13 +74,104 @@ router.post('/paystack', express.raw({ type: 'application/json' }), async (req, 
           }
         }
 
-        // Subscription purchase activation (paid plan upgrade).
+        // Subscription purchase activation (paid plan upgrade). When the charge
+        // was initialized with a plan, Paystack returns the subscription
+        // identifiers we need to manage renewal/cancellation later.
         const meta = data.metadata || {};
+        const subInfo = {
+          subscriptionCode: data.subscription_code || data.subscription?.subscription_code || null,
+          emailToken: data.customer?.email_token || data.subscription?.email_token || null,
+        };
         if (meta.userId && meta.plan) {
-          activatePlan(meta.userId, meta.plan);
+          activatePlan(meta.userId, meta.plan, subInfo);
+        } else if (subInfo.subscriptionCode) {
+          // Fallback: map the returned plan code back to a tier and match the
+          // buyer by the persisted subscription code or their email.
+          const planId = planIdForCode(data.plan?.plan_code || (typeof data.plan === 'string' ? data.plan : null));
+          const existing = db.prepare('SELECT * FROM subscriptions WHERE paystack_subscription_code = ?').get(subInfo.subscriptionCode);
+          const user = existing
+            ? { id: existing.user_id }
+            : (data.customer?.email ? db.prepare('SELECT id FROM users WHERE email = ?').get(data.customer.email) : null);
+          if (user && planId) activatePlan(user.id, planId, subInfo);
         }
 
         logger.info(`Paystack charge succeeded: ${reference}`);
+        break;
+      }
+
+      case 'subscription.create': {
+        const code = data.subscription_code;
+        const emailToken = data.email_token;
+        const planId = planIdForCode(data.plan?.plan_code || (typeof data.plan === 'string' ? data.plan : null));
+        if (code) {
+          const existing = db.prepare('SELECT * FROM subscriptions WHERE paystack_subscription_code = ?').get(code);
+          if (existing) {
+            db.prepare(`
+              UPDATE subscriptions SET status = 'active',
+                paystack_email_token = COALESCE(?, paystack_email_token),
+                updated_at = datetime('now')
+              WHERE id = ?
+            `).run(emailToken || null, existing.id);
+          } else if (planId) {
+            const user = data.customer?.email
+              ? db.prepare('SELECT id FROM users WHERE email = ?').get(data.customer.email)
+              : null;
+            if (user) activatePlan(user.id, planId, { subscriptionCode: code, emailToken });
+          }
+          logger.info(`Paystack subscription created: ${code}`);
+        }
+        break;
+      }
+
+      case 'subscription.not_renew': {
+        const code = data.subscription_code;
+        const sub = code ? db.prepare('SELECT * FROM subscriptions WHERE paystack_subscription_code = ?').get(code) : null;
+        if (sub) {
+          // Keep access until the end of the paid period; only flag non-renewal.
+          db.prepare(`
+            UPDATE subscriptions SET status = 'active',
+              cancelled_at = datetime('now'), updated_at = datetime('now')
+            WHERE id = ?
+          `).run(sub.id);
+          notify(sub.user_id, 'system', 'Subscription Not Renewing', 'Your subscription will not renew. You keep access until the end of the current period.');
+          logger.info(`Paystack subscription not renewing: ${code}`);
+        }
+        break;
+      }
+
+      case 'subscription.disable': {
+        const code = data.subscription_code;
+        const sub = code ? db.prepare('SELECT * FROM subscriptions WHERE paystack_subscription_code = ?').get(code) : null;
+        if (sub && sub.plan !== 'free') {
+          db.prepare(`
+            UPDATE subscriptions SET plan = 'free', status = 'cancelled',
+              cancelled_at = datetime('now'),
+              paystack_subscription_code = NULL,
+              paystack_email_token = NULL,
+              updated_at = datetime('now')
+            WHERE id = ?
+          `).run(sub.id);
+          notify(sub.user_id, 'system', 'Plan Cancelled', 'Your paid plan has been cancelled and moved to Free.');
+          logger.info(`Paystack subscription disabled: ${code}`);
+        }
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const code = data.subscription?.subscription_code || data.subscription_code;
+        let sub = code ? db.prepare('SELECT * FROM subscriptions WHERE paystack_subscription_code = ?').get(code) : null;
+        if (!sub && data.customer?.email) {
+          const user = db.prepare('SELECT id FROM users WHERE email = ?').get(data.customer.email);
+          if (user) sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(user.id);
+        }
+        if (sub) {
+          db.prepare(`
+            UPDATE subscriptions SET status = 'past_due', updated_at = datetime('now')
+            WHERE id = ?
+          `).run(sub.id);
+          notify(sub.user_id, 'payment', 'Subscription Payment Failed', 'We could not charge your card for your subscription. Please update your payment method to keep your plan.');
+          logger.warn(`Paystack subscription invoice failed: ${code || data.customer?.email}`);
+        }
         break;
       }
 

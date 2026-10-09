@@ -42,8 +42,10 @@ function getSubscription(userId) {
 }
 
 // Idempotent plan activation used by both the verify route and the
-// `charge.success` webhook after a successful Paystack payment.
-export function activatePlan(userId, plan) {
+// `charge.success` webhook after a successful Paystack payment. When Paystack
+// returns subscription identifiers we persist them so later
+// subscription.disable / not_renew webhooks can find this row.
+export function activatePlan(userId, plan, info = {}) {
   if (!PLANS[plan]) return false;
   const sub = getSubscription(userId);
   db.prepare(`
@@ -53,13 +55,75 @@ export function activatePlan(userId, plan) {
       trial_end = NULL,
       pending_plan = NULL,
       paystack_reference = NULL,
+      paystack_subscription_code = COALESCE(?, paystack_subscription_code),
+      paystack_email_token = COALESCE(?, paystack_email_token),
       updated_at = datetime('now')
     WHERE user_id = ?
-  `).run(plan, userId);
+  `).run(plan, info.subscriptionCode || null, info.emailToken || null, userId);
   if (!sub || sub.plan !== plan) {
     notify(userId, 'system', 'Plan Upgraded', `You're now on the ${PLANS[plan].name} plan!`);
   }
   return true;
+}
+
+// ---------------------------------------------------------------------------
+// Recurring billing: Paystack plans
+// ---------------------------------------------------------------------------
+// A Paystack "plan" is the server-side template that drives automatic monthly
+// charges. We create one per paid tier (lazily) and cache the returned
+// `plan_code` in platform_settings so every checkout reuses the same plan.
+// Passing that code to transaction/initialize makes Paystack set up the
+// subscription automatically on the first successful charge.
+
+function readPlanCodes() {
+  const row = db.prepare("SELECT value FROM platform_settings WHERE key = 'paystack_plan_codes'").get();
+  if (!row?.value) return {};
+  try {
+    const parsed = JSON.parse(row.value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writePlanCodes(map) {
+  db.prepare(`
+    INSERT INTO platform_settings (key, value, updated_at)
+    VALUES ('paystack_plan_codes', ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = datetime('now')
+  `).run(JSON.stringify(map));
+}
+
+async function getPaystackPlanCode(planId) {
+  const plan = PLANS[planId];
+  if (!plan || plan.price <= 0 || !isPaystackConfigured()) return null;
+  const cacheKey = `${planId}:${DEFAULT_CURRENCY}`;
+  const codes = readPlanCodes();
+  if (codes[cacheKey]) return codes[cacheKey];
+
+  const created = await paystack.createPlan({
+    name: `TradeHub ${plan.name}`,
+    amountMinor: toMinorUnits(plan.price, DEFAULT_CURRENCY),
+    interval: 'monthly',
+    currency: DEFAULT_CURRENCY,
+  });
+  const code = created?.plan_code || created?.code;
+  if (code) {
+    codes[cacheKey] = code;
+    writePlanCodes(codes);
+  }
+  return code || null;
+}
+
+// Reverse-map a Paystack plan_code back to our tier id, for webhook handlers
+// that only know the code.
+export function planIdForCode(code) {
+  if (!code) return null;
+  const codes = readPlanCodes();
+  for (const [cacheKey, value] of Object.entries(codes)) {
+    if (value === code) return cacheKey.split(':')[0];
+  }
+  return null;
 }
 
 router.get('/current', authenticateToken, (req, res) => {
@@ -118,11 +182,20 @@ router.post('/upgrade', authenticateToken, async (req, res) => {
       }
       const reference = uuidv4();
       const amountMinor = toMinorUnits(PLANS[targetPlan].price, DEFAULT_CURRENCY);
+      // Passing the plan code turns this first charge into a recurring
+      // subscription: Paystack auto-charges the buyer each month until it is
+      // disabled via /cancel. If we can't mint a plan we fall back to a
+      // one-off charge and the local 30-day period still applies.
+      const planCode = await getPaystackPlanCode(targetPlan).catch((err) => {
+        logger.warn(`Could not create Paystack plan for ${targetPlan}: ${err.message}`);
+        return null;
+      });
       const initialized = await paystack.initializeTransaction({
         amountMinor,
         currency: DEFAULT_CURRENCY,
         email: req.user.email,
         reference,
+        planCode,
         metadata: { userId: req.user.id, plan: targetPlan, tradehub_subscription: reference },
         callbackUrl: process.env.PAYSTACK_CALLBACK_URL,
       });
@@ -183,7 +256,10 @@ router.get('/upgrade/verify/:reference', authenticateToken, async (req, res) => 
       return res.status(400).json({ error: 'No plan associated with this payment' });
     }
 
-    activatePlan(req.user.id, plan);
+    activatePlan(req.user.id, plan, {
+      subscriptionCode: verified.subscription_code || verified.subscription?.subscription_code || null,
+      emailToken: verified.customer?.email_token || verified.subscription?.email_token || null,
+    });
     const updated = getSubscription(req.user.id);
     res.json({ success: true, plan: updated.plan, subscription: { ...updated, ...PLANS[updated.plan] } });
   } catch (err) {
@@ -193,16 +269,32 @@ router.get('/upgrade/verify/:reference', authenticateToken, async (req, res) => 
   }
 });
 
-router.post('/cancel', authenticateToken, (req, res) => {
+router.post('/cancel', authenticateToken, async (req, res) => {
   try {
     const sub = getSubscription(req.user.id);
     if (sub.plan === 'free') {
       return res.status(400).json({ error: 'Already on free plan' });
     }
 
+    // Stop future Paystack charges first; the local downgrade is idempotent so
+    // it is safe to proceed even if Paystack is briefly unreachable.
+    if (isPaystackConfigured() && sub.paystack_subscription_code) {
+      try {
+        await paystack.disableSubscription({
+          code: sub.paystack_subscription_code,
+          token: sub.paystack_email_token,
+        });
+      } catch (err) {
+        logger.warn(`Could not disable Paystack subscription ${sub.paystack_subscription_code}: ${err.message}`);
+      }
+    }
+
     db.prepare(`
       UPDATE subscriptions SET plan = 'free', status = 'cancelled',
-        cancelled_at = datetime('now'), updated_at = datetime('now')
+        cancelled_at = datetime('now'),
+        paystack_subscription_code = NULL,
+        paystack_email_token = NULL,
+        updated_at = datetime('now')
       WHERE user_id = ?
     `).run(req.user.id);
 

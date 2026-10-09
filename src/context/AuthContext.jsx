@@ -116,21 +116,26 @@ export function AuthProvider({ children }) {
   }, []);
 
   // --- Fingerprint (passkey) sign-in ------------------------------------------
-  const signInWithPasskey = useCallback(async (email) => {
-    setIsLoading(true);
-    setError(null);
+  const signInWithPasskey = useCallback(async (email, options = {}) => {
+    // Conditional (autofill) ceremonies sit idle until the user picks a
+    // passkey, so they must not flip the global loading flag or surface errors.
+    const conditional = options.mediation === 'conditional';
+    if (!conditional) {
+      setIsLoading(true);
+      setError(null);
+    }
     try {
-      const data = await loginWithPasskey(email);
+      const data = await loginWithPasskey(email, options);
       setToken(data.token);
       localStorage.setItem('tradehub_token', data.token);
       setUser(data.user);
       setIsAuthenticated(true);
       return { success: true };
     } catch (err) {
-      setError(err.message || 'Fingerprint sign-in failed');
+      if (!conditional) setError(err.message || 'Fingerprint sign-in failed');
       return { success: false, error: err.message };
     } finally {
-      setIsLoading(false);
+      if (!conditional) setIsLoading(false);
     }
   }, []);
 

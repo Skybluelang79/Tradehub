@@ -15,6 +15,41 @@ export function isPasskeySupported() {
     && typeof navigator.credentials?.create === 'function';
 }
 
+let supportPromise = null;
+
+/**
+ * Probe the device once and cache the answer. `platform` is true when a
+ * fingerprint/face sensor is actually present — this is what lets the login
+ * screen say "fingerprint" instead of the vaguer "passkey". `conditional` is
+ * true when the browser can surface passkeys inline inside an input field
+ * (WebAuthn autofill / conditional mediation).
+ */
+export function passkeySupport() {
+  if (!isPasskeySupported()) {
+    return Promise.resolve({ supported: false, platform: false, conditional: false });
+  }
+  if (!supportPromise) {
+    const { PublicKeyCredential } = window;
+    const platform = typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function'
+      ? PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().catch(() => false)
+      : Promise.resolve(false);
+    const conditional = typeof PublicKeyCredential.isConditionalMediationAvailable === 'function'
+      ? PublicKeyCredential.isConditionalMediationAvailable().catch(() => false)
+      : Promise.resolve(false);
+
+    supportPromise = Promise.all([platform, conditional]).then(([platformAvailable, conditionalAvailable]) => ({
+      supported: true,
+      platform: platformAvailable,
+      conditional: conditionalAvailable,
+    }));
+  }
+  return supportPromise;
+}
+
+export function isPlatformAuthenticatorAvailable() {
+  return passkeySupport().then((support) => support.platform);
+}
+
 export function base64urlToBuffer(value) {
   const base64 = value.replace(/-/g, '+').replace(/_/g, '/');
   const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
@@ -87,14 +122,14 @@ function friendlyError(err) {
   if (!(err instanceof Error)) return 'Something went wrong';
   switch (err.name) {
     case 'NotAllowedError':
-      return 'Passkey prompt was dismissed or timed out';
+      return 'Fingerprint sign-in was dismissed or timed out. Please try again.';
     case 'InvalidStateError':
-      return 'A passkey for this device already exists';
+      return 'This device is already set up for fingerprint sign-in';
     case 'NotSupportedError':
     case 'SecurityError':
-      return 'This browser cannot use passkeys. Try a fingerprint, face or device PIN.';
+      return 'This browser cannot use fingerprint sign-in. Set up a fingerprint, face unlock or device PIN and try again.';
     case 'AbortError':
-      return 'Passkey request was cancelled';
+      return 'Fingerprint sign-in was cancelled';
     default:
       return err.message || 'Something went wrong';
   }
@@ -126,8 +161,12 @@ export async function registerPasskey() {
  * Sign in with an existing passkey. Passing an email scopes the prompt to that
  * account's passkeys; omitting it lets the browser offer any passkey it holds
  * for this site, which is the one-tap "Sign in with your fingerprint" path.
+ *
+ * `mediation: 'conditional'` runs the ceremony in autofill mode: no modal is
+ * shown, the passkey just appears in the browser's autofill list for the
+ * focused username field.
  */
-export async function loginWithPasskey(email) {
+export async function loginWithPasskey(email, { mediation } = {}) {
   if (!isPasskeySupported()) {
     throw new Error('This browser cannot use passkeys');
   }
@@ -138,6 +177,7 @@ export async function loginWithPasskey(email) {
   try {
     assertion = await navigator.credentials.get({
       publicKey: toCredentialRequestOptions(options),
+      ...(mediation ? { mediation } : {}),
     });
   } catch (err) {
     throw new Error(friendlyError(err));
@@ -158,6 +198,8 @@ export function removePasskey(id) {
 
 export default {
   isPasskeySupported,
+  passkeySupport,
+  isPlatformAuthenticatorAvailable,
   registerPasskey,
   loginWithPasskey,
   listPasskeys,

@@ -759,6 +759,11 @@ function migrate() {
   ensureColumn('transactions', 'credit_cents', 'INTEGER DEFAULT 0');
   ensureColumn('transactions', 'currency', "TEXT DEFAULT 'NGN'");
   ensureColumn('transactions', 'paystack_reference', 'TEXT');
+  ensureColumn('transactions', 'transaction_reference', 'TEXT');
+  ensureColumn('transactions', 'bank_account_number', 'TEXT');
+  ensureColumn('transactions', 'bank_account_name', 'TEXT');
+  ensureColumn('transactions', 'bank_name', 'TEXT');
+  ensureColumn('transactions', 'bank_expires_at', 'TEXT');
 
   ensureColumn('payment_methods', 'paystack_authorization_code', 'TEXT');
   ensureColumn('payment_methods', 'card_type', "TEXT DEFAULT ''");
@@ -781,6 +786,8 @@ function migrate() {
   ensureColumn('users', 'paystack_customer_code', "TEXT DEFAULT ''");
   ensureColumn('subscriptions', 'paystack_reference', 'TEXT');
   ensureColumn('subscriptions', 'pending_plan', 'TEXT');
+  ensureColumn('subscriptions', 'paystack_subscription_code', 'TEXT');
+  ensureColumn('subscriptions', 'paystack_email_token', 'TEXT');
   ensureColumn('user_settings', 'fcm_token', "TEXT DEFAULT ''");
 ensureColumn('items', 'sold_to', 'TEXT');
 ensureColumn('users', 'identity_verified', 'INTEGER DEFAULT 0');

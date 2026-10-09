@@ -24,29 +24,31 @@ function payWithCard({
   currency = 'NGN',
   reference,
   accessCode,
+  channels,
   onSuccess,
   onClose,
   onError,
 }) {
   return loadPaystack().then((PaystackPop) => {
-    const handler = PaystackPop.setup({
+    const setup = {
       key: publicKey,
       email: email || (window.__tradehub_user_email__ || ''),
       amount: Math.round(amountCents),
       currency,
       ref: reference,
       access_code: accessCode,
+      // Restrict the popup to the channels the buyer chose at checkout
+      // (card, ussd, qr, mobile_money, bank…). Omitting it lets Paystack show
+      // every channel enabled on the account.
+      channels: Array.isArray(channels) && channels.length ? channels : undefined,
       callback: () => {
-        if (accessCode) {
-          // Paystack Pop with an access_code returns the paymentReference on
-          // success; verify server-side using the original reference.
-          onSuccess(reference);
-          return;
-        }
+        // Paystack Pop returns on success; always verify server-side using the
+        // original reference rather than trusting the browser.
         onSuccess(reference);
       },
       onClose,
-    });
+    };
+    const handler = PaystackPop.setup(setup);
     handler.openIframe();
   }).catch((err) => {
     if (onError) onError(err);

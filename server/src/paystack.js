@@ -20,6 +20,18 @@ export const DEFAULT_CURRENCY = process.env.PAYSTACK_CURRENCY || 'NGN';
 // Paystack itself can only charge a subset, so those fall back to NGN at checkout.
 export const SUPPORTED_CURRENCIES = PAYSTACK_CURRENCIES;
 
+// Every channel Paystack can present on a transaction. Callers pick a subset;
+// anything not in this list is dropped before it reaches Paystack so a bad
+// value can't make an otherwise valid checkout fail.
+export const PAYSTACK_CHANNELS = ['card', 'bank', 'ussd', 'qr', 'mobile_money', 'bank_transfer', 'eft'];
+
+export function normalizeChannels(channels) {
+  if (!Array.isArray(channels)) return undefined;
+  const cleaned = [...new Set(channels.map((c) => String(c || '').toLowerCase().trim()))]
+    .filter((c) => PAYSTACK_CHANNELS.includes(c));
+  return cleaned.length ? cleaned : undefined;
+}
+
 export function isValidCurrency(c) {
   return isValidAfricanCurrency(c);
 }
@@ -75,8 +87,10 @@ export const paystack = {
     }
   },
 
-  // POST /transaction/initialize - creates a charge and returns an access_code
-  async initializeTransaction({ amountMinor, currency, email, reference, metadata = {}, channels = null, callbackUrl }) {
+  // POST /transaction/initialize - creates a charge and returns an access_code.
+  // When `planCode` is supplied Paystack ignores `amount` and charges the plan,
+  // auto-creating a subscription on the first successful payment.
+  async initializeTransaction({ amountMinor, currency, email, reference, metadata = {}, channels = null, callbackUrl, planCode = null }) {
     const body = {
       amount: amountMinor,
       currency: String(currency || DEFAULT_CURRENCY).toUpperCase(),
@@ -85,8 +99,55 @@ export const paystack = {
       metadata,
       callback_url: callbackUrl || process.env.PAYSTACK_CALLBACK_URL || '',
     };
-    if (Array.isArray(channels) && channels.length) body.channels = channels;
+    const normalized = normalizeChannels(channels);
+    if (normalized) body.channels = normalized;
+    if (planCode) body.plan = planCode;
     return this.request('POST', '/transaction/initialize', body);
+  },
+
+  // POST /charge with a `bank_transfer` object creates a temporary account
+  // number tied to this transaction ("Pay with Transfer"). The response carries
+  // the account_name / account_number / bank and is never charged to a card.
+  async chargeBankTransfer({ amountMinor, currency, email, reference, metadata = {}, expiresAt = null }) {
+    return this.request('POST', '/charge', {
+      email,
+      amount: amountMinor,
+      currency: String(currency || DEFAULT_CURRENCY).toUpperCase(),
+      reference,
+      metadata,
+      bank_transfer: { account_expires_at: expiresAt },
+    });
+  },
+
+  // POST /plan - create (or fetch an existing) recurring billing plan.
+  async createPlan({ name, amountMinor, interval = 'monthly', currency }) {
+    return this.request('POST', '/plan', {
+      name,
+      amount: amountMinor,
+      interval,
+      currency: String(currency || DEFAULT_CURRENCY).toUpperCase(),
+    });
+  },
+
+  async listPlans() {
+    return this.request('GET', '/plan');
+  },
+
+  // POST /subscription - subscribe an existing customer (must have a card
+  // authorization on file) to a plan.
+  async createSubscription({ customer, planCode, authorization = null, startDate = null }) {
+    const body = { customer, plan: planCode };
+    if (authorization) body.authorization = authorization;
+    if (startDate) body.start_date = startDate;
+    return this.request('POST', '/subscription', body);
+  },
+
+  async disableSubscription({ code, token }) {
+    return this.request('POST', '/subscription/disable', { code, token });
+  },
+
+  async enableSubscription({ code, token }) {
+    return this.request('POST', '/subscription/enable', { code, token });
   },
 
   // GET /transaction/verify/:reference

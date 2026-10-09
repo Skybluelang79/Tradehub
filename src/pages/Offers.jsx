@@ -88,6 +88,7 @@ export default function Offers({ onClose }) {
         currency: res.currency,
         reference: res.reference,
         accessCode: res.accessCode,
+        channels: res.channels,
         authorizationUrl: res.authorizationUrl,
         onSuccess: async () => {
           await api.payments.verify(res.reference);

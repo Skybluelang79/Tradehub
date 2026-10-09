@@ -42,3 +42,8 @@ backups/
 # Firebase config
 .env.firebase
 server/.env.firebase
+
+# Python
+.venv
+__pycache__/
+*.py[cod]

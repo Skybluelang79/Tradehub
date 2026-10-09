@@ -397,11 +397,11 @@ export default function Home() {
                       <span className="mini-item-title">{item.title}</span>
                       {hasSale ? (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice)}</span>
-                          <span className="mini-item-price-original">{formatPrice(item.price)}</span>
+                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice, item.currency)}</span>
+                          <span className="mini-item-price-original">{formatPrice(item.price, item.currency)}</span>
                         </div>
                       ) : (
-                        <span className="mini-item-price">{formatPrice(item.price)}</span>
+                        <span className="mini-item-price">{formatPrice(item.price, item.currency)}</span>
                       )}
                     </div>
                   </div>
@@ -430,11 +430,11 @@ export default function Home() {
                       <span className="mini-item-title">{item.title}</span>
                       {hasSale ? (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice)}</span>
-                          <span className="mini-item-price-original">{formatPrice(item.price)}</span>
+                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice, item.currency)}</span>
+                          <span className="mini-item-price-original">{formatPrice(item.price, item.currency)}</span>
                         </div>
                       ) : (
-                        <span className="mini-item-price">{formatPrice(item.price)}</span>
+                        <span className="mini-item-price">{formatPrice(item.price, item.currency)}</span>
                       )}
                     </div>
                   </div>
@@ -463,11 +463,11 @@ export default function Home() {
                       <span className="mini-item-title">{item.title}</span>
                       {hasSale ? (
                         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice)}</span>
-                          <span className="mini-item-price-original">{formatPrice(item.price)}</span>
+                          <span className="mini-item-price mini-item-price--sale">{formatPrice(item.salePrice, item.currency)}</span>
+                          <span className="mini-item-price-original">{formatPrice(item.price, item.currency)}</span>
                         </div>
                       ) : (
-                        <span className="mini-item-price">{formatPrice(item.price)}</span>
+                        <span className="mini-item-price">{formatPrice(item.price, item.currency)}</span>
                       )}
                     </div>
                   </div>

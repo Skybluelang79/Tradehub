@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Avatar, Rating, Button, Input, Textarea, Select } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
-import { ImageLightbox, PriceChart } from '../components/features';
+import { ImageLightbox, PriceChart, BankTransferPanel } from '../components/features';
 import { api } from '../services/client';
 import { payWithCard } from '../services/paystack';
 import { useAuth } from '../context/AuthContext';
@@ -30,6 +30,7 @@ import { AdBanner } from '../components/features';
 import { useApp } from '../context';
 import { categories, conditionOptions } from '../services/api';
 import { formatPrice, formatDistance, formatDate, normalizeReview } from '../utils/helpers';
+import { getCurrencySymbol } from '../utils/currency.js';
 import '../styles/globals.css';
 import './ItemDetail.css';
 
@@ -93,6 +94,7 @@ export default function ItemDetail() {
   const [giftCode, setGiftCode] = useState('');
   const [checkoutBusy, setCheckoutBusy] = useState(false);
   const [checkoutResult, setCheckoutResult] = useState(null);
+  const [checkoutBank, setCheckoutBank] = useState(null);
   const [checkoutError, setCheckoutError] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -200,6 +202,7 @@ export default function ItemDetail() {
     setGiftCode('');
     setCheckoutBusy(false);
     setCheckoutResult(null);
+    setCheckoutBank(null);
     setCheckoutError('');
   };
 
@@ -254,7 +257,7 @@ export default function ItemDetail() {
       const methods = (r.methods || []).filter((m) => m.enabled !== false);
       setAvailableMethods(methods);
       if (methods.length) {
-        const preferred = ['card', 'paystack_bank', 'gift_card'].filter((id) => methods.some((m) => m.id === id));
+        const preferred = ['card', 'bank_transfer', 'paystack_bank', 'bank', 'ussd', 'mobile_money', 'qr', 'gift_card'].filter((id) => methods.some((m) => m.id === id));
         setCheckoutMethod(preferred[0]);
       }
       setWalletCredit(r.creditCents ?? methods.find((m) => m.id === 'gift_card')?.creditCents ?? 0);
@@ -299,6 +302,13 @@ export default function ItemDetail() {
         return;
       }
 
+      // In-app bank transfer: show the minted account number instead of a popup.
+      if (res.bankTransfer) {
+        setCheckoutBank({ reference: res.reference || res.transactionId, bankTransfer: res.bankTransfer });
+        setCheckoutBusy(false);
+        return;
+      }
+
       // Real Paystack charge - open the Paystack Pop checkout.
       await payWithCard({
         publicKey: res.publicKey,
@@ -307,6 +317,7 @@ export default function ItemDetail() {
         currency: res.currency,
         reference: res.reference || res.transactionId,
         accessCode: res.accessCode,
+        channels: res.channels,
         authorizationUrl: res.authorizationUrl,
         onSuccess: async () => {
           const verified = await api.payments.verify(res.reference || res.transactionId);
@@ -449,7 +460,7 @@ export default function ItemDetail() {
     if (!selectedItem) return [];
     const url = getItemShareUrl();
     const title = selectedItem.title;
-    const price = formatPrice(displayPrice);
+    const price = formatPrice(displayPrice, selectedItem?.currency);
     const text = `${title} — ${price} on TradeHub`;
     return [
       { id: 'facebook', name: 'Facebook', url: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`, color: '#1877F2' },
@@ -498,7 +509,7 @@ export default function ItemDetail() {
     }
     const amount = parseFloat(bidAmount);
     if (!amount || amount < minBid) {
-      addToast(`Bid must be at least ${formatPrice(minBid)}`, 'error');
+      addToast(`Bid must be at least ${formatPrice(minBid, selectedItem?.currency)}`, 'error');
       return;
     }
     setBidBusy(true);
@@ -711,6 +722,7 @@ export default function ItemDetail() {
         );
       case 'bank':
       case 'paystack_bank':
+      case 'bank_transfer':
         return (
           <span className="checkout-method-icon bank">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -791,14 +803,14 @@ export default function ItemDetail() {
         <div className="detail-price-row">
           {showSale ? (
             <>
-              <div className="detail-price detail-price--sale">{formatPrice(selectedItem.salePrice)}</div>
-              <div className="detail-price--original">{formatPrice(selectedItem.price)}</div>
+              <div className="detail-price detail-price--sale">{formatPrice(selectedItem.salePrice, selectedItem.currency)}</div>
+              <div className="detail-price--original">{formatPrice(selectedItem.price, selectedItem.currency)}</div>
               <span className="detail-sale-badge">
                 {Math.round((1 - selectedItem.salePrice / selectedItem.price) * 100)}% OFF
               </span>
             </>
           ) : (
-            <div className="detail-price">{formatPrice(selectedItem.price)}</div>
+            <div className="detail-price">{formatPrice(selectedItem.price, selectedItem.currency)}</div>
           )}
         </div>
         <h1 className="detail-title">{selectedItem.title}</h1>
@@ -817,7 +829,7 @@ export default function ItemDetail() {
             <div className="auction-bid-row">
               <div className="auction-bid-current">
                 <span className="auction-label">Current Bid</span>
-                <span className="auction-current-bid">{formatPrice(currentBid)}</span>
+                <span className="auction-current-bid">{formatPrice(currentBid, selectedItem?.currency)}</span>
                 {currentBidder && <span className="auction-leader">by {currentBidder.name}</span>}
                 {!currentBidder && <span className="auction-leader">No bids yet</span>}
               </div>
@@ -834,7 +846,7 @@ export default function ItemDetail() {
                 <input
                   type="number"
                   className="input auction-bid-input"
-                  placeholder={`Min ${formatPrice(minBid)}`}
+                  placeholder={`Min ${formatPrice(minBid, selectedItem?.currency)}`}
                   value={bidAmount}
                   onChange={(e) => setBidAmount(e.target.value)}
                 />
@@ -843,7 +855,7 @@ export default function ItemDetail() {
                 </button>
               </div>
             )}
-            <p className="auction-min-hint">Minimum bid: {formatPrice(minBid)}</p>
+            <p className="auction-min-hint">Minimum bid: {formatPrice(minBid, selectedItem?.currency)}</p>
             {bids && bids.length > 0 && (
               <div className="auction-bids-list">
                 <span className="auction-label">Recent bids</span>
@@ -851,7 +863,7 @@ export default function ItemDetail() {
                   <div key={b.id || b.created_at} className="auction-bid-entry">
                     <Avatar src={b.bidder_avatar} alt={b.bidder_name} size="sm" />
                     <span className="auction-bidder-name">{b.bidder_name}</span>
-                    <span className="auction-bid-amount">{formatPrice(b.amount)}</span>
+                    <span className="auction-bid-amount">{formatPrice(b.amount, selectedItem?.currency)}</span>
                     <span className="auction-bid-time">{formatDate(b.created_at)}</span>
                   </div>
                 ))}
@@ -1001,7 +1013,7 @@ export default function ItemDetail() {
                 </div>
                 <div className="mini-item-info-detail">
                   <span className="mini-item-title-detail">{item.title}</span>
-                  <span className="mini-item-price-detail">₦{Number(item.price).toLocaleString()}</span>
+                  <span className="mini-item-price-detail">{formatPrice(item.price, item.currency)}</span>
                 </div>
               </div>
             ))}
@@ -1348,13 +1360,15 @@ export default function ItemDetail() {
       <Modal
         isOpen={showCheckout}
         onClose={resetCheckout}
-        title={checkoutResult ? 'Payment Complete' : 'Checkout'}
+        title={checkoutResult ? 'Payment Complete' : checkoutBank ? 'Pay by Bank Transfer' : 'Checkout'}
         footer={
           checkoutResult ? (
             <Button block onClick={resetCheckout}>Done</Button>
+          ) : checkoutBank ? (
+            <Button block variant="secondary" onClick={() => setCheckoutBank(null)}>Choose another method</Button>
           ) : (
             <Button block onClick={handleCheckout} disabled={checkoutBusy}>
-              {checkoutBusy ? 'Processing...' : `Pay ${formatPrice(displayPrice)}`}
+              {checkoutBusy ? 'Processing...' : `Pay ${formatPrice(displayPrice, selectedItem?.currency)}`}
             </Button>
           )
         }
@@ -1364,16 +1378,30 @@ export default function ItemDetail() {
             <CheckIcon size={16} />
             <span>Payment received and held in escrow. The seller is notified and your order is on its way.</span>
           </div>
+        ) : checkoutBank ? (
+          <BankTransferPanel
+            reference={checkoutBank.reference}
+            details={checkoutBank.bankTransfer}
+            onPaid={() => {
+              markAsSold(selectedItem.id);
+              setCheckoutBank(null);
+              setCheckoutResult(true);
+            }}
+          />
         ) : (
           <div>
-            <p className="checkout-price-line">Total <strong>{formatPrice(displayPrice)}</strong></p>
+            <p className="checkout-price-line">Total <strong>{formatPrice(displayPrice, selectedItem?.currency)}</strong></p>
             <p className="checkout-sub">Payments are held in escrow until you confirm receipt.</p>
 
             <div className="checkout-methods">
               {displayMethods.map((m) => {
                 const methodDesc =
                   m.id === 'card' ? 'Credit, debit, Verve' :
+                  m.id === 'bank_transfer' ? 'Get a dedicated account number for this order' :
                   m.id === 'paystack_bank' || m.id === 'bank' ? (m.description || 'Pay via a dedicated bank account') :
+                  m.id === 'ussd' ? 'Dial a USSD code to pay' :
+                  m.id === 'mobile_money' ? 'Pay from your mobile money wallet' :
+                  m.id === 'qr' ? 'Scan a QR code to pay' :
                   m.id === 'gift_card' ? walletCredit > 0 ? `${formatPrice(walletCredit / 100)} available` : 'Use store credit or a gift card' :
                   m.description || '';
                 return (
@@ -1414,10 +1442,10 @@ export default function ItemDetail() {
       <Modal isOpen={showOfferModal} onClose={() => setShowOfferModal(false)} title="Make an Offer">
         <div>
           <p className="checkout-price-line">
-            Listed at <strong>{formatPrice(selectedItem?.price || 0)}</strong>
+            Listed at <strong>{formatPrice(selectedItem?.price || 0, selectedItem?.currency)}</strong>
           </p>
           <div className="input-group" style={{ marginTop: 12 }}>
-            <label className="input-label">Your offer (₦)</label>
+            <label className="input-label">Your offer ({getCurrencySymbol(selectedItem?.currency)})</label>
             <input
               type="number"
               step="0.01"

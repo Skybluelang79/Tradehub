@@ -177,6 +177,7 @@ export const api = {
     resetGiftCard: (id) => adminRequest(`/payments/gift-cards/${id}/reset`, { method: 'POST' }),
     confirmFunds: (txnId) => adminRequest(`/payments/admin/fund-confirmed/${txnId}`, { method: 'POST' }),
     createIntent: (data) => request('/payments/create-intent', { method: 'POST', body: JSON.stringify(data) }),
+    bankTransfer: (reference) => request(`/payments/bank-transfer/${reference}`),
     verify: (reference) => request(`/payments/verify/${reference}`, { method: 'POST' }),
     confirm: (txnId) => request(`/payments/confirm/${txnId}`, { method: 'POST' }),
     confirmReceipt: (txnId) => request(`/payments/transactions/${txnId}/confirm-receipt`, { method: 'POST' }),

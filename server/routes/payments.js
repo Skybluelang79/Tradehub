@@ -17,6 +17,36 @@ import {
   isValidCurrency,
   isPaystackCurrency,
 } from '../src/paystack.js';
+
+// How each checkout option is presented by Paystack. The dedicated
+// `bank_transfer` option is handled separately because it uses the Charge API
+// to mint an in-app account number rather than opening the Paystack popup.
+export function channelsForMethod(method) {
+  switch (method) {
+    case 'bank':
+    case 'paystack_bank':
+      return ['bank_transfer', 'card'];
+    case 'bank_transfer':
+      return ['bank_transfer'];
+    case 'ussd':
+      return ['ussd'];
+    case 'qr':
+      return ['qr'];
+    case 'mobile_money':
+      return ['mobile_money'];
+    default:
+      return ['card'];
+  }
+}
+
+// Normalize the client's requested method to the value stored on the
+// transaction. Everything that isn't a recognised offline channel is a card.
+export function normalizePaymentMethod(method) {
+  const raw = String(method || 'card').toLowerCase();
+  if (['bank', 'paystack_bank'].includes(raw)) return 'bank';
+  if (['bank_transfer', 'ussd', 'qr', 'mobile_money'].includes(raw)) return raw;
+  return 'card';
+}
 import { convert } from '../../shared/currencies.js';
 
 const router = Router();
@@ -101,19 +131,52 @@ export function reserveItem(itemId) {
   db.prepare("UPDATE items SET status = 'sold' WHERE id = ? AND status = 'active'").run(itemId);
 }
 
-function insertTransaction({ txnId, item, amount, currency, buyerId, sellerId, method, status, paystackRef, paymentMethodId, promoCode, discountAmount, originalAmount, creditCents = 0 }) {
+function insertTransaction({ txnId, item, amount, currency, buyerId, sellerId, method, status, paystackRef, paymentMethodId, promoCode, discountAmount, originalAmount, creditCents = 0, providerRef, bank }) {
   const image = db.prepare('SELECT url FROM item_images WHERE item_id = ? ORDER BY sort_order LIMIT 1').get(item.id)?.url || '';
   db.prepare(`
-    INSERT INTO transactions (id, item_id, item_title, item_image, amount, currency, buyer_id, seller_id, payment_method_id, paystack_reference, method, provider_ref, status, promo_code, discount_amount, original_amount, credit_cents)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO transactions (id, item_id, item_title, item_image, amount, currency, buyer_id, seller_id, payment_method_id, paystack_reference, method, provider_ref, status, promo_code, discount_amount, original_amount, credit_cents, bank_account_number, bank_account_name, bank_name, bank_expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     txnId, item.id, item.title, image, amount, currency, buyerId, sellerId,
     paymentMethodId || null, paystackRef || null,
-    method, paystackRef || '', status,
+    method, providerRef || paystackRef || '', status,
     promoCode || '', discountAmount || 0, originalAmount || amount,
-    creditCents || 0
+    creditCents || 0,
+    bank?.accountNumber || null, bank?.accountName || null, bank?.bankName || null, bank?.expiresAt || null
   );
   if (status === 'pending') reserveItem(item.id);
+}
+
+// Persist the temporary account Paystack minted for a Pay-with-Transfer charge
+// so the buyer can be shown (and later re-shown) the same details.
+function attachBankDetails(txnId, charge) {
+  const bank = charge?.bank || {};
+  db.prepare(`
+    UPDATE transactions
+    SET bank_account_number = ?, bank_account_name = ?, bank_name = ?, bank_expires_at = ?, transaction_reference = ?
+    WHERE id = ?
+  `).run(
+    charge?.account_number || null,
+    charge?.account_name || null,
+    bank.name || charge?.bank_name || null,
+    charge?.account_expires_at || null,
+    charge?.transaction_reference || null,
+    txnId
+  );
+}
+
+function publicBankTransfer(txn) {
+  if (!txn || !txn.bank_account_number) return null;
+  return {
+    accountNumber: txn.bank_account_number,
+    accountName: txn.bank_account_name,
+    bankName: txn.bank_name,
+    expiresAt: txn.bank_expires_at,
+    amount: txn.amount,
+    currency: txn.currency,
+    transactionReference: txn.transaction_reference || null,
+    reference: txn.paystack_reference,
+  };
 }
 
 // ---- Credit helpers ---------------------------------------------------------
@@ -255,20 +318,58 @@ router.get('/options', authenticateToken, (req, res) => {
           id: 'card',
           name: configured ? 'Paystack Card' : 'Card',
           enabled: true,
+          channels: ['card'],
           description: 'Pay instantly with any debit or credit card (Visa, Mastercard, Verve) inside TradeHub.',
+          live: configured,
+        },
+        {
+          id: 'bank_transfer',
+          name: 'Dedicated Bank Transfer',
+          enabled: configured && process.env.PAYSTACK_BANK_TRANSFER_ENABLED !== 'false',
+          channels: ['bank_transfer'],
+          // Unlike the popup bank option, this mints an account number we show
+          // in-app and confirm automatically through the Paystack webhook.
+          inApp: true,
+          description: 'Get a dedicated account number for this order and pay by transfer from any bank app.',
           live: configured,
         },
         {
           id: 'paystack_bank',
           name: 'Paystack Bank Transfer',
           enabled: configured && process.env.PAYSTACK_BANK_TRANSFER_ENABLED !== 'false',
+          channels: ['bank_transfer', 'card'],
           description: 'Pay via a dedicated Paystack bank account generated for this order. Funds are auto-confirmed.',
+          live: configured,
+        },
+        {
+          id: 'ussd',
+          name: 'USSD',
+          enabled: configured,
+          channels: ['ussd'],
+          description: 'Dial a USSD code on your phone to complete the payment.',
+          live: configured,
+        },
+        {
+          id: 'mobile_money',
+          name: 'Mobile Money',
+          enabled: configured,
+          channels: ['mobile_money'],
+          description: 'Pay with MTN, Airtel or other mobile money wallets.',
+          live: configured,
+        },
+        {
+          id: 'qr',
+          name: 'QR Code',
+          enabled: configured,
+          channels: ['qr'],
+          description: 'Scan a QR code with your banking app to pay.',
           live: configured,
         },
         {
           id: 'gift_card',
           name: 'Gift Card / Store Credit',
           enabled: true,
+          channels: [],
           description: 'Use gift card credit or your store credit balance at checkout.',
           creditCents: wallet.credit_cents,
         },
@@ -347,7 +448,7 @@ function buildCheckout(req) {
 router.post('/create-intent', authenticateToken, async (req, res) => {
   try {
     const { item, amount, amountCents, currency, baseAmount, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents } = buildCheckout(req);
-    const method = req.body.method === 'bank' || req.body.method === 'paystack_bank' ? 'bank' : (req.body.method || 'card');
+    const method = normalizePaymentMethod(req.body.method);
     const txnId = uuidv4();
 
     // Fully covered by store credit / gift card — nothing to charge.
@@ -363,11 +464,40 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
         return res.status(503).json({ error: 'Payments are not configured. Set PAYSTACK_SECRET_KEY or enable DEMO_MODE.' });
       }
       applyCredit({ userId: req.user.id, giftCard, creditCents });
-      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: method === 'bank' ? 'bank' : 'card', status: 'pending', paystackRef: `demo_${txnId}`, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'pending', paystackRef: `demo_${txnId}`, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
       return res.json({ demo: true, transactionId: txnId, status: 'pending', paid: true, amountCents, creditCents, promo: promoInfo, currency });
     }
 
-    const channels = method === 'bank' ? ['bank_transfer', 'card'] : ['card'];
+    // Dedicated in-app bank transfer: mint a temporary account number instead
+    // of opening the Paystack popup. Confirmed by the charge.success webhook.
+    if (method === 'bank_transfer') {
+      const charge = await paystack.chargeBankTransfer({
+        amountMinor: toMinorUnits(chargeCents / 100, currency),
+        currency,
+        email: req.user.email,
+        reference: txnId,
+        metadata: { itemId: item.id, buyerId: req.user.id, sellerId: item.seller_id, tradehub_transaction: txnId },
+        expiresAt: process.env.PAYSTACK_BANK_TRANSFER_EXPIRES_AT || null,
+      });
+      applyCredit({ userId: req.user.id, giftCard, creditCents });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
+      attachBankDetails(txnId, charge);
+      const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(txnId);
+      return res.json({
+        transactionId: txnId,
+        reference: txnId,
+        status: 'awaiting_payment',
+        method,
+        amountCents,
+        chargeCents,
+        creditCents,
+        currency,
+        promo: promoInfo,
+        bankTransfer: publicBankTransfer(txn),
+      });
+    }
+
+    const channels = channelsForMethod(method);
     const initialized = await paystack.initializeTransaction({
       amountMinor: toMinorUnits(chargeCents / 100, currency),
       currency,
@@ -380,7 +510,7 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
 
     // Reserve the buyer's credit now; it is restored if the payment is abandoned.
     applyCredit({ userId: req.user.id, giftCard, creditCents });
-    insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: method === 'bank' ? 'bank' : 'card', status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
+    insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
 
     res.json({
       transactionId: txnId,
@@ -389,6 +519,8 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
       authorizationUrl: initialized.authorization_url,
       publicKey: PAYSTACK_PUBLIC_KEY,
       status: 'awaiting_payment',
+      method,
+      channels,
       amountCents,
       chargeCents,
       creditCents,
@@ -523,7 +655,7 @@ router.delete('/cart', authenticateToken, (req, res) => {
 router.post('/cart/checkout', authenticateToken, async (req, res) => {
   try {
     const { method: rawMethod = 'card', giftCardCode, promoCode } = req.body;
-    const method = rawMethod === 'bank' || rawMethod === 'paystack_bank' ? 'bank' : 'card';
+    const method = normalizePaymentMethod(rawMethod);
     const cartItems = getCart(req.user.id);
     if (!cartItems.length) return res.status(400).json({ error: 'Your cart is empty' });
 
@@ -620,13 +752,44 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
         return res.status(503).json({ error: 'Payments are not configured. Set PAYSTACK_SECRET_KEY or enable DEMO_MODE.' });
       }
       applyCredit({ userId: req.user.id, giftCard, creditCents });
-      allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method: method === 'bank' ? 'bank' : 'card', status: 'pending', paystackRef: `demo_${txnIds[i]}`, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
+      allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method, status: 'pending', paystackRef: `demo_${txnIds[i]}`, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
       db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
       return res.json({ demo: true, paid: true, status: 'pending', transactionIds: txnIds, totalCents, creditCents, count: allocated.length, promo: promoInfo, currency });
     }
 
+    // Dedicated in-app bank transfer for the whole cart.
+    if (method === 'bank_transfer') {
+      const charge = await paystack.chargeBankTransfer({
+        amountMinor: toMinorUnits(chargeCents / 100, currency),
+        currency,
+        email: req.user.email,
+        reference: paystackRef,
+        metadata: { itemIds: allocated.map((l) => l.item.id), buyerId: req.user.id, tradehub_transaction: paystackRef },
+        expiresAt: process.env.PAYSTACK_BANK_TRANSFER_EXPIRES_AT || null,
+      });
+      applyCredit({ userId: req.user.id, giftCard, creditCents });
+      allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method, status: 'awaiting_payment', paystackRef, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
+      // Every line shares one charge, so mirror the account onto each row.
+      txnIds.forEach((id) => attachBankDetails(id, charge));
+      db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
+      const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(txnIds[0]);
+      return res.json({
+        transactionIds: txnIds,
+        reference: paystackRef,
+        status: 'awaiting_payment',
+        method,
+        totalCents,
+        chargeCents,
+        creditCents,
+        count: allocated.length,
+        promo: promoInfo,
+        currency,
+        bankTransfer: publicBankTransfer(txn),
+      });
+    }
+
     // Charge the buyer through Paystack.
-    const channels = method === 'bank' ? ['bank_transfer', 'card'] : ['card'];
+    const channels = channelsForMethod(method);
     const initialized = await paystack.initializeTransaction({
       amountMinor: toMinorUnits(chargeCents / 100, currency),
       currency,
@@ -637,7 +800,7 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       callbackUrl: process.env.PAYSTACK_CALLBACK_URL,
     });
     applyCredit({ userId: req.user.id, giftCard, creditCents });
-    allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method: method === 'bank' ? 'bank' : 'card', status: 'awaiting_payment', paystackRef, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
+    allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method, status: 'awaiting_payment', paystackRef, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
     db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
 
     res.json({
@@ -647,6 +810,8 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       authorizationUrl: initialized.authorization_url,
       publicKey: PAYSTACK_PUBLIC_KEY,
       status: 'awaiting_payment',
+      method,
+      channels,
       totalCents,
       chargeCents,
       creditCents,
@@ -702,6 +867,26 @@ router.post('/verify/:reference', authenticateToken, async (req, res) => {
   } catch (err) {
     if (err.status === 400 || err.status === 403 || err.status === 404) return res.status(err.status).json({ error: err.message });
     logger.error('Verify payment error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Re-serve the temporary account details for an in-app bank transfer so the
+// checkout screen can survive a reload, and report whether it has been paid.
+router.get('/bank-transfer/:reference', authenticateToken, (req, res) => {
+  try {
+    const txn = db.prepare(
+      "SELECT * FROM transactions WHERE paystack_reference = ? AND method = 'bank_transfer' ORDER BY created_at LIMIT 1"
+    ).get(req.params.reference);
+    if (!txn) return res.status(404).json({ error: 'Bank transfer not found' });
+    if (txn.buyer_id !== req.user.id && !req.user.isAdmin) return res.status(403).json({ error: 'Not authorized' });
+    res.json({
+      status: txn.status,
+      paid: txn.status === 'pending' || txn.status === 'completed',
+      bankTransfer: publicBankTransfer(txn),
+    });
+  } catch (err) {
+    logger.error('Get bank transfer error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

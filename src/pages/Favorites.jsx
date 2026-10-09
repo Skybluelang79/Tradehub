@@ -3,6 +3,7 @@ import { Header } from '../components/layout';
 import { useApp } from '../context';
 import { useToast } from '../components/ui/Toast';
 import { HeartIcon, MapPinIcon } from '../components/ui/Icons';
+import { formatPrice } from '../utils/helpers';
 import './Favorites.css';
 
 export default function Favorites({ onClose }) {
@@ -130,7 +131,7 @@ export default function Favorites({ onClose }) {
                   </div>
                   <div className="favorite-info">
                     <h3 className="favorite-title">{item.title}</h3>
-                    <p className="favorite-price">₦{item.price.toLocaleString()}</p>
+                    <p className="favorite-price">{formatPrice(item.price, item.currency)}</p>
                     <div className="favorite-meta">
                       <span className="favorite-location">
                         <MapPinIcon size={14} />
