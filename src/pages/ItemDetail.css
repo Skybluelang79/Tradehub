@@ -871,6 +871,36 @@
   background: var(--accent);
 }
 
+.checkout-saved-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.checkout-saved-card:hover,
+.checkout-saved-card.active {
+  border-color: var(--accent);
+}
+
+.checkout-saved-card input {
+  accent-color: var(--accent);
+}
+
+.checkout-saved-card strong {
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
 .crypto-network-grid {
   display: flex;
   flex-wrap: wrap;

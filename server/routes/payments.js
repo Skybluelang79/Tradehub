@@ -269,6 +269,80 @@ router.post('/methods', authenticateToken, (req, res) => {
   }
 });
 
+// Begin saving a card the "Paystack way": a tiny restricted charge (the lowest
+// amount Paystack accepts) is created so the buyer enters the real card inside
+// Paystack's secure popup. The successful payment returns a reusable
+// authorization_code that is stored on the method, and the nominal charge is
+// refunded so adding a card is free.
+const CARD_SAVE_AMOUNT_MINOR = 100;
+
+router.post('/methods/tokenize', authenticateToken, async (req, res) => {
+  try {
+    if (!isPaystackConfigured()) {
+      return res.status(503).json({ error: 'Saving a card requires Paystack to be configured' });
+    }
+    const usr = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+    if (!usr?.email) {
+      return res.status(400).json({ error: 'Add an email to your account before saving a card' });
+    }
+    const reference = `save_${uuidv4()}`;
+    const initialized = await paystack.initializeTransaction({
+      amountMinor: CARD_SAVE_AMOUNT_MINOR,
+      currency: DEFAULT_CURRENCY,
+      email: usr.email,
+      reference,
+      channels: ['card'],
+      metadata: { type: 'card_save', purpose: 'saved_payment_method' },
+    });
+    res.json({
+      reference,
+      accessCode: initialized.access_code,
+      publicKey: PAYSTACK_PUBLIC_KEY,
+      currency: DEFAULT_CURRENCY,
+      amountMinor: CARD_SAVE_AMOUNT_MINOR,
+      email: usr.email,
+    });
+  } catch (err) {
+    if (err.status === 503) return res.status(503).json({ error: err.message });
+    logger.error('Tokenize card error:', err);
+    res.status(500).json({ error: err.message || 'Could not start card verification' });
+  }
+});
+
+// Confirm a card-save charge after the Paystack popup reports success, store the
+// authorization code, and refund the nominal charge.
+router.post('/methods/tokenize/:reference', authenticateToken, async (req, res) => {
+  try {
+    if (!isPaystackConfigured()) {
+      return res.status(503).json({ error: 'Paystack is not configured' });
+    }
+    const verified = await paystack.verifyTransaction(req.params.reference);
+    if (verified.status !== 'success' || !verified.authorization?.authorization_code) {
+      return res.status(400).json({ error: `Card verification not successful (${verified.status || 'unknown'})` });
+    }
+    const methodId = saveAuthorization(req.user.id, verified.authorization);
+    if (!methodId) return res.status(500).json({ error: 'Could not save card' });
+    if (req.body?.isDefault) {
+      db.prepare('UPDATE payment_methods SET is_default = 0 WHERE user_id = ?').run(req.user.id);
+      db.prepare('UPDATE payment_methods SET is_default = 1 WHERE id = ?').run(methodId);
+    }
+    try {
+      await paystack.refundTransaction(req.params.reference);
+      logger.info(`Refunded card-save charge ${req.params.reference}`);
+    } catch (refundErr) {
+      logger.warn(`Card-save refund for ${req.params.reference} failed:`, refundErr.message);
+    }
+    const method = db.prepare(
+      'SELECT id, brand, card_type, last4, exp_month, exp_year, is_default, created_at FROM payment_methods WHERE id = ?'
+    ).get(methodId);
+    res.json({ method });
+  } catch (err) {
+    if (err.status === 400 || err.status === 503) return res.status(err.status).json({ error: err.message });
+    logger.error('Verify tokenized card error:', err);
+    res.status(500).json({ error: err.message || 'Could not verify card' });
+  }
+});
+
 router.put('/methods/:id/default', authenticateToken, (req, res) => {
   try {
     db.prepare('UPDATE payment_methods SET is_default = 0 WHERE user_id = ?').run(req.user.id);
@@ -456,6 +530,33 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
       applyCredit({ userId: req.user.id, giftCard, creditCents });
       insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: 'credit', status: 'pending', paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
       return res.json({ transactionId: txnId, status: 'pending', method: 'credit', paid: true, amountCents, creditCents, promo: promoInfo, currency });
+    }
+
+    // One-tap checkout with a saved card: charge the stored Paystack
+    // authorization code directly, no popup needed.
+    if (req.body.paymentMethodId) {
+      const savedMethod = db.prepare('SELECT * FROM payment_methods WHERE id = ? AND user_id = ?').get(req.body.paymentMethodId, req.user.id);
+      if (!savedMethod) return res.status(400).json({ error: 'Saved card not found' });
+      if (!savedMethod.paystack_authorization_code) {
+        return res.status(400).json({ error: 'This saved card cannot be charged yet' });
+      }
+      if (!isPaystackConfigured()) {
+        return res.status(503).json({ error: 'Payments are not configured' });
+      }
+      await paystack.chargeAuthorization({
+        amountMinor: toMinorUnits(chargeCents / 100, currency),
+        currency,
+        email: req.user.email,
+        authorizationCode: savedMethod.paystack_authorization_code,
+        reference: txnId,
+        metadata: { itemId: item.id, buyerId: req.user.id, sellerId: item.seller_id, tradehub_transaction: txnId },
+      });
+      // Charge succeeded — reserve the buyer's credit, record the order in
+      // escrow (which marks the item sold), and confirm to the buyer.
+      applyCredit({ userId: req.user.id, giftCard, creditCents });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: 'saved_card', status: 'pending', paystackRef: txnId, paymentMethodId: savedMethod.id, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
+      notify(req.user.id, 'payment', 'Payment Received', `Payment of ${amount} ${currency} for "${item.title}" was received and is held in escrow.`);
+      return res.json({ paid: true, transactionId: txnId, status: 'pending', method: 'saved_card', amountCents, chargeCents, creditCents, promo: promoInfo, currency });
     }
 
     // Card / bank via Paystack.
@@ -744,6 +845,32 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method: 'credit', status: 'pending', paystackRef: null, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
       db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
       return res.json({ paid: true, status: 'pending', method: 'credit', transactionIds: txnIds, totalCents, creditCents, count: allocated.length, promo: promoInfo, currency });
+    }
+
+    // One-tap checkout with a saved card: one charge_authorization covers the
+    // whole cart; no Paystack popup.
+    if (req.body.paymentMethodId) {
+      const savedMethod = db.prepare('SELECT * FROM payment_methods WHERE id = ? AND user_id = ?').get(req.body.paymentMethodId, req.user.id);
+      if (!savedMethod) return res.status(400).json({ error: 'Saved card not found' });
+      if (!savedMethod.paystack_authorization_code) {
+        return res.status(400).json({ error: 'This saved card cannot be charged yet' });
+      }
+      if (!isPaystackConfigured()) {
+        return res.status(503).json({ error: 'Payments are not configured' });
+      }
+      await paystack.chargeAuthorization({
+        amountMinor: toMinorUnits(chargeCents / 100, currency),
+        currency,
+        email: req.user.email,
+        authorizationCode: savedMethod.paystack_authorization_code,
+        reference: paystackRef,
+        metadata: { itemIds: allocated.map((l) => l.item.id), buyerId: req.user.id, tradehub_transaction: paystackRef },
+      });
+      applyCredit({ userId: req.user.id, giftCard, creditCents });
+      allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method: 'saved_card', status: 'pending', paystackRef, paymentMethodId: savedMethod.id, promoCodeUsed, currency, buyerId: req.user.id }));
+      allocated.forEach((l) => notify(req.user.id, 'payment', 'Payment Received', `Payment for "${l.item.title}" was received and is held in escrow.`));
+      db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
+      return res.json({ paid: true, status: 'pending', method: 'saved_card', transactionIds: txnIds, totalCents, chargeCents, creditCents, count: allocated.length, promo: promoInfo, currency });
     }
 
     // Demo mode (no Paystack configured).

@@ -23,6 +23,8 @@ export default function Cart({ onClose }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [bankIntent, setBankIntent] = useState(null);
+  const [savedMethods, setSavedMethods] = useState([]);
+  const [useSavedCard, setUseSavedCard] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -30,6 +32,7 @@ export default function Cart({ onClose }) {
       return;
     }
     refreshCart();
+    api.payments.methods().then((r) => setSavedMethods(r.methods || [])).catch(() => {});
     api.payments.options()
       .then((r) => {
         const methods = (r.methods || []).filter((m) => m.enabled !== false);
@@ -44,6 +47,7 @@ export default function Cart({ onClose }) {
 
   const subtotalCents = cart.reduce((s, it) => s + Math.round((it.sale_price || it.price) * it.quantity * 100), 0);
   const itemCount = cart.reduce((s, it) => s + it.quantity, 0);
+  const defaultCard = savedMethods.find((m) => m.is_default) || savedMethods[0];
 
   const handleOpenItem = (itemId) => {
     const item = items.find((i) => i.id === itemId);
@@ -89,6 +93,7 @@ export default function Cart({ onClose }) {
     setBankIntent(null);
     try {
       const payload = { method: method === 'gift_card' ? 'card' : method };
+      if (useSavedCard && defaultCard) payload.paymentMethodId = defaultCard.id;
       if (method === 'gift_card' && giftCode.trim()) payload.giftCardCode = giftCode.trim();
       if (promoCode.trim()) payload.promoCode = promoCode.trim();
 
@@ -286,6 +291,17 @@ export default function Cart({ onClose }) {
                     </button>
                   ))}
                 </div>
+              )}
+
+              {method === 'card' && defaultCard && (
+                <label className="saved-card-opt">
+                  <input
+                    type="checkbox"
+                    checked={useSavedCard}
+                    onChange={(e) => setUseSavedCard(e.target.checked)}
+                  />
+                  Pay instantly with saved card <strong>•••• {defaultCard.last4}</strong> (valid {defaultCard.exp_month}/{defaultCard.exp_year})
+                </label>
               )}
 
               {error && <p className="cart-error">{error}</p>}

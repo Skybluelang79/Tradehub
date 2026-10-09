@@ -167,6 +167,12 @@ export const paystack = {
     });
   },
 
+  // POST /refund - reverse a previous transaction (used to return the nominal
+  // ₦1 charge used to tokenize and save a card).
+  async refundTransaction(reference) {
+    return this.request('POST', '/refund', { transaction: reference });
+  },
+
   // POST /customer - idempotent customer lookup/create
   async getOrCreateCustomer(email, metadata = {}) {
     const existing = await this.request('GET', `/customer/${encodeURIComponent(email)}`).catch(() => null);

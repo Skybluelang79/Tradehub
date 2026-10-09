@@ -63,7 +63,7 @@ const plans = [
   {
     id: 'premium',
     name: 'Premium',
-    price: 2500,
+    price: 3000,
     period: '/mo',
     color: '#FBBF24',
     features: ['Unlimited listings', '4% transaction fee', 'Priority search ranking', 'Premium badge', '2 free boosts/mo', 'Analytics dashboard'],

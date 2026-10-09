@@ -96,6 +96,8 @@ export default function ItemDetail() {
   const [checkoutResult, setCheckoutResult] = useState(null);
   const [checkoutBank, setCheckoutBank] = useState(null);
   const [checkoutError, setCheckoutError] = useState('');
+  const [savedMethods, setSavedMethods] = useState([]);
+  const [useSavedCard, setUseSavedCard] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerAmount, setOfferAmount] = useState('');
@@ -204,6 +206,8 @@ export default function ItemDetail() {
     setCheckoutResult(null);
     setCheckoutBank(null);
     setCheckoutError('');
+    setSavedMethods([]);
+    setUseSavedCard(false);
   };
 
   const handleAddToCart = async () => {
@@ -253,6 +257,7 @@ export default function ItemDetail() {
     setCheckoutResult(null);
     setCheckoutError('');
     setCheckoutMethod('card');
+    api.payments.methods().then((r) => setSavedMethods(r.methods || [])).catch(() => {});
     api.payments.options().then((r) => {
       const methods = (r.methods || []).filter((m) => m.enabled !== false);
       setAvailableMethods(methods);
@@ -279,26 +284,22 @@ export default function ItemDetail() {
       if (checkoutMethod === 'gift_card') {
         payload.giftCardCode = giftCode.trim();
       }
+      const defaultCard = savedMethods.find((m) => m.is_default) || savedMethods[0];
+      if (useSavedCard && defaultCard) payload.paymentMethodId = defaultCard.id;
       const res = await api.payments.createIntent(payload);
 
-      // Store credit / demo charges land in escrow as `pending` — the buyer
-      // releases them from Payments once they confirm delivery, which is also
-      // what unlocks leaving a review for the seller.
-      if (checkoutMethod === 'gift_card') {
-        if (res.paid || res.demo) {
-          markAsSold(selectedItem.id);
-          addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
-          resetCheckout();
-        } else {
-          setCheckoutResult(res);
-        }
-        return;
-      }
-
-      if (res.demo) {
+      // Store credit / demo / one-tap saved-card charges land in escrow as
+      // `pending` — the buyer releases them from Payments once they confirm
+      // delivery, which is also what unlocks leaving a review for the seller.
+      if (res.paid || res.demo) {
         markAsSold(selectedItem.id);
         addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
         resetCheckout();
+        return;
+      }
+
+      if (checkoutMethod === 'gift_card') {
+        setCheckoutResult(res);
         return;
       }
 
@@ -698,6 +699,7 @@ export default function ItemDetail() {
     { id: 'card', name: 'Card / Paystack', enabled: true },
     { id: 'gift_card', name: 'Gift Card / Store Credit', enabled: true },
   ];
+  const defaultCard = savedMethods.find((m) => m.is_default) || savedMethods[0];
 
   const renderMethodIcon = (id) => {
     switch (id) {
@@ -1420,6 +1422,17 @@ export default function ItemDetail() {
                 );
               })}
             </div>
+
+            {checkoutMethod === 'card' && defaultCard && (
+              <label className={`checkout-saved-card ${useSavedCard ? 'active' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={useSavedCard}
+                  onChange={(e) => setUseSavedCard(e.target.checked)}
+                />
+                Pay instantly with saved card <strong>•••• {defaultCard.last4}</strong> (valid {defaultCard.exp_month}/{defaultCard.exp_year})
+              </label>
+            )}
 
             {checkoutMethod === 'gift_card' && (
               <div className="input-group" style={{ marginTop: 12 }}>

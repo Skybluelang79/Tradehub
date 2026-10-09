@@ -259,6 +259,35 @@
   color: white;
 }
 
+.saved-card-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.saved-card-opt:hover {
+  border-color: var(--accent);
+}
+
+.saved-card-opt input {
+  accent-color: var(--accent);
+}
+
+.saved-card-opt strong {
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
 .cart-error {
   color: var(--danger, #dc2626);
   font-size: 13px;

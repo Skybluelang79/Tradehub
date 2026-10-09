@@ -156,6 +156,8 @@ export const api = {
     },
     methods: () => request('/payments/methods'),
     addMethod: (data) => request('/payments/methods', { method: 'POST', body: JSON.stringify(data) }),
+    tokenizeCard: () => request('/payments/methods/tokenize', { method: 'POST' }),
+    verifyTokenize: (reference, data) => request(`/payments/methods/tokenize/${reference}`, { method: 'POST', body: JSON.stringify(data || {}) }),
     setDefault: (id) => request(`/payments/methods/${id}/default`, { method: 'PUT' }),
     removeMethod: (id) => request(`/payments/methods/${id}`, { method: 'DELETE' }),
     wallet: () => request('/payments/wallet'),

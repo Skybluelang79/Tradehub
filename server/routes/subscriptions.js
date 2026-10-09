@@ -17,7 +17,7 @@ const router = Router();
 // screens display, so it has to match PLAN_FEES in payments.js.
 const PLANS = {
   free: { name: 'Free', price: 0, fee: 0.04, boosts: 0, maxListings: 5, badge: null },
-  premium: { name: 'Premium', price: 9.99, fee: 0.04, boosts: 2, maxListings: -1, badge: 'Premium Seller' },
+  premium: { name: 'Premium', price: 3000, fee: 0.04, boosts: 2, maxListings: -1, badge: 'Premium Seller' },
   pro: { name: 'Pro', price: 24.99, fee: 0.04, boosts: 5, maxListings: -1, badge: 'Pro Seller' },
 };
 

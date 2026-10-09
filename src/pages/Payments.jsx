@@ -8,6 +8,7 @@ import { ShieldIcon, PlusIcon, CheckIcon, ClockIcon, GiftIcon, TrendingUpIcon } 
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/client';
+import { payWithCard } from '../services/paystack';
 import { formatPrice, formatDate } from '../utils/helpers';
 import '../styles/globals.css';
 import './Payments.css';
@@ -30,13 +31,14 @@ function formatCents(cents) {
 }
 
 export default function Payments() {
-  const { paymentMethods, addPaymentMethod, removePaymentMethod, setDefaultPaymentMethod, transactions, items, setSelectedItem, setActiveTab } = useApp();
+  const { paymentMethods, removePaymentMethod, setDefaultPaymentMethod, transactions, items, setSelectedItem, setActiveTab } = useApp();
   const { isAuthenticated, user: authUser } = useAuth();
   const { addToast } = useToast();
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [filter, setFilter] = useState('all');
   const [newCard, setNewCard] = useState({ type: 'visa', last4: '', expiry: '', name: '', isDefault: false });
+  const [addingCard, setAddingCard] = useState(false);
   const [showEscrowInfo, setShowEscrowInfo] = useState(false);
 
   const [wallet, setWallet] = useState(null);
@@ -91,37 +93,48 @@ export default function Payments() {
   const activeTransactions = backendTransactions ?? transactions;
 
   const handleAddCard = async () => {
-    if (newCard.last4.length === 4 && newCard.expiry && newCard.name) {
-      const [mm, yy] = newCard.expiry.split('/');
-      if (!mm || !yy) {
-        addToast('Enter expiry as MM/YY', 'error');
-        return;
-      }
+    if (!newCard.name.trim()) {
+      addToast('Enter the name on the card', 'error');
+      return;
+    }
+    setAddingCard(true);
+    try {
+      const init = await api.payments.tokenizeCard();
       try {
-        const res = await api.payments.addMethod({
-          brand: newCard.type,
-          last4: newCard.last4,
-          exp_month: parseInt(mm, 10),
-          exp_year: 2000 + parseInt(yy, 10),
-          is_default: newCard.isDefault,
+        await payWithCard({
+          publicKey: init.publicKey,
+          email: init.email,
+          amountCents: init.amountMinor,
+          currency: init.currency,
+          reference: init.reference,
+          accessCode: init.accessCode,
+          channels: ['card'],
+          onSuccess: async () => {
+            try {
+              await api.payments.verifyTokenize(init.reference, { isDefault: newCard.isDefault });
+              addToast('Card added — ready for quicker checkout', 'success');
+              refresh();
+              setNewCard({ type: 'visa', last4: '', expiry: '', name: '', isDefault: false });
+              setShowAddModal(false);
+            } catch (err) {
+              addToast(err.message || 'Could not save your card', 'error');
+            }
+          },
+          onClose: () => {
+            addToast('Card not saved — popup closed before the card was verified', 'info');
+          },
         });
-        addToast('Card added', 'success');
-        refresh();
-        setNewCard({ type: 'visa', last4: '', expiry: '', name: '', isDefault: false });
-        setShowAddModal(false);
-        return res;
       } catch (err) {
-        if (err.message === 'Failed to fetch') {
-          addPaymentMethod(newCard);
-          addToast('Card added (offline)', 'success');
-          setNewCard({ type: 'visa', last4: '', expiry: '', name: '', isDefault: false });
-          setShowAddModal(false);
-          return;
-        }
-        addToast(err.message || 'Failed to add card', 'error');
+        addToast(err.message || 'Could not open Paystack. Check your connection.', 'error');
       }
-    } else {
-      addToast('Please fill in all card details', 'error');
+    } catch (err) {
+      if (err.message === 'Failed to fetch') {
+        addToast('Cannot save cards while offline', 'error');
+      } else {
+        addToast(err.message || 'Could not start card verification', 'error');
+      }
+    } finally {
+      setAddingCard(false);
     }
   };
 
@@ -611,7 +624,7 @@ export default function Payments() {
       </Modal>
 
       <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Card"
-        footer={<Button block onClick={handleAddCard} disabled={!newCard.last4 || !newCard.expiry || !newCard.name}>Add Card</Button>}>
+        footer={<Button block onClick={handleAddCard} disabled={addingCard || !newCard.name}>{addingCard ? 'Saving…' : 'Verify & Add Card'}</Button>}>
         <div className="modal-form">
           <div className="input-group">
             <label className="input-label">Card Type</label>
@@ -625,16 +638,14 @@ export default function Payments() {
             </div>
           </div>
           <div className="input-group">
-            <label className="input-label">Card Number (last 4 digits)</label>
-            <input type="text" className="input" placeholder="1234" maxLength={4} value={newCard.last4} onChange={(e) => setNewCard({ ...newCard, last4: e.target.value.replace(/\D/g, '') })} />
-          </div>
-          <div className="input-group">
-            <label className="input-label">Expiry Date</label>
-            <input type="text" className="input" placeholder="MM/YY" value={newCard.expiry} onChange={(e) => setNewCard({ ...newCard, expiry: e.target.value })} />
-          </div>
-          <div className="input-group">
             <label className="input-label">Cardholder Name</label>
             <input type="text" className="input" placeholder="Name on card" value={newCard.name} onChange={(e) => setNewCard({ ...newCard, name: e.target.value })} />
+          </div>
+          <div className="input-group">
+            <p style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.5 }}>
+              We'll open Paystack's secure popup to enter and verify your card, just like a real Paystack payment.
+              A small refundable charge is placed and returned immediately, then your card is saved for one-tap checkout.
+            </p>
           </div>
           <label className="checkbox-label">
             <input type="checkbox" checked={newCard.isDefault} onChange={(e) => setNewCard({ ...newCard, isDefault: e.target.checked })} />
