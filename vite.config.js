@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react'
 const isCloudflare = process.env.CF_PAGES === 'true' || process.env.WRANGLER === 'true';
 const base = process.env.VITE_BASE || (isCloudflare ? '/' : '/Tradehub/')
 const outDir = (base === '/' || isCloudflare) ? 'dist' : 'dist/Tradehub'
+// Dev API/proxy target. Point this at whichever backend is running: the Node
+// server or the Python (FastAPI) server — both listen on 3001 by default.
+const proxyTarget = process.env.VITE_PROXY_TARGET || 'http://localhost:3001';
 
 export default defineConfig({
   plugins: [react()],
@@ -27,15 +30,15 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',
+        target: proxyTarget,
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://localhost:3001',
+        target: proxyTarget,
         changeOrigin: true,
       },
       '/socket.io': {
-        target: 'http://localhost:3001',
+        target: proxyTarget,
         ws: true,
       },
     },

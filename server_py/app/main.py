@@ -36,6 +36,7 @@ from .routers import (
     templates,
     upload,
     verification,
+    vision,
     webauthn,
     webhooks,
 )
@@ -115,6 +116,7 @@ app.include_router(phone_auth.router, prefix="/api/phone-auth")
 app.include_router(webauthn.router, prefix="/api/webauthn")
 app.include_router(admin.router, prefix="/api/admin")
 app.include_router(ai.router, prefix="/api/ai")
+app.include_router(vision.router, prefix="/api/vision")
 
 
 from . import realtime as _realtime  # noqa: E402

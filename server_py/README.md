@@ -77,11 +77,15 @@ The HTTP surface now mirrors the Node backend across:
 - **Auth extras** — WebAuthn passkeys, phone OTP, Firebase, social login.
 - **AI** — listing generation, search parsing, Q&A, price guide, recommendations
   (`app/ai.py`, rule-based fallbacks work offline).
+- **Vision** — image statistics/description and receipt parsing under
+  `/api/vision` (`app/vision.py`). Image analysis uses Pillow; receipt OCR uses
+  Azure Document Intelligence (`prebuilt-receipt`) when configured and falls back
+  to regex parsing otherwise. `GET /api/vision/status` reports availability.
 
 Realtime and the background scheduler start automatically at app startup. Set
 `RUN_SCHEDULER=false` to disable the scheduler (the test suite does this).
 
 ## Not yet ported
 
-- Advanced ML/vision goals (image/receipt processing) beyond the rule-based
-  fallbacks in `app/ai.py`.
+- Deep-learning model inference (object detection, embeddings); the vision
+  module provides statistics + OCR, not trained-model predictions.

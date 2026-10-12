@@ -60,6 +60,14 @@ The server seeds an admin account on first run:
 
 - Admin: `admin@tradehub.com` / (the value of `ADMIN_PASSWORD`)
 
+The Vite dev server proxies `/api`, `/uploads`, and `/socket.io` to
+`http://localhost:3001` by default. To point it at a backend on another host/port
+(e.g. the Python backend running with `uvicorn`), set `VITE_PROXY_TARGET`:
+
+```bash
+VITE_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
+```
+
 ## Tests
 
 ```bash
