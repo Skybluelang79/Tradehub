@@ -1,16 +1,56 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from . import config
-from .routers import auth, chat, follows, health, items, notifications, offers, payments, reviews, searches, verification
+from . import config, scheduler
+from .routers import (
+    admin,
+    ai,
+    auth,
+    auth_social,
+    blocking,
+    chat,
+    disputes,
+    fcm,
+    firebase,
+    follows,
+    giftcards,
+    health,
+    items,
+    notifications,
+    offers,
+    payouts,
+    payments,
+    phone_auth,
+    promotions,
+    referrals,
+    reports,
+    reviews,
+    searches,
+    settings,
+    subscriptions,
+    templates,
+    upload,
+    verification,
+    webauthn,
+    webhooks,
+)
 
 logger = logging.getLogger("tradehub")
 
-app = FastAPI(title="TradeHub API", version="py-0.1.0")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    if not config.IS_PRODUCTION or config.RUN_SCHEDULER:
+        scheduler.start_scheduler()
+    yield
+
+
+app = FastAPI(title="TradeHub API", version="py-0.1.0", lifespan=lifespan)
 
 
 @app.exception_handler(HTTPException)
@@ -55,3 +95,28 @@ app.include_router(payments.router, prefix="/api/payments")
 app.include_router(verification.router, prefix="/api/verification")
 app.include_router(chat.router, prefix="/api/chat")
 app.include_router(notifications.router, prefix="/api/notifications")
+
+app.include_router(auth_social.router, prefix="/api/auth")
+app.include_router(upload.router, prefix="/api/upload")
+app.include_router(templates.router, prefix="/api/templates")
+app.include_router(settings.router, prefix="/api/settings")
+app.include_router(fcm.router, prefix="/api/fcm")
+app.include_router(firebase.router, prefix="/api/firebase")
+app.include_router(subscriptions.router, prefix="/api/subscription")
+app.include_router(webhooks.router, prefix="/api/webhooks")
+app.include_router(payouts.router, prefix="/api/payouts")
+app.include_router(giftcards.router, prefix="/api/payments/gift-cards")
+app.include_router(referrals.router, prefix="/api/referrals")
+app.include_router(promotions.router, prefix="/api/promotions")
+app.include_router(disputes.router, prefix="/api/disputes")
+app.include_router(reports.router, prefix="/api/reports")
+app.include_router(blocking.router, prefix="/api/blocking")
+app.include_router(phone_auth.router, prefix="/api/phone-auth")
+app.include_router(webauthn.router, prefix="/api/webauthn")
+app.include_router(admin.router, prefix="/api/admin")
+app.include_router(ai.router, prefix="/api/ai")
+
+
+from . import realtime as _realtime  # noqa: E402
+
+app = _realtime.wrap(app)

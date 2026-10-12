@@ -39,7 +39,36 @@ PAYSTACK_CALLBACK_URL = os.environ.get("PAYSTACK_CALLBACK_URL", "")
 PAYSTACK_WEBHOOK_SECRET = os.environ.get("PAYSTACK_WEBHOOK_SECRET", "")
 PAYSTACK_BANK_TRANSFER_ENABLED = os.environ.get("PAYSTACK_BANK_TRANSFER_ENABLED", "true") != "false"
 PAYSTACK_BANK_TRANSFER_EXPIRES_AT = os.environ.get("PAYSTACK_BANK_TRANSFER_EXPIRES_AT", "")
+PAYSTACK_BANK_COUNTRY = os.environ.get("PAYSTACK_BANK_COUNTRY", "nigeria")
 DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
+
+APP_URL = os.environ.get("APP_URL", "http://localhost:5173")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+
+OTP_PEPPER = os.environ.get("OTP_PEPPER", "")
+SMS_API_KEY = os.environ.get("SMS_API_KEY", "")
+SMS_SENDER = os.environ.get("SMS_SENDER", "TradeHub")
+
+WEBAUTHN_RP_NAME = os.environ.get("WEBAUTHN_RP_NAME", "TradeHub")
+WEBAUTHN_RP_ID = os.environ.get("WEBAUTHN_RP_ID", "")
+WEBAUTHN_ORIGINS = os.environ.get("WEBAUTHN_ORIGINS", "")
+
+FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "")
+FIREBASE_CLIENT_EMAIL = os.environ.get("FIREBASE_CLIENT_EMAIL", "")
+FIREBASE_PRIVATE_KEY = os.environ.get("FIREBASE_PRIVATE_KEY", "")
+FIREBASE_SERVICE_ACCOUNT = os.environ.get("FIREBASE_SERVICE_ACCOUNT", "")
+FIREBASE_STORAGE = os.environ.get("FIREBASE_STORAGE", "false").lower() == "true"
+FIREBASE_STORAGE_BUCKET = os.environ.get("FIREBASE_STORAGE_BUCKET", "")
+
+USE_BLOB = (
+    os.environ.get("NETLIFY") == "true"
+    or os.environ.get("DB_BLOB") == "true"
+    or bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+)
+
+AUTO_RELEASE_DAYS = int(os.environ.get("AUTO_RELEASE_DAYS", "7"))
+ABANDON_PAYMENT_HOURS = int(os.environ.get("ABANDON_PAYMENT_HOURS", "24"))
+RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "true").lower() == "true"
 
 
 def allowed_origins():

@@ -61,14 +61,27 @@ missing env vars fatal (mirrors `requiredEnv`). `SMTP_HOST` toggles email
 "config"; until SMTP is ported, dev mode still returns `devVerifyToken` /
 `devResetToken` so flows are testable.
 
-## Roadmap (not ported yet)
+## Feature parity
 
-1. **Payments** — `wallets`, methods, escrow checkout, dedicated bank transfer,
-   saved-card (`charge_authorization`), receipts (the A/B/C sprint targets).
-2. **Items / offers / bids / reviews / favorites / cart / search / notifications**.
-3. **Chat** — `python-socketio` to keep the `socket.io-client` frontend working.
-4. **Subscriptions + Paystack webhooks** — port `server/src/paystack.js`.
-5. **Uploads / S3 / images**, **admin**, **referrals**, **promotions**,
-   **gift cards**, **payouts**, **disputes/reports/blocking**.
-6. **Auth extras** — WebAuthn passkeys, phone OTP, Firebase, social login.
-7. **Goals** — ML recommendations/pricing, image/receipt processing in Python.
+The HTTP surface now mirrors the Node backend across:
+
+- **Payments** — wallets, methods, escrow checkout, dedicated bank transfer,
+  saved-card, receipts.
+- **Items / offers / bids / reviews / favorites / cart / search / notifications**.
+- **Chat** — REST plus a `python-socketio` server (`app/realtime.py`) that keeps
+  the `socket.io-client` frontend working (messaging, calls, WebRTC relay).
+- **Subscriptions + Paystack webhooks** — `app/routers/subscriptions.py`,
+  `webhooks.py`, and the hourly jobs in `app/scheduler.py`.
+- **Uploads**, **admin**, **referrals**, **promotions**, **gift cards**,
+  **payouts**, **disputes/reports/blocking**.
+- **Auth extras** — WebAuthn passkeys, phone OTP, Firebase, social login.
+- **AI** — listing generation, search parsing, Q&A, price guide, recommendations
+  (`app/ai.py`, rule-based fallbacks work offline).
+
+Realtime and the background scheduler start automatically at app startup. Set
+`RUN_SCHEDULER=false` to disable the scheduler (the test suite does this).
+
+## Not yet ported
+
+- Advanced ML/vision goals (image/receipt processing) beyond the rule-based
+  fallbacks in `app/ai.py`.
