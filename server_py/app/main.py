@@ -1,10 +1,14 @@
+import logging
+
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import config
-from .routers import auth, follows, health, items, offers, reviews, searches, verification
+from .routers import auth, chat, follows, health, items, notifications, offers, payments, reviews, searches, verification
+
+logger = logging.getLogger("tradehub")
 
 app = FastAPI(title="TradeHub API", version="py-0.1.0")
 
@@ -26,6 +30,12 @@ async def validation_error_handler(request: Request, exc: RequestValidationError
     return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"error": "Validation failed", "details": details})
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"error": "Internal server error"})
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.allowed_origins(),
@@ -41,4 +51,7 @@ app.include_router(reviews.router, prefix="/api/reviews")
 app.include_router(offers.router, prefix="/api/offers")
 app.include_router(searches.router, prefix="/api/searches")
 app.include_router(follows.router, prefix="/api/follows")
+app.include_router(payments.router, prefix="/api/payments")
 app.include_router(verification.router, prefix="/api/verification")
+app.include_router(chat.router, prefix="/api/chat")
+app.include_router(notifications.router, prefix="/api/notifications")

@@ -110,7 +110,7 @@ export default function Home() {
       setFilters({
         ...filters,
         search: res.query || query,
-        category: res.category || '',
+        category: res.category || 'all',
         minPrice: res.minPrice || '',
         maxPrice: res.maxPrice || '',
       });

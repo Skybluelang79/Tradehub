@@ -66,6 +66,10 @@ def is_valid_currency(code):
     return key in _BY_CODE and USD_RATES.get(key, 0) > 0
 
 
+def is_paystack_currency(code):
+    return normalize_currency(code) in PAYSTACK_CURRENCIES
+
+
 def get_currency_symbol(code):
     return _BY_CODE.get(normalize_currency(code), {}).get("symbol") or normalize_currency(code)
 

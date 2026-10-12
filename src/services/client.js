@@ -109,6 +109,7 @@ export const api = {
     update: (id, data) => request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     delete: (id) => request(`/items/${id}`, { method: 'DELETE' }),
     favorite: (id) => request(`/items/${id}/favorite`, { method: 'POST' }),
+    favorites: () => request('/items/favorites'),
     bid: (id, amount) => request(`/items/${id}/bid`, { method: 'POST', body: JSON.stringify({ amount }) }),
     bids: (id) => request(`/items/${id}/bids`),
     byUser: (userId) => request(`/items/user/${userId}`),

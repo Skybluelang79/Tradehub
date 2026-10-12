@@ -17,7 +17,7 @@ export default function Favorites({ onClose }) {
       addToast('No items in your wishlist to share', 'error');
       return;
     }
-    const text = `Check out my TradeHub wishlist!\n\n${wishlist.map(i => `• ${i.title} — $${i.price}`).join('\n')}`;
+    const text = `Check out my TradeHub wishlist!\n\n${wishlist.map(i => `• ${i.title} — ${formatPrice(i.price, i.currency)}`).join('\n')}`;
     if (navigator.share) {
       navigator.share({ title: 'My TradeHub Wishlist', text }).catch(() => {});
     } else {

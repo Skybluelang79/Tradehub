@@ -14,6 +14,7 @@ BASE_URL = "https://api.paystack.co"
 PAYSTACK_CHANNELS = ["card", "bank", "ussd", "qr", "mobile_money", "bank_transfer", "eft"]
 
 DEFAULT_CURRENCY = config.PAYSTACK_CURRENCY or "NGN"
+PAYSTACK_PUBLIC_KEY = config.PAYSTACK_PUBLIC_KEY
 
 
 def is_paystack_configured():

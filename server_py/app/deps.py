@@ -37,6 +37,12 @@ def require_user(token: str = Depends(bearer_token)) -> dict:
     return current_user(token)
 
 
+def require_admin(user: dict = Depends(require_user)) -> dict:
+    if not user.get("isAdmin"):
+        raise HTTPException(status_code=403, detail={"error": "Admin access required"})
+    return user
+
+
 def optional_user(authorization: str | None = Header(default=None)) -> dict | None:
     if not authorization:
         return None

@@ -7,7 +7,13 @@ let socket = null;
 
 export function connectSocket(token) {
   if (SOCKET_DISABLED) return null;
-  if (socket?.connected) return socket;
+  // Reuse the existing instance. Creating a fresh socket whenever the current
+  // one is transiently disconnected orphaned the old one along with every
+  // listener registered against it.
+  if (socket) {
+    if (!socket.connected && !socket.active) socket.connect();
+    return socket;
+  }
 
   socket = io(SOCKET_URL, {
     auth: { token },

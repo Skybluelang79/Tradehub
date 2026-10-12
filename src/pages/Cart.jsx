@@ -101,6 +101,7 @@ export default function Cart({ onClose }) {
 
       if (res.paid || res.demo) {
         setSuccess(true);
+        setBusy(false);
         await refreshCart();
         addToast('Purchase complete! Payment is held in escrow.', 'success');
         return;
@@ -126,6 +127,7 @@ export default function Cart({ onClose }) {
         onSuccess: async () => {
           await api.payments.verify(res.reference);
           setSuccess(true);
+          setBusy(false);
           await refreshCart();
           addToast('Purchase complete! Payment is held in escrow.', 'success');
         },

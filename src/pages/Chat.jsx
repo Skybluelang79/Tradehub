@@ -266,7 +266,19 @@ export default function Chat() {
   }, []);
 
   const fileInputRef = useRef(null);
+  const pendingAttachmentsRef = useRef([]);
   const [pendingAttachments, setPendingAttachments] = useState([]);
+
+  useEffect(() => { pendingAttachmentsRef.current = pendingAttachments; }, [pendingAttachments]);
+  // Leaving the chat must not leak the object URLs backing attachment
+  // previews; they are only revoked on send or per-file removal otherwise.
+  useEffect(() => {
+    return () => {
+      pendingAttachmentsRef.current.forEach((a) => {
+        if (a.preview && a.preview.startsWith('blob:')) URL.revokeObjectURL(a.preview);
+      });
+    };
+  }, []);
 
   const handleFilesPick = useCallback((e) => {
     const files = Array.from(e.target.files || []);
@@ -503,6 +515,8 @@ export default function Chat() {
     const item = items.find((i) => i.id === conv.itemId);
     const isOtherOnline = onlineUserIds.includes(otherUserId);
     const otherTyping = typingUsers[otherUserId];
+    const offer80 = item ? formatPrice(item.price * 0.8, item.currency) : '';
+    const offer90 = item ? formatPrice(item.price * 0.9, item.currency) : '';
 
     const handleSend = async () => {
       const plaintext = inputText.trim();
@@ -668,11 +682,11 @@ export default function Chat() {
         {item && (
           <div className="quick-actions">
             <button className="quick-btn" onClick={() => handleQuickReply('Is this still available?')}>Is this available?</button>
-            <button className="quick-btn quick-btn--price" onClick={() => handleQuickReply(`Would you take $${Math.round(item.price * 0.8)}?`)}>
-              Offer ${Math.round(item.price * 0.8)}
+            <button className="quick-btn quick-btn--price" onClick={() => handleQuickReply(`Would you take ${offer80}?`)}>
+              Offer {offer80}
             </button>
-            <button className="quick-btn quick-btn--price" onClick={() => handleQuickReply(`I can do $${Math.round(item.price * 0.9)}. Deal?`)}>
-              Offer ${Math.round(item.price * 0.9)}
+            <button className="quick-btn quick-btn--price" onClick={() => handleQuickReply(`I can do ${offer90}. Deal?`)}>
+              Offer {offer90}
             </button>
             <button className="quick-btn" onClick={() => handleQuickReply('When can we meet?')}>When to meet?</button>
           </div>
@@ -782,7 +796,7 @@ export default function Chat() {
                     <span className="pending-attachment-name">{f.name}</span>
                     <span className="pending-attachment-size">{formatBytes(f.size)}</span>
                     <button type="button" className="pending-attachment-remove" onClick={() => removePendingAttachment(i)} aria-label="Remove">
-                      XIcon size={16}
+                      <XIcon size={16} />
                     </button>
                   </div>
                 ))}

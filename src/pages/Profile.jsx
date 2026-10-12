@@ -1159,7 +1159,7 @@ export default function Profile() {
                         </div>
                         <div className="template-card-meta">
                           <span>{tmpl.category}</span>
-                          <span>₦{Number(tmpl.price).toLocaleString()}</span>
+                          <span>{formatPrice(Number(tmpl.price) || 0)}</span>
                         </div>
                         <button className="template-card-delete" onClick={() => deleteTemplate(tmpl.id)}>
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="14" height="14">
@@ -1847,7 +1847,7 @@ export default function Profile() {
                 <ZapIcon size={20} />
                 <div>
                   <strong>{days} Days</strong>
-                  <span>₦{days === 3 ? '3,000' : days === 7 ? '5,000' : days === 14 ? '9,000' : '15,000'}</span>
+                  <span>{formatPrice(days === 3 ? 3000 : days === 7 ? 5000 : days === 14 ? 9000 : 15000)}</span>
                 </div>
               </button>
             ))}

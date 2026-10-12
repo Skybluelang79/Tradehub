@@ -164,7 +164,9 @@ def _check_item_fields(payload, update=False):
     out["description"] = _clean_named_string("description", description, 2000, details)
 
     price = payload.get("price")
-    if price is not None and not _is_number(price):
+    if price is None and not update:
+        details.append("price: Price is required")
+    elif price is not None and not _is_number(price):
         details.append("price: Expected number, received ...")
     elif price is not None and price <= 0:
         details.append("price: Price must be positive")
@@ -417,6 +419,26 @@ def categories_overview():
         "FROM items WHERE status = 'active' GROUP BY category ORDER BY count DESC"
     )
     return {"categories": rows}
+
+
+@router.get("/favorites")
+def list_favorites(user: dict = Depends(require_user)):
+    rows = db.all(
+        "SELECT i.*, u.name as seller_name, u.avatar as seller_avatar, "
+        "u.rating as seller_rating, u.verified as seller_verified, "
+        "f.price_at_add as favorite_price_at_add, f.created_at as favorited_at "
+        "FROM favorites f JOIN items i ON f.item_id = i.id "
+        "JOIN users u ON i.seller_id = u.id "
+        "WHERE f.user_id = ? AND i.status != 'draft' ORDER BY f.created_at DESC",
+        (user["id"],),
+    )
+    items = []
+    for row in rows:
+        item = _item_with_images(row)
+        item["is_favorite"] = True
+        item["sale_active"] = _sale_active(item)
+        items.append(item)
+    return {"items": items, "favorites": [item["id"] for item in items]}
 
 
 @router.get("/{item_id}")

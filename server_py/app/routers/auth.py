@@ -1,6 +1,6 @@
 import logging
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -16,7 +16,7 @@ LOGIN_PROFILE = "id, name, username, email, avatar, bio, phone, verified, rating
 
 
 def _iso(delta):
-    return (datetime.now(timezone.utc) + delta).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return security.sql_timestamp(delta)
 
 
 def _dev_mode():

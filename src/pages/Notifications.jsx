@@ -161,12 +161,19 @@ export default function Notifications({ onClose }) {
   }, [markNotificationRead, items, setSelectedItem, setActiveTab, onClose]);
 
   const handleTouchStart = useCallback((e, id) => {
-    touchStartX.current = { x: e.touches[0].clientX, id };
+    const touch = e.touches && e.touches[0];
+    if (!touch) return;
+    touchStartX.current = { x: touch.clientX, id };
   }, []);
 
   const handleTouchEnd = useCallback((e) => {
     if (!touchStartX.current) return;
-    const diff = touchStartX.current.x - e.changedTouches[0].clientX;
+    const touches = e.changedTouches && e.changedTouches[0];
+    if (!touches) {
+      touchStartX.current = null;
+      return;
+    }
+    const diff = touchStartX.current.x - touches.clientX;
     if (diff > 80) {
       setSwipedId(touchStartX.current.id);
       setTimeout(() => {

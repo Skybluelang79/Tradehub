@@ -240,6 +240,24 @@ const [items, setItems] = useState([]);
     return () => { cancelled = true; };
   }, [authUser]);
 
+  // Favorites are per-account server state. Hydrate the id list so the heart
+  // icons and the Favorites page agree with the backend instead of only the
+  // localStorage copy.
+  useEffect(() => {
+    if (!authUser?.id) return undefined;
+    let cancelled = false;
+    api.items.favorites()
+      .then((data) => {
+        if (cancelled) return;
+        const ids = Array.isArray(data?.favorites)
+          ? data.favorites
+          : (data?.items || []).map((i) => i.id);
+        setFavorites(ids);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [authUser?.id]);
+
   // Notifications are server state (offers, sales, saved-search alerts...).
   // The localStorage copy only seeds the UI before the first response lands,
   // and a light poll keeps alerts arriving while the app is open.
@@ -407,17 +425,23 @@ const [items, setItems] = useState([]);
         ...prev,
         [conversationId]: [...(prev[conversationId] || []), message],
       }));
+      const isMine = message.senderId === currentUserId;
       setConversations((prev) =>
         prev.map((conv) =>
           conv.id === conversationId
-            ? { ...conv, lastMessage: preview, lastMessageTime: message.time || message.created_at, unreadCount: conv.unreadCount + 1 }
+            ? {
+                ...conv,
+                lastMessage: preview,
+                lastMessageTime: message.time || message.created_at,
+                unreadCount: isMine ? conv.unreadCount : conv.unreadCount + 1,
+              }
             : conv
         )
       );
     };
     window.addEventListener('app_add_message', handler);
     return () => window.removeEventListener('app_add_message', handler);
-  }, [messages]);
+  }, [messages, currentUserId]);
 
   const getDistanceFromUser = useCallback((lat, lng) => {
     if (!userLocation) return null;
@@ -750,26 +774,49 @@ const [items, setItems] = useState([]);
     });
   }, []);
 
-  const addConversation = useCallback((itemId, sellerId) => {
-    const existingConv = conversations.find(
-      (c) => c.itemId === itemId && c.participants.includes(currentUserId)
-    );
+  const addConversation = useCallback(async (itemId, sellerId) => {
+    if (!currentUserId || !sellerId) return null;
 
+    // Sellers can be messaged straight from their profile with no listing
+    // selected; fall back to any active listing so the server gets an itemId.
+    const resolvedItemId = itemId || items.find((i) => i.sellerId === sellerId)?.id || null;
+    if (!resolvedItemId) return null;
+
+    const existingConv = conversations.find(
+      (c) => c.itemId === resolvedItemId && c.participants.includes(currentUserId)
+    );
     if (existingConv) return existingConv;
 
-    const newConv = {
-      id: generateId(),
-      itemId,
-      participants: [currentUserId, sellerId],
-      lastMessage: '',
-      lastMessageTime: new Date().toISOString(),
-      unreadCount: 0,
-    };
-
-    setConversations((prev) => [newConv, ...prev]);
-    setMessages((prev) => ({ ...prev, [newConv.id]: [] }));
-    return newConv;
-  }, [conversations, currentUserId]);
+    try {
+      const { conversation } = await api.chat.create(resolvedItemId, sellerId);
+      const newConv = {
+        id: conversation.id,
+        itemId: conversation.item_id,
+        participants: [conversation.buyer_id, conversation.seller_id],
+        lastMessage: conversation.last_message || '',
+        lastMessageTime: conversation.last_message_time || conversation.created_at,
+        unreadCount: conversation.unread_count || 0,
+        pinned: !!conversation.pinned,
+        muted: !!conversation.muted,
+      };
+      setConversations((prev) => (prev.some((c) => c.id === newConv.id) ? prev : [newConv, ...prev]));
+      setMessages((prev) => (newConv.id in prev ? prev : { ...prev, [newConv.id]: [] }));
+      setUsers((prev) => {
+        const otherId = newConv.participants.find((p) => p !== currentUserId);
+        if (!otherId || !conversation.other_name || prev.some((u) => u.id === otherId)) return prev;
+        return [...prev, {
+          id: otherId,
+          name: conversation.other_name,
+          avatar: conversation.other_avatar || null,
+          verified: !!conversation.other_verified,
+        }];
+      });
+      return newConv;
+    } catch (err) {
+      console.warn('Could not start conversation:', err?.message);
+      return null;
+    }
+  }, [conversations, currentUserId, items]);
 
   const incrementItemViews = useCallback((itemId) => {
     setItems((prev) => prev.map((item) =>
@@ -777,14 +824,28 @@ const [items, setItems] = useState([]);
     ));
   }, []);
 
-  const toggleFavorite = useCallback((itemId) => {
-    setFavorites((prev) => {
-      if (prev.includes(itemId)) {
-        return prev.filter((id) => id !== itemId);
-      }
-      return [...prev, itemId];
-    });
-  }, []);
+  const toggleFavorite = useCallback(async (itemId) => {
+    const wasFavorite = favorites.includes(itemId);
+    setFavorites((prev) =>
+      wasFavorite ? prev.filter((id) => id !== itemId) : [...prev, itemId]
+    );
+    try {
+      const res = await api.items.favorite(itemId);
+      const favorited = res?.favorited ?? !wasFavorite;
+      setFavorites((prev) => {
+        const has = prev.includes(itemId);
+        if (favorited === has) return prev;
+        return favorited ? [...prev, itemId] : prev.filter((id) => id !== itemId);
+      });
+    } catch {
+      // Roll the optimistic toggle back if the server rejected it.
+      setFavorites((prev) => {
+        const has = prev.includes(itemId);
+        if (wasFavorite === has) return prev;
+        return wasFavorite ? [...prev, itemId] : prev.filter((id) => id !== itemId);
+      });
+    }
+  }, [favorites]);
 
   const isFavorite = useCallback((itemId) => {
     return favorites.includes(itemId);
@@ -839,40 +900,40 @@ const [items, setItems] = useState([]);
   }, []);
 
   const completeTransaction = useCallback((transactionId) => {
-    setTransactions((prev) => {
-      const txn = prev.find((t) => t.id === transactionId);
-      if (txn) {
-        addNotification({
-          type: 'sale',
-          title: 'Payment Released',
-          body: `Payment for "${txn.itemTitle}" has been released.`,
-        });
-      }
-      return prev.map((t) =>
+    const txn = transactions.find((t) => t.id === transactionId);
+    setTransactions((prev) =>
+      prev.map((t) =>
         t.id === transactionId
           ? { ...t, status: 'completed', completedAt: new Date().toISOString() }
           : t
-      );
-    });
-  }, [addNotification]);
+      )
+    );
+    if (txn) {
+      addNotification({
+        type: 'sale',
+        title: 'Payment Released',
+        body: `Payment for "${txn.itemTitle}" has been released.`,
+      });
+    }
+  }, [transactions, addNotification]);
 
   const refundTransaction = useCallback((transactionId) => {
-    setTransactions((prev) => {
-      const txn = prev.find((t) => t.id === transactionId);
-      if (txn) {
-        addNotification({
-          type: 'system',
-          title: 'Payment Refunded',
-          body: `Payment for "${txn.itemTitle}" has been refunded.`,
-        });
-      }
-      return prev.map((t) =>
+    const txn = transactions.find((t) => t.id === transactionId);
+    setTransactions((prev) =>
+      prev.map((t) =>
         t.id === transactionId
           ? { ...t, status: 'refunded', completedAt: null }
           : t
-      );
-    });
-  }, [addNotification]);
+      )
+    );
+    if (txn) {
+      addNotification({
+        type: 'system',
+        title: 'Payment Refunded',
+        body: `Payment for "${txn.itemTitle}" has been refunded.`,
+      });
+    }
+  }, [transactions, addNotification]);
 
   const addReview = useCallback((review) => {
     const newReview = {
