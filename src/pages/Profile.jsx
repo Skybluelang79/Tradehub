@@ -390,15 +390,12 @@ export default function Profile() {
     const cents = Math.round(Number(payoutForm.amountCents));
     if (!cents || cents < 100) { addToast('Minimum payout is $1.00', 'error'); return; }
     if (!wallet || cents > wallet.available_cents) { addToast('Insufficient available balance', 'error'); return; }
-    const details = {};
-    if (payoutForm.method === 'bank') {
-      details.bankName = payoutForm.bankName.trim();
-      details.accountNumber = payoutForm.accountNumber.trim();
-      details.accountName = payoutForm.accountName.trim();
-      if (!details.bankName || !details.accountNumber) { addToast('Bank details required', 'error'); return; }
-    } else {
-      details.email = payoutForm.email?.trim() || authUser?.email;
-    }
+    const details = {
+      bankName: payoutForm.bankName.trim(),
+      accountNumber: payoutForm.accountNumber.trim(),
+      accountName: payoutForm.accountName.trim(),
+    };
+    if (!details.bankName || !details.accountNumber) { addToast('Bank details required', 'error'); return; }
     setPayoutBusy(true);
     try {
       const r = await api.payouts.request({ amountCents: cents, method: payoutForm.method, details });

@@ -158,7 +158,7 @@ export default function AdminPayouts() {
 
       <div className="payout-section">
         <div className="payout-section-header">
-          <h2>Awaiting Funds (Bank / Crypto)</h2>
+          <h2>Awaiting Funds (Bank Transfer)</h2>
           <p>Confirm when the buyer's bank transfer arrives</p>
         </div>
         {awaiting.length === 0 ? (
