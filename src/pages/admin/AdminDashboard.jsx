@@ -78,6 +78,27 @@ const AdminDashboard = ({ onNavigate }) => {
     ];
   }, [data]);
 
+  const healthChecks = useMemo(() => {
+    const s = data?.stats || {};
+    const pendingReports = Number(s.pendingReports || 0);
+    const openDisputes = Number(s.openDisputes || 0);
+    const pendingPayoutsCents = Number(s.pendingPayouts || 0);
+    return [
+      { label: 'Pending reports', value: pendingReports, alert: pendingReports > 0 },
+      { label: 'Open disputes', value: openDisputes, alert: openDisputes > 0 },
+      { label: 'Pending payouts', value: fmtCentsMoney(pendingPayoutsCents), alert: pendingPayoutsCents > 0 },
+      { label: 'Active wallets', value: Number(s.activeWallets || 0), alert: false },
+      {
+        label: 'Gift cards issued',
+        value: Number(s.giftCardsIssued || 0),
+        suffix: `${Number(s.giftCardsRedeemed || 0)} redeemed`,
+        alert: false,
+      },
+    ];
+  }, [data]);
+
+  const healthAlerts = useMemo(() => healthChecks.filter((item) => item.alert).length, [healthChecks]);
+
   const revenueMax = useMemo(() => Math.max(...(data?.revenueByDay || []).map((r) => Number(r.revenue)), 1), [data]);
   const signupMax = useMemo(() => Math.max(...(data?.userSignupsByDay || []).map((r) => Number(r.count)), 1), [data]);
   const catMax = useMemo(() => Math.max(...(data?.topCategories || []).map((c) => c.count), 1), [data]);
@@ -264,29 +285,20 @@ const AdminDashboard = ({ onNavigate }) => {
         <div className="dashboard-card chart-card">
           <div className="card-header">
             <h3>Health Checks</h3>
-            <span className="card-badge">{data?.stats?.openDisputes || 0} disputes</span>
+            <span className={`card-badge ${healthAlerts > 0 ? 'badge-warn' : 'badge-ok'}`}>
+              {healthAlerts > 0 ? `${healthAlerts} need attention` : 'All clear'}
+            </span>
           </div>
-          <div className="chart-container health-container">
-            <div className="health-row">
-              <span>Pending reports</span>
-              <strong>{data?.stats?.pendingReports || 0}</strong>
-            </div>
-            <div className="health-row">
-              <span>Open disputes</span>
-              <strong>{data?.stats?.openDisputes || 0}</strong>
-            </div>
-            <div className="health-row">
-              <span>Pending payouts</span>
-              <strong>{fmtCentsMoney(data?.stats?.pendingPayouts)}</strong>
-            </div>
-            <div className="health-row">
-              <span>Active wallets</span>
-              <strong>{data?.stats?.activeWallets || 0}</strong>
-            </div>
-            <div className="health-row">
-              <span>Gift cards issued</span>
-              <strong>{data?.stats?.giftCardsIssued || 0} ({data?.stats?.giftCardsRedeemed || 0} redeemed)</strong>
-            </div>
+          <div className="health-grid">
+            {healthChecks.map((item) => (
+              <div key={item.label} className={`health-tile ${item.alert ? 'alert' : 'ok'}`}>
+                <span className="health-tile-label">{item.label}</span>
+                <strong className="health-tile-value">
+                  {item.value}
+                  {item.suffix && <span className="health-tile-suffix">{item.suffix}</span>}
+                </strong>
+              </div>
+            ))}
           </div>
         </div>
 
