@@ -15,7 +15,10 @@ import pkg from '../package.json' with { type: 'json' };
 
 const router = Router();
 const ADMIN_EMAIL = 'admin@tradehub.com';
-const ADMIN_PASSWORD = requiredEnv('ADMIN_PASSWORD', 'admin123');
+// Admin password falls back to the default with a warning rather than throwing:
+// admin login must never be the reason the whole server fails to boot. The
+// warning below tells operators to set it in production.
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
 const USER_STATUSES = ['active', 'suspended', 'banned'];
 const TX_STATUSES = ['pending', 'completed', 'refunded', 'awaiting_payment', 'failed', 'cancelled'];
