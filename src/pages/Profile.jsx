@@ -1197,7 +1197,6 @@ export default function Profile() {
                         onChange={(e) => setPayoutForm((f) => ({ ...f, method: e.target.value }))}
                       >
                         <option value="bank">Bank Transfer</option>
-                        <option value="paypal">PayPal</option>
                       </select>
                     </label>
                     {payoutForm.method === 'bank' && (

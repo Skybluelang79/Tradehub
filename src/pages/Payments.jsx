@@ -22,8 +22,6 @@ const STATUS_LABELS = {
 
 const PAYOUT_METHODS = [
   { id: 'bank', name: 'Bank Transfer', fields: ['accountName', 'accountNumber', 'routing'] },
-  { id: 'crypto', name: 'Crypto Wallet', fields: ['address', 'network'] },
-  { id: 'paypal', name: 'PayPal', fields: ['email'] },
 ];
 
 function formatCents(cents) {
@@ -431,7 +429,7 @@ export default function Payments() {
         </div>
         {payouts.length === 0 ? (
           <div className="empty-state" style={{ padding: '20px' }}>
-            <p className="empty-text" style={{ marginBottom: 12 }}>Earn from sales, then request a payout to your bank, crypto wallet or PayPal.</p>
+            <p className="empty-text" style={{ marginBottom: 12 }}>Earn from sales, then request a payout to your bank account.</p>
             <Button onClick={() => setShowPayoutModal(true)}>Request Payout</Button>
           </div>
         ) : (
@@ -707,25 +705,24 @@ export default function Payments() {
             />
             {wallet && <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 6 }}>Available: {formatCents(wallet.available_cents)}</p>}
           </div>
-          <div className="input-group">
-            <label className="input-label">Method</label>
-            <div className="card-type-selector">
-              {PAYOUT_METHODS.map((m) => (
-                <div key={m.id} className={`card-type-option ${payoutMethod === m.id ? 'active' : ''}`} onClick={() => { setPayoutMethod(m.id); setPayoutFields({}); }}>
-                  <span>{m.name}</span>
-                </div>
-              ))}
+          {PAYOUT_METHODS.length > 1 && (
+            <div className="input-group">
+              <label className="input-label">Method</label>
+              <div className="card-type-selector">
+                {PAYOUT_METHODS.map((m) => (
+                  <div key={m.id} className={`card-type-option ${payoutMethod === m.id ? 'active' : ''}`} onClick={() => { setPayoutMethod(m.id); setPayoutFields({}); }}>
+                    <span>{m.name}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
           {PAYOUT_METHODS.find((m) => m.id === payoutMethod).fields.map((f) => (
             <div className="input-group" key={f}>
               <label className="input-label">
                 {f === 'accountName' ? 'Account Name' :
                   f === 'accountNumber' ? 'Account Number' :
-                  f === 'routing' ? 'Routing Number' :
-                  f === 'address' ? 'Wallet Address' :
-                  f === 'network' ? 'Network (e.g. BTC, ETH)' :
-                  'PayPal Email'}
+                  'Routing Number'}
               </label>
               <input
                 type="text"

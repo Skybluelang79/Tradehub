@@ -14,7 +14,7 @@ logger = logging.getLogger("tradehub")
 
 router = APIRouter()
 
-PAYOUT_METHODS = ["bank", "crypto", "paypal"]
+PAYOUT_METHODS = ["bank"]
 
 
 def _round_number(value):

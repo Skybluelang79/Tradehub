@@ -7,7 +7,7 @@ import logger from '../src/logger.js';
 
 const router = Router();
 
-const PAYOUT_METHODS = ['bank', 'crypto', 'paypal'];
+const PAYOUT_METHODS = ['bank'];
 
 function getWallet(userId) {
   let w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);

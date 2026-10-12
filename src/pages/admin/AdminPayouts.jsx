@@ -159,13 +159,13 @@ export default function AdminPayouts() {
       <div className="payout-section">
         <div className="payout-section-header">
           <h2>Awaiting Funds (Bank / Crypto)</h2>
-          <p>Confirm when the buyer's bank transfer or crypto payment arrives</p>
+          <p>Confirm when the buyer's bank transfer arrives</p>
         </div>
         {awaiting.length === 0 ? (
           <div className="empty-state">
             <DollarIcon size={48} />
             <h3>Nothing awaiting payment</h3>
-            <p>Bank and crypto payments will appear here once a buyer starts checkout</p>
+            <p>Bank payments will appear here once a buyer starts checkout</p>
           </div>
         ) : (
           <div className="transactions-table-container">
