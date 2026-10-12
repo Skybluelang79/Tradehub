@@ -112,7 +112,7 @@ router.get('/dashboard', adminAuth, (req, res) => {
     const pendingPayouts = db.prepare("SELECT COALESCE(SUM(amount_cents), 0) as total FROM payouts WHERE status IN ('pending','approved')").get().total;
     const paidOut = db.prepare("SELECT COALESCE(SUM(amount_cents), 0) as total FROM payouts WHERE status = 'completed'").get().total;
     const activeWallets = db.prepare('SELECT COUNT(*) as count FROM wallets WHERE available_cents > 0').get().count;
-    const giftCardsIssued = db.prepare('SELECT COUNT(*) as count FROM gift_cards').get().count;
+    const giftCardsIssued = db.prepare("SELECT COUNT(*) as count FROM gift_cards WHERE status != 'voided'").get().count;
     const giftCardsRedeemed = db.prepare("SELECT COUNT(*) as count FROM gift_cards WHERE status = 'redeemed'").get().count;
 
     const recentUsers = db.prepare('SELECT id, name, email, avatar, created_at FROM users ORDER BY created_at DESC LIMIT 5').all();

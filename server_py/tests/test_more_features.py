@@ -123,6 +123,28 @@ def test_gift_card_issue_redeem_flow():
     assert again.status_code == 400
 
 
+def test_dashboard_gift_card_count_excludes_voided():
+    admin = admin_token()
+    before = client.get("/api/admin/dashboard", headers=auth(admin)).json()["stats"]["giftCardsIssued"]
+
+    issued = client.post(
+        "/api/payments/gift-cards/issue",
+        json={"amountCents": 1000, "count": 1},
+        headers=auth(admin),
+    )
+    code = issued.json()["codes"][0]
+    after_issue = client.get("/api/admin/dashboard", headers=auth(admin)).json()["stats"]["giftCardsIssued"]
+    assert after_issue == before + 1
+
+    cards = client.get("/api/payments/gift-cards/list", headers=auth(admin)).json()["cards"]
+    card_id = next(c["id"] for c in cards if c["code"] == code)
+    voided = client.post(f"/api/payments/gift-cards/{card_id}/void", headers=auth(admin))
+    assert voided.status_code == 200, voided.text
+
+    after_void = client.get("/api/admin/dashboard", headers=auth(admin)).json()["stats"]["giftCardsIssued"]
+    assert after_void == before
+
+
 def test_gift_card_brand_admin_only():
     token, _ = signup("Brand User")
     assert client.get("/api/payments/gift-cards/brands/all", headers=auth(token)).status_code == 403

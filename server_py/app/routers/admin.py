@@ -152,7 +152,9 @@ def admin_dashboard(admin: dict = Depends(require_admin)):
         "SELECT COALESCE(SUM(amount_cents), 0) as total FROM payouts WHERE status = 'completed'"
     )["total"]
     active_wallets = db.get("SELECT COUNT(*) as count FROM wallets WHERE available_cents > 0")["count"]
-    gift_cards_issued = db.get("SELECT COUNT(*) as count FROM gift_cards")["count"]
+    gift_cards_issued = db.get(
+        "SELECT COUNT(*) as count FROM gift_cards WHERE status != 'voided'"
+    )["count"]
     gift_cards_redeemed = db.get("SELECT COUNT(*) as count FROM gift_cards WHERE status = 'redeemed'")["count"]
 
     recent_users = db.all(
