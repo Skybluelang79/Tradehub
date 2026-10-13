@@ -12,6 +12,7 @@ import db, { flushDB } from './db.js';
 import logger from './src/logger.js';
 import { requiredEnv, allowedOrigins } from './src/env.js';
 import { startScheduler } from './src/scheduler.js';
+import { integrationStatus } from './src/features.js';
 import { ensureLoaded } from './db.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -462,6 +463,14 @@ ensureLoaded().then(() => {
   server.listen(PORT, () => {
     logger.info(`TradeHub API running on http://localhost:${PORT}`);
     logger.info(`WebSocket ready on port ${PORT}`);
+
+    const integrations = integrationStatus();
+    const active = Object.entries(integrations).filter(([, on]) => on).map(([name]) => name);
+    const inactive = Object.entries(integrations).filter(([, on]) => !on).map(([name]) => name);
+    logger.info(`Integrations active: ${active.join(', ') || 'none'}`);
+    if (inactive.length) {
+      logger.warn(`Integrations not configured: ${inactive.join(', ')}`);
+    }
   });
 });
 

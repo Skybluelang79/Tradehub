@@ -1,6 +1,24 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = window.location.origin;
+// Same-origin API (Netlify Functions) => sockets target the page origin.
+// VITE_API_URL pointing at a separate, socket-capable backend (Render/Railway/
+// Fly/Docker) => target that host, so real-time chat reaches the server that
+// actually holds the connection. Hosts that cannot hold sockets set
+// VITE_DISABLE_SOCKET=true and fall back to REST polling.
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
+function resolveSocketUrl() {
+  if (/^https?:\/\//i.test(API_BASE)) {
+    try {
+      return new URL(API_BASE).origin;
+    } catch {
+      // fall through to same-origin
+    }
+  }
+  return window.location.origin;
+}
+
+const SOCKET_URL = resolveSocketUrl();
 const SOCKET_DISABLED = import.meta.env.VITE_DISABLE_SOCKET === 'true';
 
 let socket = null;

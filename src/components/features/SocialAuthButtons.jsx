@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { isFirebaseConfigured } from '../../config/firebase';
 import { useToast } from '../ui/Toast';
 import './SocialAuthButtons.css';
 
@@ -146,9 +145,15 @@ export default function SocialAuthButtons({ onClose }) {
     else addToast(`${platform.name} login is not configured yet`, 'error');
   };
 
-  // Without a Firebase project the popup flow cannot produce a token, so hide
-  // the buttons entirely rather than offering a control that always fails.
-  if (!isFirebaseConfigured()) return null;
+  // Only offer a provider whose client credential is actually present, since
+  // otherwise the button can only ever fail. Google/Facebook tokens are
+  // validated server-side, so this does not depend on the optional Firebase
+  // project (which is only needed for push/auth/storage).
+  const providers = [];
+  if (googleClientId) providers.push({ id: 'google', name: 'Google', icon: GoogleIcon, onClick: handleGoogle });
+  if (facebookAppId) providers.push({ id: 'facebook', name: 'Facebook', icon: FacebookIcon, onClick: handleFacebook });
+
+  if (providers.length === 0) return null;
 
   return (
     <div className="social-auth">
@@ -157,27 +162,22 @@ export default function SocialAuthButtons({ onClose }) {
       </div>
 
       <div className="social-auth-row">
-        <button
-          type="button"
-          className="social-auth-btn"
-          onClick={handleGoogle}
-          disabled={!!busy}
-          aria-label="Continue with Google"
-        >
-          {busy === 'google' ? <span className="social-auth-spinner" /> : <GoogleIcon />}
-          <span>{busy === 'google' ? 'Signing in…' : 'Google'}</span>
-        </button>
-
-        <button
-          type="button"
-          className="social-auth-btn"
-          onClick={handleFacebook}
-          disabled={!!busy}
-          aria-label="Continue with Facebook"
-        >
-          {busy === 'facebook' ? <span className="social-auth-spinner" /> : <FacebookIcon />}
-          <span>{busy === 'facebook' ? 'Signing in…' : 'Facebook'}</span>
-        </button>
+        {providers.map((provider) => {
+          const Icon = provider.icon;
+          return (
+            <button
+              key={provider.id}
+              type="button"
+              className="social-auth-btn"
+              onClick={provider.onClick}
+              disabled={!!busy}
+              aria-label={`Continue with ${provider.name}`}
+            >
+              {busy === provider.id ? <span className="social-auth-spinner" /> : <Icon />}
+              <span>{busy === provider.id ? 'Signing in…' : provider.name}</span>
+            </button>
+          );
+        })}
       </div>
 
       <button

@@ -23,14 +23,26 @@ async function request(path, options = {}) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  const data = await res.json();
+
+  // A non-JSON body (empty response, HTML gateway error, timeout page) must not
+  // be reported as a successful payload; fall back to null so the status check
+  // below surfaces the real HTTP error instead of a JSON parse exception.
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+  }
 
   if (!res.ok) {
     if (options.asAdmin && (res.status === 401 || res.status === 403)) {
       localStorage.removeItem('tradehub_admin_token');
       window.dispatchEvent(new CustomEvent('adminSessionExpired'));
     }
-    throw new Error(data.error || `Request failed: ${res.status}`);
+    throw new Error((data && data.error) || `Request failed: ${res.status}`);
   }
   return data;
 }
@@ -340,11 +352,14 @@ restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.st
         try { file = await compressImage(f, { maxWidth: 1280, maxHeight: 1280, quality: 0.82 }); } catch {}
         formData.append('images', file);
       }
-      return fetch(`${API_BASE}/upload`, {
+      const r = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },
         body: formData,
-      }).then(r => r.json());
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `Upload failed: ${r.status}`);
+      return data;
     },
     single: async (file) => {
       const { compressImage } = await import('../utils/imageCompression');
@@ -352,11 +367,14 @@ restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.st
       let out = file;
       try { out = await compressImage(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.82 }); } catch {}
       formData.append('image', out);
-      return fetch(`${API_BASE}/upload/single`, {
+      const r = await fetch(`${API_BASE}/upload/single`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${authToken}` },
         body: formData,
-      }).then(r => r.json());
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `Upload failed: ${r.status}`);
+      return data;
     },
     chatAttachment: async (file) => {
       const formData = new FormData();

@@ -17,9 +17,11 @@ COPY --from=build /app/dist ./dist
 COPY server/package*.json ./server/
 RUN cd server && npm ci --omit=dev
 COPY server ./server
+# The server imports ../shared/currencies.js, so it must ship alongside it.
+COPY shared ./shared
 
 RUN mkdir -p server/uploads server/logs \
-  && chown -R node:node server \
+  && chown -R node:node server shared \
   && chmod 755 server
 
 USER node

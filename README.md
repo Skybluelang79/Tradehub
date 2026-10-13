@@ -83,6 +83,14 @@ npm test
 
 TradeHub ships with configs for **Netlify** (`netlify.toml`), **Render** (`render.yaml`), **Railway** (`railway.json`), **Vercel** (`vercel.json`), and **Docker** (`Dockerfile`, `server/Dockerfile`). In every case you must provide the same env vars as `server/.env.example`.
 
+The alternative **Python (FastAPI) backend** in `server_py/` is deployable on its own via `server_py/Dockerfile`; `render.yaml` includes a `tradehub-api-py` service that builds it. It speaks the same API and uses the same SQLite schema, so run **only one** backend against a given database.
+
+Frontend (`VITE_*`) build-time variables are documented in `.env.example` at the repo root. On Netlify, set them (and every `server/.env.example` var) as **runtime** environment variables — values declared under `[build.environment]` in `netlify.toml` are build-time only and never reach the serverless functions.
+
+### Real-time chat in production
+
+Serverless hosts (Netlify/Vercel Functions) cannot hold WebSocket connections, so chat falls back to REST polling there. To enable real-time, host the API on a long-running process — the Dockerfile, `render.yaml` (Node or `tradehub-api-py`), or `railway.json` — then build the frontend with `VITE_API_URL` pointing at that host and **without** `VITE_DISABLE_SOCKET`. The socket client follows `VITE_API_URL`'s origin automatically.
+
 > **Note:** the sql.js database lives in memory and is flushed to disk. Run a **single API instance** (and add a disk volume on Render/Railway) to avoid lost writes.
 
 ### Production checklist
@@ -90,8 +98,14 @@ TradeHub ships with configs for **Netlify** (`netlify.toml`), **Render** (`rende
 - [ ] Strong, unique `JWT_SECRET`, `REFRESH_SECRET`, `ADMIN_PASSWORD`
 - [ ] Real Paystack keys (**secret + public**) and `PAYSTACK_WEBHOOK_SECRET` (webhooks are rejected until configured)
 - [ ] `APP_URL` set to your real domain(s) (CORS allowlist)
-- [ ] Real SMTP credentials for verification/reset emails
-- [ ] `NODE_ENV=production`
+- [ ] Real SMTP credentials (`SMTP_HOST`/`USER`/`PASS`) for verification/reset emails
+- [ ] Termii SMS credentials (`SMS_API_KEY`, `SMS_SENDER`) for phone sign-in
+- [ ] Frontend `VITE_*` build vars (see `.env.example`), incl. `VITE_GOOGLE_CLIENT_ID` / `VITE_FACEBOOK_APP_ID` and `VITE_FIREBASE_*`
+- [ ] `FACEBOOK_APP_ID` + `FACEBOOK_APP_SECRET` if Facebook login is enabled
+- [ ] `OPENAI_API_KEY` if AI features should use an LLM (local fallbacks work without it)
+- [ ] On Netlify, set all of the above as **runtime** env vars (netlify.toml build env does not reach functions)
+- [ ] `NODE_ENV=production` (Node 22 on Netlify, CI, and Docker)
+- [ ] Confirm `GET /api/health` → `integrations` shows the services you expect as `true`
 
 ## API
 
@@ -107,6 +121,7 @@ server/
   tests/      # Jest + supertest integration tests
   db.js       # sql.js database layer (schema, seeding, persistence)
   index.js    # HTTP server, Socket.IO, graceful shutdown
+server_py/    # Alternative FastAPI backend (same API/DB contract) + Dockerfile
 ```
 
 ## Contributing

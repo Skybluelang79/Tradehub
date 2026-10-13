@@ -45,6 +45,25 @@ python -m venv .venv
 In production the Node app listens internally and serves the built frontend at
 `/Tradehub`; swap `server` for `server_py` behind the same port/process manager.
 
+## Docker / deploy
+
+A `Dockerfile` is provided (build context is this directory). The image serves
+`app.main:app` via uvicorn on `$PORT` (default 3001) and keeps the SQLite
+database on the volume path `/data/tradehub.db` (override with `DB_PATH`).
+
+```powershell
+docker build -t tradehub-api-py server_py
+docker run -p 3001:3001 -v tradehub-data:/data `
+  -e NODE_ENV=production `
+  -e JWT_SECRET=... -e REFRESH_SECRET=... -e ADMIN_PASSWORD=... `
+  -e APP_URL=https://your-frontend.example `
+  tradehub-api-py
+```
+
+`render.yaml` includes a `tradehub-api-py` service that builds this image with
+an attached disk. Because the Node and Python backends share the same schema and
+SQLite is single-writer, run only one of them against a given database.
+
 ## Tests
 
 ```powershell

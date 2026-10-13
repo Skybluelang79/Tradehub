@@ -9,6 +9,7 @@ import { errorHandler, notFound } from './src/errorHandler.js';
 import { apiLimiter } from './src/rateLimiter.js';
 import { maintenanceMode } from './middleware/maintenance.js';
 import { allowedOrigins } from './src/env.js';
+import { integrationStatus } from './src/features.js';
 
 import authRoutes from './routes/auth.js';
 import itemRoutes from './routes/items.js';
@@ -125,7 +126,7 @@ app.use('/api/phone-auth', phoneAuthRoutes);
 app.use('/api/webauthn', webauthnRoutes);
 
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ status: 'ok', timestamp: new Date().toISOString(), integrations: integrationStatus() });
 });
 
 app.use(notFound);

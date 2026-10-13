@@ -68,3 +68,42 @@ services:
           type: web
           name: tradehub-api
           property: url
+
+  # ── Alternative Python (FastAPI) backend ────────────────────────────────
+  # The Node service above (tradehub-api) and this Python service implement the
+  # same API/DB contract, so run ONLY ONE of them against a given database
+  # (SQLite is single-writer). To switch the frontend to Python, delete or
+  # suspend `tradehub-api`, deploy this service, then point the frontend's
+  # VITE_API_URL at this service's URL (change the fromService on the frontend
+  # above to `tradehub-api-py`).
+  - type: web
+    name: tradehub-api-py
+    env: docker
+    dockerfilePath: ./server_py/Dockerfile
+    dockerContext: ./server_py
+    region: oregon
+    plan: starter
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_SECRET
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: APP_URL
+        fromService:
+          type: web
+          name: tradehub-frontend
+          property: url
+      - key: DB_PATH
+        value: /data/tradehub.db
+      - key: UPLOADS_DIR
+        value: /data/uploads
+    disk:
+      name: tradehub-data-py
+      mountPath: /data
+      sizeGB: 1

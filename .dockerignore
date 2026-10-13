@@ -1,0 +1,34 @@
+# Keep build context small and never bake secrets/deps into the image.
+.git
+.github
+.netlify
+.cache
+.vscode
+dist
+dist-ssr
+node_modules
+**/node_modules
+backups
+*.log
+
+# Databases and user uploads are runtime data, not image content.
+*.db
+*.db-shm
+*.db-wal
+server/uploads
+server/logs
+
+# Secrets: keep the example templates, drop anything real.
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+
+# The Python backend builds from its own context (server_py/Dockerfile).
+server_py
+
+# Local docs/tooling not needed inside the image.
+README.md
+SPEC.md
