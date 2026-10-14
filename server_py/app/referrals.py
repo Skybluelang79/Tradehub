@@ -2,7 +2,7 @@ import uuid
 
 from . import db, notifications
 
-REWARD_CENTS = 1000
+REWARD_CENTS = 100000
 
 
 def credit_first_purchase(user_id):

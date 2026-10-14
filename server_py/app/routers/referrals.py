@@ -11,7 +11,7 @@ logger = logging.getLogger("tradehub")
 
 router = APIRouter()
 
-REWARD_CENTS = 1000
+REWARD_CENTS = 100000
 
 
 def _sanitize_code(code):

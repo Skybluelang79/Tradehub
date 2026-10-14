@@ -94,7 +94,7 @@ export default function Referrals() {
                 <span className="referral-date">Joined {formatDate(r.created_at)}</span>
               </div>
               <span className={`referral-status referral-status--${r.status}`}>
-                {r.status === 'credited' ? `$${(r.reward_cents / 100).toFixed(2)} earned` : 'Pending first purchase'}
+                {r.status === 'credited' ? `₦${(r.reward_cents / 100).toFixed(2)} earned` : 'Pending first purchase'}
               </span>
             </div>
           ))}

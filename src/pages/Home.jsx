@@ -196,11 +196,16 @@ export default function Home() {
               onChange={(e) => setSearchInput(e.target.value)}
               autoFocus
             />
-            {searchInput && (
-              <button className="search-clear" onClick={() => setSearchInput('')}>
-                <XIcon size={16} />
-              </button>
-            )}
+            <button
+              className={`save-search-btn ${(searchInput || filters.category || filters.minPrice || filters.maxPrice) ? 'enabled' : ''}`}
+              onClick={handleSaveSearch}
+              title="Save this search to get alerts on new matches"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+              <span className="btn-label">Save</span>
+            </button>
             <button
               className={`ai-search-btn ${searchInput ? 'enabled' : ''}`}
               onClick={handleAiSearch}
@@ -210,18 +215,13 @@ export default function Home() {
               <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2l1.9 5.6L19.5 9l-5.6 1.9L12 16.5l-1.9-5.6L4.5 9l5.6-1.4L12 2zM19 14l.9 2.6L22.5 17.5l-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9L19 14zm-9 3l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2z" />
               </svg>
-              {aiSearching ? '…' : 'AI'}
+              <span className="btn-label">{aiSearching ? '…' : 'AI'}</span>
             </button>
-            <button
-              className={`save-search-btn ${(searchInput || filters.category || filters.minPrice || filters.maxPrice) ? 'enabled' : ''}`}
-              onClick={handleSaveSearch}
-              title="Save this search to get alerts on new matches"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-              </svg>
-              Save
-            </button>
+            {searchInput && (
+              <button className="search-clear" onClick={() => setSearchInput('')} title="Clear search">
+                <XIcon size={16} />
+              </button>
+            )}
           </div>
           <SearchSuggestions
             query={searchInput}

@@ -451,8 +451,10 @@ const [items, setItems] = useState([]);
   const filteredItems = items.filter((item) => {
     if (item.status !== 'active') return false;
     
-    const distance = getDistanceFromUser(item.location.lat, item.location.lng);
-    if (distance && distance > filters.distance) return false;
+    const itemLat = item.location?.lat;
+    const itemLng = item.location?.lng;
+    const distance = itemLat != null && itemLng != null ? getDistanceFromUser(itemLat, itemLng) : null;
+    if (filters.distance !== 'all' && distance != null && distance > filters.distance) return false;
 
     if (filters.category !== 'all' && item.category.toLowerCase() !== filters.category) return false;
 
@@ -483,8 +485,12 @@ const [items, setItems] = useState([]);
       case 'popular':
         return (b.views || 0) - (a.views || 0) || (b.favorites || 0) - (a.favorites || 0);
       case 'nearest': {
-        const distA = getDistanceFromUser(a.location.lat, a.location.lng) || Infinity;
-        const distB = getDistanceFromUser(b.location.lat, b.location.lng) || Infinity;
+        const aLat = a.location?.lat;
+        const aLng = a.location?.lng;
+        const bLat = b.location?.lat;
+        const bLng = b.location?.lng;
+        const distA = aLat != null && aLng != null ? (getDistanceFromUser(aLat, aLng) ?? Infinity) : Infinity;
+        const distB = bLat != null && bLng != null ? (getDistanceFromUser(bLat, bLng) ?? Infinity) : Infinity;
         return distA - distB;
       }
       default:

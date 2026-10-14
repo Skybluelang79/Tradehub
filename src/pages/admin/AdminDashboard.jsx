@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useAdmin } from '../../context/AdminContext.jsx';
 import { useToast } from '../../components/ui/Toast.jsx';
 import { api } from '../../services/client';
+import AreaChart from '../../components/admin/AreaChart.jsx';
 import './AdminDashboard.css';
 
 const fmtMoney = (v) => {
@@ -12,6 +13,28 @@ const fmtMoney = (v) => {
 };
 
 const fmtCentsMoney = (v) => fmtMoney((v || 0) / 100);
+
+const fmtCount = (v) => Math.round(Number(v) || 0).toLocaleString();
+
+const localDateKey = (d) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+const buildSeries = (days, rows, valueKey) => {
+  const map = new Map((rows || []).map((r) => [String(r.date).slice(0, 10), Number(r[valueKey]) || 0]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const series = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const d = new Date(today);
+    d.setDate(today.getDate() - i);
+    series.push({
+      date: localDateKey(d),
+      label: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: map.get(localDateKey(d)) || 0,
+    });
+  }
+  return series;
+};
 
 const AdminDashboard = ({ onNavigate }) => {
   const { adminToken } = useAdmin();
@@ -99,8 +122,12 @@ const AdminDashboard = ({ onNavigate }) => {
 
   const healthAlerts = useMemo(() => healthChecks.filter((item) => item.alert).length, [healthChecks]);
 
-  const revenueMax = useMemo(() => Math.max(...(data?.revenueByDay || []).map((r) => Number(r.revenue)), 1), [data]);
-  const signupMax = useMemo(() => Math.max(...(data?.userSignupsByDay || []).map((r) => Number(r.count)), 1), [data]);
+  const [range, setRange] = useState(30);
+
+  const revenueSeries = useMemo(() => buildSeries(range, data?.revenueByDay, 'revenue'), [range, data]);
+  const signupSeries = useMemo(() => buildSeries(range, data?.userSignupsByDay, 'count'), [range, data]);
+  const revenueTotal = useMemo(() => revenueSeries.reduce((sum, p) => sum + p.value, 0), [revenueSeries]);
+  const signupTotal = useMemo(() => signupSeries.reduce((sum, p) => sum + p.value, 0), [signupSeries]);
   const catMax = useMemo(() => Math.max(...(data?.topCategories || []).map((c) => c.count), 1), [data]);
 
   const transactionStatus = (status) => {
@@ -125,6 +152,18 @@ const AdminDashboard = ({ onNavigate }) => {
           <p>Real-time overview of your marketplace</p>
         </div>
         <div className="header-actions">
+          <div className="range-selector" role="group" aria-label="Time range">
+            {[7, 14, 30].map((days) => (
+              <button
+                key={days}
+                type="button"
+                className={`range-btn ${range === days ? 'active' : ''}`}
+                onClick={() => setRange(days)}
+              >
+                {days}D
+              </button>
+            ))}
+          </div>
           <span className="live-badge">
             <span className="live-dot" />
             Live
@@ -206,48 +245,36 @@ const AdminDashboard = ({ onNavigate }) => {
       <div className="dashboard-grid">
         <div className="dashboard-card chart-card">
           <div className="card-header">
-            <h3>Revenue (last 30 days)</h3>
-            <span className="card-badge">{(data?.stats?.totalTransactions || 0).toLocaleString()} total txns</span>
+            <div className="card-header-titles">
+              <h3>Revenue</h3>
+              <span className="card-subtitle">Last {range} days · {fmtMoney(revenueTotal)} total</span>
+            </div>
+            <span className="card-badge">{(data?.stats?.totalTransactions || 0).toLocaleString()} txns</span>
           </div>
-          <div className="chart-container">
-            {data?.revenueByDay?.length ? (
-              <div className="bar-chart">
-                {data.revenueByDay.slice(-14).map((item, index) => (
-                  <div key={item.date} className="bar-item" title={`${item.date}: ${fmtMoney(item.revenue)}`}>
-                    <div className="bar" style={{ height: `${(item.revenue / revenueMax) * 100}%`, animationDelay: `${index * 0.05}s` }}>
-                      <span className="bar-value">{fmtMoney(item.revenue)}</span>
-                    </div>
-                    <span className="bar-label">{item.date ? new Date(item.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : ''}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">No revenue yet</div>
-            )}
-          </div>
+          <AreaChart
+            data={revenueSeries}
+            color="#8B5CF6"
+            height={230}
+            valueFormat={fmtMoney}
+            labelFormat={(d) => d.label}
+          />
         </div>
 
         <div className="dashboard-card chart-card">
           <div className="card-header">
-            <h3>New Users (last 30 days)</h3>
+            <div className="card-header-titles">
+              <h3>New Users</h3>
+              <span className="card-subtitle">Last {range} days · {fmtCount(signupTotal)} signups</span>
+            </div>
             <span className="card-badge">{data?.stats?.totalUsers || 0} total</span>
           </div>
-          <div className="chart-container">
-            {data?.userSignupsByDay?.length ? (
-              <div className="bar-chart">
-                {data.userSignupsByDay.slice(-14).map((item, index) => (
-                  <div key={item.date} className="bar-item" title={`${item.date}: ${item.count}`}>
-                    <div className="bar user-bar" style={{ height: `${(item.count / signupMax) * 100}%`, animationDelay: `${index * 0.05}s` }}>
-                      <span className="bar-value">{item.count}</span>
-                    </div>
-                    <span className="bar-label">{item.date ? new Date(item.date).toLocaleDateString('en-US', { day: 'numeric', month: 'short' }) : ''}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="empty-state">No signups yet</div>
-            )}
-          </div>
+          <AreaChart
+            data={signupSeries}
+            color="#3B82F6"
+            height={230}
+            valueFormat={fmtCount}
+            labelFormat={(d) => d.label}
+          />
         </div>
 
         <div className="dashboard-card chart-card">

@@ -91,7 +91,7 @@ def test_referrals_my():
     token, _ = signup("Referrer")
     body = client.get("/api/referrals/my", headers=auth(token)).json()
     assert body["code"]
-    assert body["rewardCents"] == 1000
+    assert body["rewardCents"] == 100000
 
 
 def test_support_ticket():

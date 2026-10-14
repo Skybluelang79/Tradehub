@@ -1,8 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context';
 import { useToast } from '../ui/Toast';
 import { api } from '../../services/client';
+import { storage } from '../../services/storage';
 import './Ad.css';
+
+const DISMISS_KEYS = {
+  banner: 'tradehub_ad_banner_dismissed',
+  card: 'tradehub_ad_card_dismissed',
+  push: 'tradehub_ad_push_dismissed',
+  brand: 'tradehub_ad_brand_dismissed',
+};
+
+const DISMISS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function usePersistentDismissal(key) {
+  const [dismissed, setDismissed] = useState(() => {
+    const until = storage.get(key, 0);
+    return typeof until === 'number' && until > Date.now();
+  });
+
+  const dismiss = useCallback(() => {
+    setDismissed(true);
+    storage.set(key, Date.now() + DISMISS_TTL_MS);
+  }, [key]);
+
+  return [dismissed, dismiss];
+}
 
 function useAdNavigation() {
   const { setFilters, setActiveTab, filters, currentUserId } = useApp();
@@ -20,6 +44,11 @@ function useAdNavigation() {
   const goToAdd = () => setActiveTab('add');
   const goToPayments = () => setActiveTab('payments');
 
+  const goSafeTrading = () => {
+    const el = document.querySelector('.safe-trading');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
   const inviteFriend = async () => {
     let url = 'https://tradehub-app-928.netlify.app';
     let text = 'Join me on TradeHub to buy and sell near you!';
@@ -28,7 +57,7 @@ function useAdNavigation() {
         const res = await api.referrals.code();
         if (res && res.code) {
           url = `https://tradehub-app-928.netlify.app/?ref=${res.code}`;
-          text = `Join me on TradeHub and we both get ₦10,000 credit! Use my code: ${res.code}`;
+          text = `Join me on TradeHub and we both get ₦1,000 credit! Use my code: ${res.code}`;
         }
       } catch {}
     }
@@ -41,7 +70,7 @@ function useAdNavigation() {
     }
   };
 
-  return { goHome, goToAdd, goToPayments, inviteFriend };
+  return { goHome, goToAdd, goToPayments, goSafeTrading, inviteFriend };
 }
 
 const banners = [
@@ -92,12 +121,12 @@ const pushes = [
   { title: 'Premium Seller?', desc: 'Get verified and appear first!', btn: 'Upgrade', action: 'upgrade' },
   { title: 'List for Free!', desc: 'Zero fees on your first 10 listings', btn: 'Start Selling', action: 'add' },
   { title: 'Safe Trading', desc: 'Escrow protection for every transaction', btn: 'Learn More', action: 'learn' },
-  { title: 'Refer a Friend', desc: 'Earn ₦10,000 credit for each referral', btn: 'Invite', action: 'invite' },
+  { title: 'Refer a Friend', desc: 'Earn ₦1,000 credit for each referral', btn: 'Invite', action: 'invite' },
 ];
 
 export function AdBanner({ className = '' }) {
   const [current, setCurrent] = useState(0);
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, dismiss] = usePersistentDismissal(DISMISS_KEYS.banner);
   const { goHome } = useAdNavigation();
 
   useEffect(() => {
@@ -113,7 +142,7 @@ export function AdBanner({ className = '' }) {
 
   return (
     <div className={`ad-banner ${className}`}>
-      <button className="ad-dismiss" onClick={() => setDismissed(true)}>
+      <button className="ad-dismiss" onClick={dismiss}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
@@ -161,8 +190,27 @@ export function AdBanner({ className = '' }) {
   );
 }
 
+const cardIcons = {
+  star: (
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15.5 14" />
+    </>
+  ),
+  package: (
+    <>
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+      <line x1="12" y1="22.08" x2="12" y2="12" />
+    </>
+  ),
+};
+
 export function AdCard({ title, subtitle, className = '' }) {
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, dismiss] = usePersistentDismissal(DISMISS_KEYS.card);
   const [card] = useState(() => {
     const cards = [
       { title: 'Featured Deal', subtitle: 'Limited time offer', icon: 'star', category: '' },
@@ -177,7 +225,7 @@ export function AdCard({ title, subtitle, className = '' }) {
 
   return (
     <div className={`ad-card ${className}`}>
-      <button className="ad-card-dismiss" onClick={() => setDismissed(true)}>
+      <button className="ad-card-dismiss" onClick={dismiss}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
@@ -185,9 +233,7 @@ export function AdCard({ title, subtitle, className = '' }) {
       </button>
       <div className="ad-card-icon">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4" />
-          <path d="M4 6v12c0 1.1.9 2 2 2h14v-4" />
-          <path d="M18 12a2 2 0 0 0 0 4h4v-4Z" />
+          {cardIcons[card.icon] || cardIcons.star}
         </svg>
       </div>
       <h4 className="ad-card-title">{title || card.title}</h4>
@@ -208,9 +254,9 @@ export function AdInline({ className = '', text = 'Promoted Content' }) {
 }
 
 export function AdPush({ className = '' }) {
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, dismiss] = usePersistentDismissal(DISMISS_KEYS.push);
   const [push] = useState(() => pushes[Math.floor(Math.random() * pushes.length)]);
-  const { goHome, goToAdd, goToPayments, inviteFriend } = useAdNavigation();
+  const { goHome, goToAdd, goToPayments, goSafeTrading, inviteFriend } = useAdNavigation();
 
   if (dismissed) return null;
 
@@ -219,13 +265,14 @@ export function AdPush({ className = '' }) {
       case 'upgrade': goToPayments(); break;
       case 'add': goToAdd(); break;
       case 'invite': inviteFriend(); break;
+      case 'learn': goSafeTrading(); break;
       default: goHome('');
     }
   };
 
   return (
     <div className={`ad-push ${className}`}>
-      <button className="ad-push-dismiss" onClick={() => setDismissed(true)}>
+      <button className="ad-push-dismiss" onClick={dismiss}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />
@@ -293,7 +340,7 @@ const brandAds = [
 ];
 
 export function BrandSponsor({ className = '' }) {
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, dismiss] = usePersistentDismissal(DISMISS_KEYS.brand);
   const [current, setCurrent] = useState(0);
   const { goHome } = useAdNavigation();
 
@@ -313,7 +360,7 @@ export function BrandSponsor({ className = '' }) {
       className={`brand-sponsor ${className}`}
       style={{ background: ad.gradient }}
     >
-      <button className="brand-sponsor-dismiss" onClick={() => setDismissed(true)}>
+      <button className="brand-sponsor-dismiss" onClick={dismiss}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="18" y1="6" x2="6" y2="18" />
           <line x1="6" y1="6" x2="18" y2="18" />

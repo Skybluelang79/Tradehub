@@ -416,7 +416,7 @@ CREATE TABLE IF NOT EXISTS referrals (
   referred_id TEXT NOT NULL,
   code TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  reward_cents INTEGER NOT NULL DEFAULT 1000,
+  reward_cents INTEGER NOT NULL DEFAULT 100000,
   created_at TEXT DEFAULT (datetime('now')),
   credited_at TEXT
 );

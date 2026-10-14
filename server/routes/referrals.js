@@ -6,7 +6,7 @@ import logger from '../src/logger.js';
 
 const router = Router();
 
-const REWARD_CENTS = 1000;
+const REWARD_CENTS = 100000;
 
 function sanitizeCode(code) {
   return String(code || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');

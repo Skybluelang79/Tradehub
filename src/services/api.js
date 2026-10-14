@@ -225,6 +225,7 @@ export const categories = [
 ];
 
 export const distanceOptions = [
+  { value: 'all', label: 'All' },
   { value: 1, label: '1 km' },
   { value: 5, label: '5 km' },
   { value: 10, label: '10 km' },

@@ -243,31 +243,35 @@
 }
 
 .search-input-wrapper {
-  position: relative;
   display: flex;
   align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 6px 8px 6px 14px;
+  transition: all var(--transition-fast);
 }
 
-.search-input-wrapper svg:first-child {
-  position: absolute;
-  left: 14px;
+.search-input-wrapper:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(15, 138, 99, 0.1);
+}
+
+.search-input-wrapper > svg {
+  flex: none;
   color: var(--text-tertiary);
 }
 
 .search-input {
-  width: 100%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 14px 155px 14px 44px;
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 9px 0;
   color: var(--text-primary);
   font-size: 15px;
-  transition: all var(--transition-fast);
-}
-
-.search-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(15, 138, 99, 0.1);
 }
 
 .search-input::placeholder {
@@ -275,28 +279,31 @@
 }
 
 .search-clear {
-  position: absolute;
-  right: 12px;
-  width: 24px;
-  height: 24px;
+  flex: none;
+  width: 30px;
+  height: 30px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-full);
   color: var(--text-tertiary);
-  transition: color 0.2s ease;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
 }
 
 .search-clear:hover {
   color: var(--text-primary);
+  background: var(--surface-hover);
 }
 
 .save-search-btn {
-  position: absolute;
-  right: 88px;
-  display: flex;
+  flex: none;
+  display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 7px 12px;
+  padding: 7px 11px;
   border-radius: var(--radius-full);
   border: 1px solid var(--border);
   background: var(--surface);
@@ -321,12 +328,11 @@
 }
 
 .ai-search-btn {
-  position: absolute;
-  right: 44px;
+  flex: none;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 6px 10px;
+  padding: 7px 11px;
   border-radius: var(--radius-full);
   border: 1px solid var(--border);
   background: var(--surface);
@@ -353,6 +359,18 @@
 .ai-search-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+@media (max-width: 420px) {
+  .save-search-btn .btn-label,
+  .ai-search-btn .btn-label {
+    display: none;
+  }
+
+  .save-search-btn,
+  .ai-search-btn {
+    padding: 7px 9px;
+  }
 }
 
 .save-search-overlay {

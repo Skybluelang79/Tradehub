@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterEach } from '@jest/globals';
 import supertest from 'supertest';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -220,6 +220,14 @@ describe('Maintenance Mode', () => {
       .post('/api/admin/login')
       .send({ email: 'admin@tradehub.com', password: process.env.ADMIN_PASSWORD || 'admin123' });
     adminToken = login.body.token;
+
+    const db = await import('../db.js');
+    db.default.prepare("UPDATE platform_settings SET value = '0' WHERE key = 'maintenance_mode'").run();
+  });
+
+  afterEach(async () => {
+    const db = await import('../db.js');
+    db.default.prepare("UPDATE platform_settings SET value = '0' WHERE key = 'maintenance_mode'").run();
   });
 
   it('allows normal traffic when maintenance is off', async () => {
