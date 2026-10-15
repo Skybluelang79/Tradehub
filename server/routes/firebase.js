@@ -57,8 +57,8 @@ router.post('/link', async (req, res) => {
     if (!jwtToken) return res.status(401).json({ error: 'JWT token required' });
 
     const jwt = await import('jsonwebtoken');
-    const { requiredEnv } = await import('../src/env.js');
-    const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
+    const { requiredSecret } = await import('../src/env.js');
+    const JWT_SECRET = requiredSecret('JWT_SECRET');
     const decoded = jwt.default.verify(jwtToken, JWT_SECRET);
 
     const { idToken } = req.body;

@@ -8,15 +8,15 @@ import validate, {
   changePasswordSchema, forgotPasswordSchema, resetPasswordSchema,
 } from '../src/validation.js';
 import { authLimiter } from '../src/rateLimiter.js';
-import { requiredEnv } from '../src/env.js';
+import { requiredSecret, requiredEnv } from '../src/env.js';
 import { sendVerificationEmail, sendPasswordResetEmail, isEmailConfigured } from '../src/email.js';
 import logger from '../src/logger.js';
 import { applyReferral } from './referrals.js';
 
 const router = Router();
 
-const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
-const REFRESH_SECRET = requiredEnv('REFRESH_SECRET', 'tradehub-refresh-secret-change-in-production-2026');
+const JWT_SECRET = requiredSecret('JWT_SECRET');
+const REFRESH_SECRET = requiredSecret('REFRESH_SECRET');
 
 export function generateRefreshToken(userId) {
   const token = uuidv4();
@@ -127,9 +127,18 @@ router.post('/social', authLimiter, async (req, res) => {
 
     let profile;
     if (provider === 'google') {
+      const clientId = requiredEnv('GOOGLE_CLIENT_ID', '');
+      if (!clientId) return res.status(503).json({ error: 'Google login is not configured' });
       const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(token)}`);
       if (!r.ok) return res.status(401).json({ error: 'Invalid Google token' });
       const data = await r.json();
+      // tokeninfo verifies the signature and expiry but does NOT check that the
+      // token was minted for this application. Without the audience check an ID
+      // token issued to any other Google client is accepted, letting an
+      // attacker sign in as (or create) an account for any Google address.
+      if (data.aud !== clientId) {
+        return res.status(401).json({ error: 'Google token was issued for a different application' });
+      }
       if (!data.email) return res.status(401).json({ error: 'Google account has no email' });
       profile = {
         email: data.email.toLowerCase(),

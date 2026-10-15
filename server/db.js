@@ -2,8 +2,12 @@ import initSqlJs from 'sql.js';
 import fs from 'fs';
 import { join } from 'path';
 import { __dirname } from './src/paths.js';
+import logger from './src/logger.js';
 
-const DB_PATH = process.env.DB_PATH || join(__dirname, 'tradehub.db');
+// __dirname is server/src, so this resolves to server/tradehub.db -- the same
+// file the Python backend uses. It previously pointed at server/src/tradehub.db,
+// so running either backend silently wrote to a different database.
+const DB_PATH = process.env.DB_PATH || join(__dirname, '..', 'tradehub.db');
 const USE_BLOB = process.env.NETLIFY === 'true' || process.env.DB_BLOB === 'true' || !!process.env.AWS_LAMBDA_FUNCTION_NAME;
 
 let SQL;
@@ -120,8 +124,17 @@ function pragma(str) {
 function saveDBFile() {
   try {
     const data = rawDb.export();
-    fs.writeFileSync(DB_PATH, Buffer.from(data));
-  } catch {}
+    // Write to a sibling temp file and rename into place. The whole database
+    // is rewritten on every statement, so a crash mid-write would otherwise
+    // leave a truncated file and there is no journal left to recover from.
+    const tmp = `${DB_PATH}.tmp`;
+    fs.writeFileSync(tmp, Buffer.from(data));
+    fs.renameSync(tmp, DB_PATH);
+  } catch (err) {
+    // Never swallow this: the failure is invisible until the next restart,
+    // when every write since the last successful save reappears as missing data.
+    logger.error('Failed to persist database to %s: %s', DB_PATH, err?.message || err);
+  }
 }
 
 function transaction(callback) {
@@ -718,6 +731,26 @@ function applySchema() {
     CREATE INDEX IF NOT EXISTS idx_calls_conversation ON call_logs(conversation_id);
   `);
 
+  // Lookup paths that previously had no index and scanned the whole table.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_conversations_buyer ON conversations(buyer_id);
+    CREATE INDEX IF NOT EXISTS idx_conversations_seller ON conversations(seller_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_buyer ON transactions(buyer_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_seller ON transactions(seller_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
+    CREATE INDEX IF NOT EXISTS idx_reviews_reviewee ON reviews(reviewee_id);
+    CREATE INDEX IF NOT EXISTS idx_reviews_reviewer ON reviews(reviewer_id);
+    CREATE INDEX IF NOT EXISTS idx_reports_item ON reports(item_id);
+    CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
+    CREATE INDEX IF NOT EXISTS idx_favorites_item ON favorites(item_id);
+    CREATE INDEX IF NOT EXISTS idx_disputes_transaction ON disputes(transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_admin ON audit_logs(admin_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
+  `);
+
   migrate();
 }
 
@@ -855,17 +888,30 @@ function seedPlatformSettings() {
   }
 }
 
+// These used to run before rawDb was assigned, so rawDb.run threw a TypeError
+// that the helper below swallowed and neither pragma ever applied. WAL is
+// meaningless for sql.js (the database is an in-memory buffer that is exported
+// wholesale), so only foreign_keys is kept -- note the schema currently
+// declares no REFERENCES clauses, so this is forward-looking rather than
+// fixing existing integrity.
+function applyConnectionPragmas() {
+  try {
+    rawDb.run('PRAGMA foreign_keys = ON');
+  } catch (err) {
+    logger.warn('Could not enable foreign_keys pragma: %s', err?.message || err);
+  }
+}
+
 export function ensureLoaded() {
   if (initialized) return Promise.resolve();
   if (initPromise) return initPromise;
 
   initPromise = (async () => {
     SQL = await getSql();
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
 
     if (!USE_BLOB) {
       rawDb = fs.existsSync(DB_PATH) ? new SQL.Database(fs.readFileSync(DB_PATH)) : new SQL.Database();
+      applyConnectionPragmas();
       applySchema();
       initialized = true;
       return;
@@ -891,6 +937,7 @@ export function ensureLoaded() {
 
     if (!rawDb) rawDb = new SQL.Database();
 
+    applyConnectionPragmas();
     applySchema();
     initialized = true;
 

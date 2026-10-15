@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './loadEnv.js';
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
@@ -10,17 +10,18 @@ import { v4 as uuidv4 } from 'uuid';
 import app from './app.js';
 import db, { flushDB } from './db.js';
 import logger from './src/logger.js';
-import { requiredEnv, allowedOrigins } from './src/env.js';
+import { requiredSecret, allowedOrigins } from './src/env.js';
 import { startScheduler } from './src/scheduler.js';
 import { integrationStatus } from './src/features.js';
 import { ensureLoaded } from './db.js';
+import { ensureAdminRow } from './routes/admin.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const server = createServer(app);
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, 'uploads');
-const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
+const JWT_SECRET = requiredSecret('JWT_SECRET');
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins(),
@@ -460,6 +461,15 @@ startScheduler();
 const PORT = process.env.PORT || 3001;
 
 ensureLoaded().then(() => {
+  // Seed the admin account before accepting traffic. Without this, routes
+  // guarded by authenticateToken (e.g. GET /api/disputes) return 401
+  // "User not found" for a valid admin token and the client signs the
+  // admin out.
+  try {
+    ensureAdminRow();
+  } catch (err) {
+    logger.error('Failed to seed admin account:', err);
+  }
   server.listen(PORT, () => {
     logger.info(`TradeHub API running on http://localhost:${PORT}`);
     logger.info(`WebSocket ready on port ${PORT}`);
@@ -472,6 +482,11 @@ ensureLoaded().then(() => {
       logger.warn(`Integrations not configured: ${inactive.join(', ')}`);
     }
   });
+}).catch((err) => {
+  // Without this the rejection is unhandled and the process stays up having
+  // never bound the port, so the failure surfaces only as a hung deploy.
+  logger.error('Failed to initialize database; refusing to start:', err);
+  process.exit(1);
 });
 
 let shuttingDown = false;

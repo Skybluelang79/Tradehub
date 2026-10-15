@@ -46,6 +46,14 @@ logger = logging.getLogger("tradehub")
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Seed the admin account before serving traffic. Routes guarded by
+    # require_user (e.g. GET /api/disputes) return 401 "User not found" for a
+    # valid admin token when the users row is missing, which signs the admin
+    # out of the panel.
+    try:
+        admin.ensure_admin_row()
+    except Exception:
+        logger.exception("Failed to seed admin account")
     if not config.IS_PRODUCTION or config.RUN_SCHEDULER:
         scheduler.start_scheduler()
     yield

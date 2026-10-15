@@ -40,8 +40,20 @@ export const AdminProvider = ({ children }) => {
       }
       throw new Error('No token returned');
     } catch (err) {
-      const isNetworkError = err instanceof TypeError || err?.message?.toLowerCase().includes('fetch') || err?.message?.toLowerCase().includes('failed to fetch');
-      setAdminLoginError(isNetworkError ? 'Cannot reach the server. Make sure the backend is running.' : 'Invalid admin credentials');
+      const message = err?.message || '';
+      const lower = message.toLowerCase();
+      const isNetworkError = err instanceof TypeError || lower.includes('fetch') || lower.includes('failed to fetch');
+      // The login route is rate limited (15 attempts / 15 min). Reporting that
+      // as "Invalid admin credentials" makes a locked-out admin keep retyping
+      // a password that was correct all along.
+      const isRateLimited = /too many|try again|rate limit|429/.test(lower);
+      setAdminLoginError(
+        isNetworkError
+          ? 'Cannot reach the server. Make sure the backend is running.'
+          : isRateLimited
+            ? message
+            : 'Invalid admin credentials'
+      );
       return false;
     }
   }, []);

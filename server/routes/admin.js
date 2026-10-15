@@ -9,7 +9,7 @@ import { adminLimiter } from '../src/rateLimiter.js';
 import { sendNotificationEmail } from '../src/email.js';
 import { refundTxn } from './payments.js';
 import { adminAuth } from '../middleware/adminAuth.js';
-import { requiredEnv } from '../src/env.js';
+import { requiredSecret, requiredEnv } from '../src/env.js';
 import logger from '../src/logger.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -18,8 +18,11 @@ const ADMIN_EMAIL = 'admin@tradehub.com';
 // Admin password falls back to the default with a warning rather than throwing:
 // admin login must never be the reason the whole server fails to boot. The
 // warning below tells operators to set it in production.
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
+// Admin password must come from the environment. requiredEnv throws in
+// production when it is missing, so a deployment can never silently fall back
+// to the well-known "admin123" default and let anyone into the panel.
+const ADMIN_PASSWORD = requiredEnv('ADMIN_PASSWORD', 'admin123');
+const JWT_SECRET = requiredSecret('JWT_SECRET');
 const USER_STATUSES = ['active', 'suspended', 'banned'];
 const TX_STATUSES = ['pending', 'completed', 'refunded', 'awaiting_payment', 'failed', 'cancelled'];
 
@@ -67,17 +70,18 @@ function sendCsv(res, filename, headers, rows) {
   res.send('\uFEFF' + lines.join('\r\n'));
 }
 
-function ensureAdminRow() {
-  const ADMIN_ID = 'admin-1';
-  let admin = db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL);
-  if (admin) {
-    db.prepare('UPDATE users SET is_admin = 1, status = CASE WHEN status IS NULL OR status = "" THEN "active" ELSE status END WHERE id = ?').run(admin.id);
-    return admin.id;
+export function ensureAdminRow() {
+  const byEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL);
+  if (byEmail) {
+    db.prepare('UPDATE users SET is_admin = 1, status = CASE WHEN status IS NULL OR status = "" THEN "active" ELSE status END WHERE id = ?').run(byEmail.id);
+    return byEmail.id;
   }
+  // `admin-1` may already be taken by an unrelated account; never promote it.
+  const adminId = db.prepare('SELECT id FROM users WHERE id = ?').get('admin-1') ? uuidv4() : 'admin-1';
   const hashed = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-  db.prepare("INSERT OR IGNORE INTO users (id, name, email, password, avatar, verified, is_admin) VALUES (?, 'Admin', ?, ?, 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 1, 1)").run(ADMIN_ID, ADMIN_EMAIL, hashed);
-  db.prepare('UPDATE users SET is_admin = 1 WHERE id = ?').run(ADMIN_ID);
-  return ADMIN_ID;
+  db.prepare("INSERT OR IGNORE INTO users (id, name, email, password, avatar, verified, is_admin) VALUES (?, 'Admin', ?, ?, 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin', 1, 1)").run(adminId, ADMIN_EMAIL, hashed);
+  const created = db.prepare('SELECT id FROM users WHERE email = ?').get(ADMIN_EMAIL);
+  return created ? created.id : adminId;
 }
 
 router.post('/login', adminLimiter, (req, res) => {

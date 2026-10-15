@@ -16,6 +16,10 @@ PROFILE_SELECT = "id, name, username, email, avatar, bio, phone, verified, ratin
 
 def _provider_profile(provider: str, token: str) -> dict:
     if provider == "google":
+        client_id = os.environ.get("GOOGLE_CLIENT_ID", "")
+        if not client_id:
+            raise HTTPException(status_code=503, detail={"error": "Google login is not configured"})
+
         try:
             r = httpx.get(
                 "https://oauth2.googleapis.com/tokeninfo",
@@ -27,6 +31,14 @@ def _provider_profile(provider: str, token: str) -> dict:
         if r.status_code != 200:
             raise HTTPException(status_code=401, detail={"error": "Invalid Google token"})
         data = r.json()
+        # tokeninfo verifies the signature and expiry but does NOT check that the
+        # token was minted for this application, so without this an ID token
+        # issued to any other Google client would be accepted.
+        if data.get("aud") != client_id:
+            raise HTTPException(
+                status_code=401,
+                detail={"error": "Google token was issued for a different application"},
+            )
         email = (data.get("email") or "").lower()
         if not email:
             raise HTTPException(status_code=401, detail={"error": "Google account has no email"})

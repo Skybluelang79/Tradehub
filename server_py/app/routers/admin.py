@@ -78,7 +78,7 @@ def _send_csv(filename, headers, rows):
     )
 
 
-def _ensure_admin_row():
+def ensure_admin_row():
     admin = db.get("SELECT id FROM users WHERE email = ?", (ADMIN_EMAIL,))
     if admin:
         db.run(
@@ -120,8 +120,11 @@ def admin_login(body: dict = Body(...)):
     password = body.get("password")
     if email != ADMIN_EMAIL or password != config.ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail={"error": "Invalid admin credentials"})
-    admin_id = _ensure_admin_row()
-    token = generate_token(admin_id)
+    admin_id = ensure_admin_row()
+    # Carry the same `isAdmin` claim the Node backend signs, so an admin token
+    # issued here is still accepted if the frontend is later pointed at the
+    # Node server (its adminAuth gate checks decoded.isAdmin).
+    token = generate_token(admin_id, isAdmin=True)
     _log_audit(admin_id, "admin_login", "user", admin_id)
     return {"token": token}
 

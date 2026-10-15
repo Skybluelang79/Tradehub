@@ -7,7 +7,7 @@ import { generateToken, authenticateToken } from '../middleware/auth.js';
 import { generateRefreshToken } from './auth.js';
 import validate, { requestPhoneCodeSchema, verifyPhoneCodeSchema, phoneSignupSchema } from '../src/validation.js';
 import { otpLimiter } from '../src/rateLimiter.js';
-import { requiredEnv } from '../src/env.js';
+import { requiredSecret } from '../src/env.js';
 import { isSmsConfigured, normalizePhone, sendOtpSms } from '../src/sms.js';
 import { applyReferral } from './referrals.js';
 import logger from '../src/logger.js';
@@ -22,7 +22,7 @@ const router = Router();
 // the one JWTs are signed with. Set OTP_PEPPER explicitly to rotate the
 // pepper independently.
 const CODE_PEPPER =
-  process.env.OTP_PEPPER || `${requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026')}:otp`;
+  process.env.OTP_PEPPER || `${requiredSecret('JWT_SECRET')}:otp`;
 const CODE_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
 const IS_PROD = process.env.NODE_ENV === 'production';

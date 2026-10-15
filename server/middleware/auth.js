@@ -1,9 +1,9 @@
 import jwt from 'jsonwebtoken';
 import db from '../db.js';
-import { requiredEnv } from '../src/env.js';
+import { requiredSecret } from '../src/env.js';
 import { verifyFirebaseToken } from '../src/firebase.js';
 
-const JWT_SECRET = requiredEnv('JWT_SECRET', 'tradehub-secret-key-change-in-production-2026');
+const JWT_SECRET = requiredSecret('JWT_SECRET');
 
 export function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];

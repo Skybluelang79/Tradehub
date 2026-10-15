@@ -1,4 +1,6 @@
 import os
+import secrets
+import warnings
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -17,8 +19,31 @@ def _env(name, default=""):
     return default
 
 
-JWT_SECRET = _env("JWT_SECRET", "tradehub-secret-key-change-in-production-2026")
-REFRESH_SECRET = _env("REFRESH_SECRET", "tradehub-refresh-secret-change-in-production-2026")
+def _secret(name):
+    """Resolve a secret without ever falling back to a checked-in literal.
+
+    A published default secret is a public key: anyone who reaches a
+    deployment that forgot to set NODE_ENV (or the variable itself) could
+    forge tokens. A random development value stays convenient locally while
+    being useless to an attacker.
+    """
+    value = os.environ.get(name)
+    if value:
+        return value
+    if os.environ.get("NODE_ENV") == "production":
+        raise RuntimeError(
+            f"Missing required secret {name}. Set it in the host environment."
+        )
+    warnings.warn(
+        f"{name} is not set; using a random development-only value. "
+        "Tokens will not survive a server restart.",
+        stacklevel=2,
+    )
+    return secrets.token_hex(32)
+
+
+JWT_SECRET = _secret("JWT_SECRET")
+REFRESH_SECRET = _secret("REFRESH_SECRET")
 DB_PATH = _env("DB_PATH", str(BASE_DIR.parent / "server" / "tradehub.db"))
 UPLOADS_DIR = os.environ.get("UPLOADS_DIR", str(BASE_DIR.parent / "uploads"))
 
@@ -43,7 +68,9 @@ PAYSTACK_BANK_COUNTRY = os.environ.get("PAYSTACK_BANK_COUNTRY", "nigeria")
 DEMO_MODE = os.environ.get("DEMO_MODE", "false").lower() == "true"
 
 APP_URL = os.environ.get("APP_URL", "http://localhost:5173")
-ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin123")
+# _env raises in production when unset, so the deployment can never fall back
+# to the well-known "admin123" default and open the admin panel to anyone.
+ADMIN_PASSWORD = _env("ADMIN_PASSWORD", "admin123")
 
 OTP_PEPPER = os.environ.get("OTP_PEPPER", "")
 SMS_API_KEY = os.environ.get("SMS_API_KEY", "")

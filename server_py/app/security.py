@@ -33,8 +33,9 @@ def verify_password(password, hashed):
         return False
 
 
-def generate_token(user_id):
+def generate_token(user_id, **extra):
     payload = {"userId": user_id, "exp": int(time.time()) + ACCESS_TOKEN_TTL_SECONDS}
+    payload.update(extra)
     return jwt.encode(payload, config.JWT_SECRET, algorithm="HS256")
 
 

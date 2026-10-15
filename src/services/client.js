@@ -38,7 +38,11 @@ async function request(path, options = {}) {
   }
 
   if (!res.ok) {
-    if (options.asAdmin && (res.status === 401 || res.status === 403)) {
+    // Only 401 means "this credential is no longer usable". 403 means the
+    // request was refused (demoted, restricted, wrong role) -- that is a
+    // per-request error, not a dead session, and clearing the token here is
+    // what used to sign the admin out of the whole panel.
+    if (options.asAdmin && res.status === 401) {
       localStorage.removeItem('tradehub_admin_token');
       window.dispatchEvent(new CustomEvent('adminSessionExpired'));
     }
