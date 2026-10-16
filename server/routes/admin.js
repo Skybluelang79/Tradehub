@@ -386,12 +386,25 @@ router.delete('/users/:id', adminAuth, (req, res) => {
     db.prepare('DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?').run(uid, uid);
     db.prepare('DELETE FROM item_images WHERE item_id IN (SELECT id FROM items WHERE seller_id = ?)').run(uid);
     db.prepare('DELETE FROM items WHERE seller_id = ?').run(uid);
-    db.prepare('DELETE FROM conversations WHERE buyer_id = ? OR seller_id = ?').run(uid, uid);
+    // Children before parents: messages/attachments/settings/calls must go
+    // before the conversations they reference, or the subquery below matches
+    // nothing and every message the user ever sent is orphaned.
+    db.prepare('DELETE FROM message_attachments WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(uid, uid);
     db.prepare('DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(uid, uid);
+    db.prepare('DELETE FROM conversation_settings WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(uid, uid);
+    db.prepare('DELETE FROM call_logs WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(uid, uid);
+    db.prepare('DELETE FROM conversations WHERE buyer_id = ? OR seller_id = ?').run(uid, uid);
     db.prepare('DELETE FROM reviews WHERE reviewer_id = ? OR reviewee_id = ?').run(uid, uid);
     db.prepare('DELETE FROM payment_methods WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM templates WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM carts WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM offers WHERE buyer_id = ? OR seller_id = ?').run(uid, uid);
+    db.prepare('DELETE FROM bids WHERE bidder_id = ?').run(uid);
+    db.prepare('DELETE FROM verification_requests WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM webauthn_credentials WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM support_tickets WHERE user_id = ?').run(uid);
+    db.prepare('DELETE FROM referrals WHERE referrer_id = ? OR referred_id = ?').run(uid, uid);
     db.prepare('DELETE FROM user_reports WHERE reported_user_id = ? OR reporter_id = ?').run(uid, uid);
     db.prepare('DELETE FROM reports WHERE reporter_id = ?').run(uid);
     db.prepare('DELETE FROM disputes WHERE opened_by = ? OR transaction_id IN (SELECT id FROM transactions WHERE buyer_id = ? OR seller_id = ?)').run(uid, uid, uid);

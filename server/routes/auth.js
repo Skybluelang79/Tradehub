@@ -450,22 +450,43 @@ router.delete('/me', authenticateToken, (req, res) => {
     if (!password) {
       return res.status(400).json({ error: 'Password required to delete account' });
     }
-    const user = db.prepare('SELECT password FROM users WHERE id = ?').get(req.user.id);
+    const user = db.prepare('SELECT password, email FROM users WHERE id = ?').get(req.user.id);
     if (!bcrypt.compareSync(password, user.password)) {
       return res.status(401).json({ error: 'Invalid password' });
     }
 
     db.prepare('DELETE FROM refresh_tokens WHERE user_id = ?').run(req.user.id);
     db.prepare('DELETE FROM notifications WHERE user_id = ?').run(req.user.id);
-    db.prepare('DELETE FROM favorites WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM favorites WHERE user_id = ? OR item_id IN (SELECT id FROM items WHERE seller_id = ?)').run(req.user.id, req.user.id);
+    db.prepare('DELETE FROM follows WHERE follower_id = ? OR following_id = ?').run(req.user.id, req.user.id);
+    db.prepare('DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?').run(req.user.id, req.user.id);
     db.prepare('DELETE FROM item_images WHERE item_id IN (SELECT id FROM items WHERE seller_id = ?)').run(req.user.id);
     db.prepare('DELETE FROM items WHERE seller_id = ?').run(req.user.id);
+    // Children before parents: messages must go before the conversations they
+    // reference, or deleting the conversations orphans every message.
+    db.prepare('DELETE FROM message_attachments WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(req.user.id, req.user.id);
+    db.prepare('DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(req.user.id, req.user.id);
+    db.prepare('DELETE FROM conversation_settings WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(req.user.id, req.user.id);
+    db.prepare('DELETE FROM call_logs WHERE conversation_id IN (SELECT id FROM conversations WHERE buyer_id = ? OR seller_id = ?)').run(req.user.id, req.user.id);
     db.prepare('DELETE FROM conversations WHERE buyer_id = ? OR seller_id = ?').run(req.user.id, req.user.id);
     db.prepare('DELETE FROM reviews WHERE reviewer_id = ? OR reviewee_id = ?').run(req.user.id, req.user.id);
-    db.prepare('DELETE FROM blocked_users WHERE blocker_id = ? OR blocked_id = ?').run(req.user.id, req.user.id);
     db.prepare('DELETE FROM payment_methods WHERE user_id = ?').run(req.user.id);
     db.prepare('DELETE FROM templates WHERE user_id = ?').run(req.user.id);
     db.prepare('DELETE FROM user_settings WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM offers WHERE buyer_id = ? OR seller_id = ?').run(req.user.id, req.user.id);
+    db.prepare('DELETE FROM bids WHERE bidder_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM saved_searches WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM verification_requests WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM webauthn_credentials WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM support_tickets WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM referrals WHERE referrer_id = ? OR referred_id = ?').run(req.user.id, req.user.id);
+    db.prepare('DELETE FROM subscriptions WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM wallets WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM payouts WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM gift_card_designs WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM email_verifications WHERE user_id = ?').run(req.user.id);
+    db.prepare('DELETE FROM password_resets WHERE email = ?').run(user.email);
     db.prepare('DELETE FROM users WHERE id = ?').run(req.user.id);
 
     res.json({ success: true, message: 'Account permanently deleted' });

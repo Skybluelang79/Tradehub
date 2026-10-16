@@ -24,6 +24,7 @@ async function bootsWith(env) {
         NODE_ENV: 'production',
         JWT_SECRET: 'a-real-jwt-secret',
         REFRESH_SECRET: 'a-real-refresh-secret',
+        ADMIN_PASSWORD: 'a-real-admin-password',
         DB_PATH: join(__dirname, 'boot-test.db'),
         ...env,
       },
