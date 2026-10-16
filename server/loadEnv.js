@@ -2,7 +2,15 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import dotenv from 'dotenv';
 
-const here = dirname(fileURLToPath(import.meta.url));
+// import.meta.url is unavailable when esbuild bundles this file to CommonJS
+// (Netlify/Vercel serverless functions), where fileURLToPath(undefined)
+// throws at module load and takes the whole function down with a 502.
+let here;
+try {
+  here = dirname(fileURLToPath(import.meta.url));
+} catch {
+  here = process.cwd();
+}
 
 // Resolve .env relative to this file, never process.cwd().
 //
