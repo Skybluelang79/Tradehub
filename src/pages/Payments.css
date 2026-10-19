@@ -808,6 +808,122 @@
   text-align: center;
 }
 
+.bank-select {
+  position: relative;
+}
+
+.bank-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.bank-select-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.bank-select-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bank-select-value > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bank-select-caret {
+  flex-shrink: 0;
+  opacity: 0.6;
+  font-size: 11px;
+}
+
+.bank-logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
+  object-fit: contain;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.bank-logo-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: var(--secondary);
+}
+
+.bank-select-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+}
+
+.bank-select-menu {
+  position: absolute;
+  z-index: 41;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+
+.bank-select-search {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+  width: 100%;
+}
+
+.bank-select-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.bank-select-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.bank-select-option:hover,
+.bank-select-option.active {
+  background: var(--secondary);
+}
+
+.bank-select-empty {
+  padding: 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
 @media (min-width: 860px) {
   .payments-layout {
     grid-template-columns: 3fr 2fr;

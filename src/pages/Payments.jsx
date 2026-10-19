@@ -5,6 +5,7 @@ import Modal from '../components/ui/Modal';
 import { GiftCardModal } from '../components/features';
 import { useToast } from '../components/ui/Toast';
 import { ShieldIcon, PlusIcon, CheckIcon, ClockIcon, GiftIcon, TrendingUpIcon } from '../components/ui/Icons';
+import { getBankLogo } from '../utils/bankLogos';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/client';
@@ -57,6 +58,8 @@ export default function Payments() {
   const [payoutBusy, setPayoutBusy] = useState(false);
   const [banks, setBanks] = useState([]);
   const [banksLoading, setBanksLoading] = useState(false);
+  const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
+  const [bankSearch, setBankSearch] = useState('');
 
   const [disputeTxn, setDisputeTxn] = useState(null);
   const [disputeReason, setDisputeReason] = useState('');
@@ -754,19 +757,67 @@ export default function Payments() {
                   'Bank'}
               </label>
               {f === 'bank' ? (
-                <select
-                  className="input"
-                  value={payoutFields[f] || ''}
-                  onChange={(e) => setPayoutFields({ ...payoutFields, [f]: e.target.value })}
-                  disabled={banksLoading}
-                >
-                  <option value="">{banksLoading ? 'Loading banks...' : 'Select your bank'}</option>
-                  {banks.map((b) => (
-                    <option key={b.code || b.id || b.name} value={b.code || b.name}>
-                      {b.name}{b._country ? ` (${b._country})` : ''}
-                    </option>
-                  ))}
-                </select>
+                <div className="bank-select">
+                  <button
+                    type="button"
+                    className="input bank-select-trigger"
+                    onClick={() => setBankDropdownOpen((v) => !v)}
+                    disabled={banksLoading}
+                  >
+                    {(() => {
+                      const selected = banks.find((b) => (b.code || b.name) === payoutFields[f]);
+                      const logo = selected && getBankLogo(selected);
+                      return (
+                        <span className="bank-select-value">
+                          {logo && <img className="bank-logo" src={logo} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />}
+                          <span>{selected ? `${selected.name}${selected._country ? ` (${selected._country})` : ''}` : (banksLoading ? 'Loading banks...' : 'Select your bank')}</span>
+                        </span>
+                      );
+                    })()}
+                    <span className="bank-select-caret">▾</span>
+                  </button>
+                  {bankDropdownOpen && (
+                    <>
+                      <div className="bank-select-backdrop" onClick={() => setBankDropdownOpen(false)} />
+                      <div className="bank-select-menu">
+                        <input
+                          type="text"
+                          className="input bank-select-search"
+                          placeholder="Search banks…"
+                          value={bankSearch}
+                          onChange={(e) => setBankSearch(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="bank-select-list">
+                          {banks
+                            .filter((b) => !bankSearch || b.name?.toLowerCase().includes(bankSearch.toLowerCase()))
+                            .map((b) => {
+                              const logo = getBankLogo(b);
+                              const value = b.code || b.name;
+                              return (
+                                <button
+                                  type="button"
+                                  key={value}
+                                  className={`bank-select-option ${payoutFields[f] === value ? 'active' : ''}`}
+                                  onClick={() => {
+                                    setPayoutFields({ ...payoutFields, [f]: value });
+                                    setBankDropdownOpen(false);
+                                    setBankSearch('');
+                                  }}
+                                >
+                                  {logo
+                                    ? <img className="bank-logo" src={logo} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
+                                    : <span className="bank-logo bank-logo-fallback">{(b.name || '?').charAt(0).toUpperCase()}</span>}
+                                  <span>{b.name}{b._country ? ` (${b._country})` : ''}</span>
+                                </button>
+                              );
+                            })}
+                          {!banks.length && <p className="bank-select-empty">{banksLoading ? 'Loading banks...' : 'No banks found'}</p>}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
               ) : (
                 <input
                   type="text"
