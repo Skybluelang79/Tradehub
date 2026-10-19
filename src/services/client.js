@@ -226,6 +226,7 @@ export const api = {
   payouts: {
     balance: () => request('/payouts/balance'),
     list: () => request('/payouts'),
+    banks: (country = 'africa') => request(`/payouts/banks${country ? `?country=${encodeURIComponent(country)}` : ''}`),
     request: (data) => request('/payouts', { method: 'POST', body: JSON.stringify(data) }),
     cancel: (id) => request(`/payouts/${id}/cancel`, { method: 'POST' }),
     all: () => adminRequest('/payouts/all'),

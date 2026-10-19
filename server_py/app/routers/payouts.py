@@ -38,10 +38,10 @@ def _get_wallet(user_id):
 
 
 @router.get("/banks")
-def list_banks(user: dict = Depends(require_user)):
+def list_banks(user: dict = Depends(require_user), country: str = None):
     try:
-        banks = paystack.list_banks()
-        return {"banks": banks or [], "country": config.PAYSTACK_BANK_COUNTRY or "nigeria"}
+        banks = paystack.list_banks(country)
+        return {"banks": banks or [], "country": country or config.PAYSTACK_BANK_COUNTRY or "nigeria"}
     except PaystackError as err:
         raise HTTPException(status_code=err.status or 500, detail={"error": str(err)})
 

@@ -181,8 +181,9 @@ export const paystack = {
   },
 
   // GET /bank - bank list for transfer recipients
-  async listBanks() {
-    return this.request('GET', `/bank?country=${process.env.PAYSTACK_BANK_COUNTRY || 'nigeria'}`);
+  async listBanks(country) {
+    const c = country || process.env.PAYSTACK_BANK_COUNTRY || 'nigeria';
+    return this.request('GET', `/bank?country=${encodeURIComponent(c)}`);
   },
 
   // POST /transferrecipient - creates a payee for transfers

@@ -4,6 +4,7 @@ import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import logger from '../src/logger.js';
+import { paystack, isPaystackConfigured } from '../src/paystack.js';
 
 const router = Router();
 
@@ -40,6 +41,48 @@ router.get('/', authenticateToken, (req, res) => {
   } catch (err) {
     logger.error('Get payouts error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/banks', authenticateToken, async (req, res) => {
+  try {
+    if (!isPaystackConfigured()) {
+      return res.status(503).json({ error: 'Payments are not configured' });
+    }
+    const country = req.query.country || process.env.PAYSTACK_BANK_COUNTRY || 'nigeria';
+    let banks = [];
+    const c = String(country).toLowerCase();
+    if (c === 'africa' || c === 'all' || c === 'all_africa') {
+      const countries = ['nigeria', 'ghana', 'kenya', 'south africa', 'tanzania', 'uganda', 'zambia', 'ivory coast', 'benin', 'senegal', 'mali', 'cameroon'];
+      for (const cc of countries) {
+        try {
+          const b = await paystack.listBanks(cc);
+          if (Array.isArray(b)) {
+            banks = banks.concat(b.map((x) => ({ ...x, _country: cc })));
+          }
+        } catch (e) {
+          logger.warn(`Failed to fetch banks for ${cc}: ${e.message}`);
+        }
+      }
+    } else if (c.includes(',')) {
+      const countries = c.split(',').map((x) => x.trim());
+      for (const cc of countries) {
+        try {
+          const b = await paystack.listBanks(cc);
+          if (Array.isArray(b)) {
+            banks = banks.concat(b.map((x) => ({ ...x, _country: cc })));
+          }
+        } catch (e) {
+          logger.warn(`Failed to fetch banks for ${cc}: ${e.message}`);
+        }
+      }
+    } else {
+      banks = await paystack.listBanks(country);
+    }
+    res.json({ banks: banks || [], country });
+  } catch (err) {
+    logger.error('Get banks error:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
   }
 });
 

@@ -188,8 +188,36 @@ class Paystack:
             pass
         return self.request("POST", "/customer", {"email": email, "metadata": metadata or {}})
 
-    def list_banks(self):
-        return self.request("GET", "/bank?country=nigeria")
+    def list_banks(self, country=None):
+        country = country or config.PAYSTACK_BANK_COUNTRY or "nigeria"
+        # Support fetching multiple countries if comma-separated or 'all'
+        if isinstance(country, str) and country.lower() in ("africa", "all", "all_africa"):
+            countries = ["nigeria", "ghana", "kenya", "south africa", "tanzania", "uganda", "zambia", "ivory coast", "benin", "senegal", "mali", "cameroon"]
+            results = []
+            for c in countries:
+                try:
+                    banks = self.request("GET", f"/bank?country={c}")
+                    if banks:
+                        for b in banks:
+                            b["_country"] = c
+                        results.extend(banks)
+                except Exception as e:
+                    logger.warning("Failed to fetch banks for %s: %s", c, e)
+            return results
+        if isinstance(country, str) and "," in country:
+            results = []
+            for c in country.split(","):
+                c = c.strip()
+                try:
+                    banks = self.request("GET", f"/bank?country={c}")
+                    if banks:
+                        for b in banks:
+                            b["_country"] = c
+                        results.extend(banks)
+                except Exception as e:
+                    logger.warning("Failed to fetch banks for %s: %s", c, e)
+            return results
+        return self.request("GET", f"/bank?country={country}")
 
     def create_transfer_recipient(self, type_, name, account_number, bank_code, currency=None):
         return self.request("POST", "/transferrecipient", {

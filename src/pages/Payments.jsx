@@ -21,7 +21,7 @@ const STATUS_LABELS = {
 };
 
 const PAYOUT_METHODS = [
-  { id: 'bank', name: 'Bank Transfer', fields: ['accountName', 'accountNumber', 'routing'] },
+  { id: 'bank', name: 'Bank Transfer', fields: ['bank', 'accountName', 'accountNumber'] },
 ];
 
 function formatCents(cents) {
@@ -55,6 +55,8 @@ export default function Payments() {
   const [payoutMethod, setPayoutMethod] = useState('bank');
   const [payoutFields, setPayoutFields] = useState({});
   const [payoutBusy, setPayoutBusy] = useState(false);
+  const [banks, setBanks] = useState([]);
+  const [banksLoading, setBanksLoading] = useState(false);
 
   const [disputeTxn, setDisputeTxn] = useState(null);
   const [disputeReason, setDisputeReason] = useState('');
@@ -86,6 +88,19 @@ export default function Payments() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (showPayoutModal) {
+      setBanksLoading(true);
+      api.payouts.banks('africa')
+        .then((res) => setBanks(res.banks || []))
+        .catch((err) => {
+          console.error('Failed to load banks:', err);
+          addToast('Could not load banks', 'error');
+        })
+        .finally(() => setBanksLoading(false));
+    }
+  }, [showPayoutModal, addToast]);
 
   const activeMethods = backendMethods ?? paymentMethods;
   const activeTransactions = backendTransactions ?? transactions;
@@ -252,7 +267,20 @@ export default function Payments() {
       return;
     }
     const method = PAYOUT_METHODS.find((m) => m.id === payoutMethod);
-    const missing = method.fields.some((f) => !payoutFields[f]?.trim());
+    const details = { ...payoutFields };
+    // Handle bank selection
+    if (payoutMethod === 'bank' && details.bank) {
+      const selectedBank = banks.find(b => b.code === details.bank || b.name === details.bank);
+      if (selectedBank) {
+        details.bankCode = selectedBank.code;
+        details.bankName = selectedBank.name;
+        details.bank = selectedBank.name;
+      }
+    }
+    const missing = method.fields.some((f) => {
+      if (f === 'bank') return !details.bank && !details.bankCode;
+      return !details[f]?.trim();
+    });
     if (missing) {
       addToast('Please fill in all payout details', 'error');
       return;
@@ -263,7 +291,7 @@ export default function Payments() {
     }
     setPayoutBusy(true);
     try {
-      await api.payouts.request({ amountCents, method: payoutMethod, details: payoutFields });
+      await api.payouts.request({ amountCents, method: payoutMethod, details: details });
       addToast('Payout requested!', 'success');
       setShowPayoutModal(false);
       setPayoutAmount('');
@@ -722,14 +750,31 @@ export default function Payments() {
               <label className="input-label">
                 {f === 'accountName' ? 'Account Name' :
                   f === 'accountNumber' ? 'Account Number' :
-                  'Routing Number'}
+                  f === 'bank' ? 'Bank' :
+                  'Bank'}
               </label>
-              <input
-                type="text"
-                className="input"
-                value={payoutFields[f] || ''}
-                onChange={(e) => setPayoutFields({ ...payoutFields, [f]: e.target.value })}
-              />
+              {f === 'bank' ? (
+                <select
+                  className="input"
+                  value={payoutFields[f] || ''}
+                  onChange={(e) => setPayoutFields({ ...payoutFields, [f]: e.target.value })}
+                  disabled={banksLoading}
+                >
+                  <option value="">{banksLoading ? 'Loading banks...' : 'Select your bank'}</option>
+                  {banks.map((b) => (
+                    <option key={b.code || b.id || b.name} value={b.code || b.name}>
+                      {b.name}{b._country ? ` (${b._country})` : ''}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="input"
+                  value={payoutFields[f] || ''}
+                  onChange={(e) => setPayoutFields({ ...payoutFields, [f]: e.target.value })}
+                />
+              )}
             </div>
           ))}
         </div>
