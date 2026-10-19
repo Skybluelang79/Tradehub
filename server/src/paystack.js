@@ -79,10 +79,11 @@ export const paystack = {
       return res.data.data;
     } catch (err) {
       if (err.status) throw err;
-      const msg = err.response?.data?.message || err.message || 'Paystack request failed';
-      logger.error(`Paystack ${method} ${path} failed:`, msg);
+      const msg = err.response?.data?.message || (typeof err.response?.data === 'string' ? err.response.data : null) || err.message || 'Paystack request failed';
+      logger.error(`Paystack ${method} ${path} failed:`, msg, err.response?.data || '');
       const wrapped = new Error(msg);
       wrapped.status = err.response?.status || 502;
+      wrapped.paystack = err.response?.data;
       throw wrapped;
     }
   },

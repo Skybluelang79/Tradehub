@@ -269,12 +269,12 @@ router.post('/methods', authenticateToken, (req, res) => {
   }
 });
 
-// Begin saving a card the "Paystack way": a tiny restricted charge (the lowest
-// amount Paystack accepts) is created so the buyer enters the real card inside
+// Begin saving a card the "Paystack way": a tiny restricted charge (Paystack's
+// NGN minimum, ₦50) is created so the buyer enters the real card inside
 // Paystack's secure popup. The successful payment returns a reusable
 // authorization_code that is stored on the method, and the nominal charge is
 // refunded so adding a card is free.
-const CARD_SAVE_AMOUNT_MINOR = 100;
+const CARD_SAVE_AMOUNT_MINOR = 5000;
 
 router.post('/methods/tokenize', authenticateToken, async (req, res) => {
   try {

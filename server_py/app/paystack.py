@@ -51,9 +51,10 @@ def to_major_units(minor, currency=DEFAULT_CURRENCY):
 
 
 class PaystackError(Exception):
-    def __init__(self, message, status=None):
+    def __init__(self, message, status=None, paystack=None):
         super().__init__(message)
         self.status = status or 502
+        self.paystack = paystack
 
 
 _client = None
@@ -85,16 +86,19 @@ class Paystack:
             )
             data = res.json()
             if isinstance(data, dict) and data.get("status") is False:
-                raise PaystackError(data.get("message") or "Paystack request failed", 400)
+                raise PaystackError(data.get("message") or "Paystack request failed", 400, paystack=data)
             return (data or {}).get("data")
         except PaystackError:
             raise
         except Exception as err:
-            msg = getattr(err, "message", None) or str(err) or "Paystack request failed"
-            logger.error("Paystack %s %s failed: %s", method, path, msg)
-            status = getattr(err, "response", None)
-            code = getattr(status, "status_code", None) if status is not None else None
-            raise PaystackError(msg, code or 502)
+            payload = getattr(err, "response", None)
+            body = getattr(payload, "json", lambda: None)() if payload is not None else None
+            if not isinstance(body, dict):
+                body = str(getattr(payload, "text", "") or "") or None
+            msg = (body.get("message") if isinstance(body, dict) else None) or str(err) or "Paystack request failed"
+            logger.error("Paystack %s %s failed: %s %s", method, path, msg, body or "")
+            code = getattr(payload, "status_code", None) if payload is not None else None
+            raise PaystackError(msg, code or 502, paystack=body)
 
     def initialize_transaction(
         self,

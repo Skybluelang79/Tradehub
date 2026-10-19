@@ -29,7 +29,9 @@ ALLOW_DEMO_PAYMENTS = config.DEMO_MODE or not config.IS_PRODUCTION
 
 PLAN_FEES = {"free": 0.04, "premium": 0.04, "pro": 0.04}
 
-CARD_SAVE_AMOUNT_MINOR = 100
+# Paystack's NGN minimum for card charges is ₦50 (5000 kobo); a ₦1 charge is
+# rejected with a 400. The nominal amount is refunded after the card is saved.
+CARD_SAVE_AMOUNT_MINOR = 5000
 
 
 # ---- Public helpers (shared with scheduler/admin in the Node service) ---------
@@ -473,7 +475,15 @@ def tokenize_card(user: dict = Depends(require_user)):
             "email": usr["email"],
         }
     except PaystackError as err:
-        raise HTTPException(status_code=err.status or 500, detail={"error": str(err)})
+        logger.error("Tokenize card error: %s %s", err, err.paystack or "")
+        paystack_msg = (err.paystack or {}).get("message") if isinstance(err.paystack, dict) else None
+        if err.status == 503:
+            raise HTTPException(status_code=503, detail={"error": str(err)})
+        if paystack_msg:
+            raise HTTPException(status_code=err.status or 500, detail={"error": paystack_msg})
+        if err.status == 400:
+            raise HTTPException(status_code=400, detail={"error": "Paystack rejected the card-save request. Check server logs."})
+        raise HTTPException(status_code=err.status or 500, detail={"error": str(err) or "Could not start card verification"})
 
 
 @router.post("/methods/tokenize/{reference}")

@@ -636,6 +636,15 @@
   cursor: not-allowed;
 }
 
+/* Keep the Total Balance card dark and bold in light mode — the theme's
+   --primary/--secondary flip to near-white, which would wash out the card
+   and make its white text invisible. */
+[data-theme="light"] .pay-hero {
+  background: linear-gradient(135deg, #131521, #1A1D2C);
+  color: #fff;
+  box-shadow: 0 10px 30px rgba(19, 21, 33, 0.35);
+}
+
 .pay-trust-note {
   display: flex;
   align-items: center;
