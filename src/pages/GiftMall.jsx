@@ -95,6 +95,15 @@ export default function GiftMall({ onClose }) {
 
   const activeUploadBtn = isAuthenticated ? 'Submit Design' : 'Sign in to Submit';
 
+  const sellableBrand = brands.find((b) => b.sellable);
+  const handleBuyGiftCard = () => {
+    if (!isAuthenticated) {
+      window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }));
+      return;
+    }
+    setShowGiftCardModal(true);
+  };
+
   return (
     <div className="gift-mall">
       <div className="gift-mall-topbar">
@@ -110,8 +119,10 @@ export default function GiftMall({ onClose }) {
           <span className="gift-mall-upload-icon"><GiftIconSvg size={20} /></span>
         </div>
         <p className="gift-mall-hint">
-          Browse sample gift card designs from each brand in our catalog, arranged in a handy modal.
+          Buy a TradeHub gift card and the full value lands in your store credit right away, or browse sample
+          designs from each brand in our catalog.
         </p>
+        <Button block onClick={handleBuyGiftCard}>Buy {sellableBrand ? sellableBrand.name : 'a Gift Card'}</Button>
         <Button block onClick={() => setShowGiftCardModal(true)}>Browse Gift Cards</Button>
       </div>
 

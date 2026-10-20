@@ -8,6 +8,20 @@ import { formatMoney } from '../../shared/currencies.js';
 
 const router = Router();
 
+// A boost is time-boxed by the server so a client cannot grant itself a
+// permanent (or arbitrarily long) top-of-search placement. Anything missing,
+// malformed or beyond the cap is clamped to MAX_BOOST_DAYS.
+const MAX_BOOST_DAYS = 30;
+function resolveBoost(boosted, boostExpiresAt) {
+  if (!boosted) return { boosted: 0, boostExpiresAt: null };
+  const now = Date.now();
+  const cap = now + MAX_BOOST_DAYS * 86400000;
+  let end = boostExpiresAt ? new Date(boostExpiresAt).getTime() : NaN;
+  if (!Number.isFinite(end) || end <= now) end = now + 7 * 86400000;
+  if (end > cap) end = cap;
+  return { boosted: 1, boostExpiresAt: new Date(end).toISOString() };
+}
+
 function calculateDistance(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -258,6 +272,7 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
 
     const id = uuidv4();
     const auction = is_auction === true;
+    const boost = resolveBoost(boosted, boost_expires_at);
 
     db.prepare(`
       INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, current_bid, current_bidder_id, status)
@@ -269,7 +284,7 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
       location?.lat || null, location?.lng || null,
       location?.address || '', quantity || 1,
       currency || 'NGN',
-      boosted ? 1 : 0, boost_expires_at || null,
+      boost.boosted, boost.boostExpiresAt,
       auction ? 1 : 0,
       auction ? (starting_bid ?? price) : null,
       auction ? (min_increment || 1) : null,
@@ -319,6 +334,14 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
 
     const data = req.validatedBody;
 
+    const boostTouched = data.boosted !== undefined || data.boost_expires_at !== undefined;
+    const boost = boostTouched
+      ? resolveBoost(
+        data.boosted !== undefined ? data.boosted : item.boosted,
+        data.boost_expires_at !== undefined ? data.boost_expires_at : item.boost_expires_at
+      )
+      : { boosted: item.boosted, boostExpiresAt: item.boost_expires_at };
+
     db.prepare(`
       UPDATE items SET title = ?, description = ?, price = ?, sale_price = ?, sale_ends_at = ?,
         category = ?, condition = ?, location_lat = ?, location_lng = ?, location_address = ?,
@@ -335,8 +358,7 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
       data.location?.lat ?? item.location_lat, data.location?.lng ?? item.location_lng,
       data.location?.address ?? item.location_address,
       data.quantity ?? item.quantity, data.status ?? item.status,
-      data.boosted !== undefined ? (data.boosted ? 1 : 0) : item.boosted,
-      data.boost_expires_at ?? item.boost_expires_at,
+      boost.boosted, boost.boostExpiresAt,
       data.is_auction !== undefined ? (data.is_auction ? 1 : 0) : item.is_auction,
       data.starting_bid !== undefined ? data.starting_bid : item.starting_bid,
       data.min_increment !== undefined ? (data.min_increment || 1) : item.min_increment,

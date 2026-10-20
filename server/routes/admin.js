@@ -1,5 +1,6 @@
 import { Router } from 'express';
-import { randomBytes } from 'crypto';
+import express from 'express';
+import { randomBytes, createHash, timingSafeEqual } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
@@ -10,6 +11,7 @@ import { sendNotificationEmail } from '../src/email.js';
 import { refundTxn } from './payments.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import { requiredSecret, requiredEnv } from '../src/env.js';
+import { readEnvFileValue } from '../loadEnv.js';
 import logger from '../src/logger.js';
 import pkg from '../package.json' with { type: 'json' };
 
@@ -25,6 +27,24 @@ const ADMIN_PASSWORD = requiredEnv('ADMIN_PASSWORD', 'admin123');
 const JWT_SECRET = requiredSecret('JWT_SECRET');
 const USER_STATUSES = ['active', 'suspended', 'banned'];
 const TX_STATUSES = ['pending', 'completed', 'refunded', 'awaiting_payment', 'failed', 'cancelled'];
+
+// Resolve the password at request time, not module load: editing .env while
+// the dev server is running used to leave the old password active until a
+// restart, which looks exactly like "the correct password is rejected".
+function liveAdminPassword() {
+  if (process.env.NODE_ENV !== 'production') {
+    const fromFile = readEnvFileValue('ADMIN_PASSWORD');
+    if (fromFile) return fromFile;
+  }
+  return process.env.ADMIN_PASSWORD || (process.env.NODE_ENV === 'production' ? null : 'admin123');
+}
+
+// Hashing both sides keeps the comparison constant-time regardless of length.
+function passwordsMatch(submitted, expected) {
+  const a = createHash('sha256').update(String(submitted)).digest();
+  const b = createHash('sha256').update(String(expected)).digest();
+  return timingSafeEqual(a, b);
+}
 
 if (process.env.ADMIN_PASSWORD === undefined || process.env.JWT_SECRET === undefined) {
   logger.warn('Admin using default credentials. Set ADMIN_PASSWORD and JWT_SECRET env vars in production.');
@@ -85,8 +105,12 @@ export function ensureAdminRow() {
 }
 
 router.post('/login', adminLimiter, (req, res) => {
-  const { email, password } = req.body;
-  if (email !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+  const { email, password } = req.body || {};
+  const expected = liveAdminPassword();
+  if (!expected) {
+    return res.status(500).json({ error: 'Admin password is not configured on the server' });
+  }
+  if (String(email || '').trim().toLowerCase() !== ADMIN_EMAIL || !passwordsMatch(password ?? '', expected)) {
     return res.status(401).json({ error: 'Invalid admin credentials' });
   }
   const adminId = ensureAdminRow();
@@ -697,6 +721,8 @@ router.get('/backup', adminAuth, async (req, res) => {
   try {
     const buf = await exportDatabase();
     res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Content-Length', buf.length);
     res.setHeader('Content-Disposition', `attachment; filename="tradehub-backup-${Date.now()}.db"`);
     logAudit(req.adminId, 'db_backup', 'database', null, { size: buf.length });
     res.send(buf);
@@ -706,20 +732,35 @@ router.get('/backup', adminAuth, async (req, res) => {
   }
 });
 
-router.post('/backup', adminAuth, async (req, res) => {
+async function restoreFromBuffer(req, res) {
   try {
-    const { data } = req.body;
-    if (!data || typeof data !== 'string') return res.status(400).json({ error: 'Base64 database payload required' });
-    const buffer = Buffer.from(data, 'base64');
-    if (buffer.length < 1000) return res.status(400).json({ error: 'Invalid database payload' });
-    await replaceDatabase(buffer);
-    logAudit(req.adminId, 'db_restore', 'database', null, { size: buffer.length });
-    res.json({ success: true, size: buffer.length });
+    const buffer = Buffer.isBuffer(req.body) ? req.body : null;
+    if (!buffer) return res.status(400).json({ error: 'Base64 database payload required' });
+    const result = await replaceDatabase(buffer);
+    logAudit(req.adminId, 'db_restore', 'database', null, { size: result.size });
+    res.json({ success: true, size: result.size });
   } catch (err) {
     logger.error('Restore error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    const message = err?.message || 'Restore failed';
+    res.status(400).json({ error: message });
   }
+}
+
+router.post('/backup', adminAuth, async (req, res) => {
+  if (typeof req.body?.data === 'string') {
+    const buffer = Buffer.from(req.body.data, 'base64');
+    req.body = buffer;
+    return restoreFromBuffer(req, res);
+  }
+  return restoreFromBuffer(req, res);
 });
+
+router.post(
+  '/backup/raw',
+  adminAuth,
+  express.raw({ type: ['application/octet-stream', 'application/x-sqlite3', 'application/vnd.sqlite3'], limit: '100mb' }),
+  restoreFromBuffer
+);
 
 // ---- Platform settings -----------------------------------------------------
 
@@ -756,15 +797,14 @@ router.put('/settings', adminAuth, (req, res) => {
 });
 
 // Permanently delete every listing and all rows that only exist to describe one.
-// Accounts, wallets, payouts and support history are left intact. Irreversible:
-// take a full backup via GET /admin/backup first.
+// Accounts, wallets, payouts, transactions and support/dispute history are left
+// intact (they are financial and audit records). Irreversible: take a full
+// backup via GET /admin/backup first.
 router.delete('/items/bulk', adminAuth, (req, res) => {
   try {
     const dependents = [
       'message_attachments',
       'messages',
-      'disputes',
-      'payouts',
       'reviews',
       'bids',
       'offers',
@@ -774,7 +814,6 @@ router.delete('/items/bulk', adminAuth, (req, res) => {
       'item_images',
       'reports',
       'conversations',
-      'transactions',
     ];
     const removed = {};
     const statements = ['BEGIN TRANSACTION;'];

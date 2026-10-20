@@ -537,6 +537,20 @@ function applySchema() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS gift_card_purchases (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      brand_id TEXT,
+      amount_cents INTEGER NOT NULL,
+      currency TEXT DEFAULT 'NGN',
+      reference TEXT UNIQUE,
+      status TEXT NOT NULL DEFAULT 'pending',
+      payment_method TEXT DEFAULT 'card',
+      card_id TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      completed_at TEXT
+    );
+
     CREATE TABLE IF NOT EXISTS payouts (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -783,6 +797,11 @@ function migrate() {
   ensureColumn('gift_cards', 'purchase_cents', 'INTEGER');
   ensureColumn('gift_cards', 'voided_at', 'TEXT');
   ensureColumn('gift_cards', 'voided_by', 'TEXT');
+  ensureColumn('gift_cards', 'sold_to', 'TEXT');
+  ensureColumn('gift_cards', 'sold_at', 'TEXT');
+  ensureColumn('gift_cards', 'payment_reference', 'TEXT');
+  ensureColumn('gift_cards', 'updated_at', 'TEXT');
+  ensureColumn('gift_card_brands', 'sellable', 'INTEGER DEFAULT 0');
   ensureColumn('users', 'status', "TEXT DEFAULT 'active'");
   ensureColumn('users', 'username', "TEXT DEFAULT ''");
   ensureColumn('users', 'banned_reason', "TEXT DEFAULT ''");
@@ -830,8 +849,9 @@ ensureColumn('messages', 'type', "TEXT DEFAULT 'text'");
 ensureColumn('messages', 'delivered', 'INTEGER DEFAULT 0');
 ensureColumn('messages', 'reply_to_id', 'TEXT');
 ensureColumn('messages', 'deleted_for_sender', 'INTEGER DEFAULT 0');
-ensureColumn('conversations', 'is_secure', 'INTEGER DEFAULT 0');
+  ensureColumn('conversations', 'is_secure', 'INTEGER DEFAULT 0');
   ensureColumn('users', 'phone_verified', 'INTEGER DEFAULT 0');
+  ensureColumn('promotions', 'updated_at', 'TEXT');
 
   db.exec(`
     UPDATE user_settings SET currency = 'NGN' WHERE currency IS NULL OR currency = '' OR currency = 'USD';
@@ -977,11 +997,36 @@ export async function exportDatabase() {
 
 export async function replaceDatabase(buffer) {
   await ensureLoaded();
-  rawDb.close();
-  rawDb = new SQL.Database(new Uint8Array(buffer));
-  applySchema();
-  initialized = true;
-  queueFlush();
+  if (!buffer || buffer.length < 1000) throw new Error('Invalid database payload');
+  if (buffer.subarray(0, 16).toString('latin1') !== 'SQLite format 3\u0000') {
+    throw new Error('The uploaded file is not a SQLite database');
+  }
+
+  const next = new SQL.Database(new Uint8Array(buffer));
+  try {
+    const check = next.exec('PRAGMA integrity_check');
+    const verdict = check?.[0]?.values?.[0]?.[0];
+    if (verdict !== 'ok') throw new Error('Database integrity check failed');
+  } catch (err) {
+    try { next.close(); } catch {}
+    throw err;
+  }
+
+  const previous = rawDb;
+  rawDb = next;
+  try {
+    applyConnectionPragmas();
+    applySchema();
+    initialized = true;
+    queueFlush();
+  } catch (err) {
+    try { rawDb.close(); } catch {}
+    rawDb = previous;
+    initialized = true;
+    throw new Error(`Restore failed: ${err.message}`);
+  }
+  try { previous.close(); } catch {}
+  return { size: buffer.length };
 }
 
 export default db;

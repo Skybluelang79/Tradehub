@@ -147,11 +147,6 @@ router.post('/:id/accept', authenticateToken, (req, res) => {
     db.prepare("UPDATE offers SET status = 'accepted', updated_at = datetime('now') WHERE id = ?").run(offer.id);
     db.prepare(`UPDATE offers SET status = 'declined', updated_at = datetime('now') WHERE item_id = ? AND status = 'pending' AND id != ?`).run(offer.item_id, offer.id);
 
-    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(offer.item_id);
-    if (item && item.status === 'active') {
-      db.prepare("UPDATE items SET status = 'sold', sold_to = ?, updated_at = datetime('now') WHERE id = ?").run(offer.buyer_id, offer.item_id);
-    }
-
     notify(offeror, 'offer', 'Offer Accepted',
       isBuyersOffer
         ? `Your offer of ${formatMoney(offer.amount_cents / 100, offer.currency)} on "${offer.item_title}" was accepted. Proceed to payment.`

@@ -78,14 +78,18 @@ router.post('/link', async (req, res) => {
 
 // Both outbound-notification endpoints require a signed-in caller: without a
 // guard they are an open relay (anyone could mail arbitrary addresses or push
-// to arbitrary device tokens).
+// to arbitrary device tokens). Even authenticated, a non-admin may only send to
+// their own address / device; admins may still target explicitly.
 router.post('/send-email', authenticateToken, async (req, res) => {
   try {
     const { to, subject, body } = req.body;
-    if (!to || !subject || !body) {
-      return res.status(400).json({ error: 'to, subject, and body are required' });
+    if (!subject || !body) {
+      return res.status(400).json({ error: 'subject and body are required' });
     }
-    await sendNotificationEmail(to, subject, body);
+    const me = db.prepare('SELECT email FROM users WHERE id = ?').get(req.user.id);
+    const recipient = req.user.isAdmin && to ? to : me?.email;
+    if (!recipient) return res.status(400).json({ error: 'No recipient email on file' });
+    await sendNotificationEmail(recipient, subject, body);
     res.json({ success: true, message: 'Email sent' });
   } catch (err) {
     console.error('Firebase send-email error:', err);
@@ -96,10 +100,17 @@ router.post('/send-email', authenticateToken, async (req, res) => {
 router.post('/push', authenticateToken, async (req, res) => {
   try {
     const { tokens, title, body, image, data } = req.body;
-    if (!tokens || !title || !body) {
-      return res.status(400).json({ error: 'tokens, title, and body are required' });
+    if (!title || !body) {
+      return res.status(400).json({ error: 'title and body are required' });
     }
-    const result = await sendPushNotification(tokens, { title, body, image, data });
+    let targets = tokens;
+    if (!req.user.isAdmin) {
+      const settings = db.prepare('SELECT fcm_token FROM user_settings WHERE user_id = ?').get(req.user.id);
+      targets = settings?.fcm_token ? [settings.fcm_token] : [];
+    }
+    if (!Array.isArray(targets)) targets = targets ? [targets] : [];
+    if (!targets.length) return res.status(400).json({ error: 'No push device registered for this account' });
+    const result = await sendPushNotification(targets, { title, body, image, data });
     res.json({ success: true, result });
   } catch (err) {
     console.error('Firebase push error:', err);

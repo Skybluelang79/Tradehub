@@ -62,17 +62,17 @@ export function runAuctionFinalize() {
         const image = db.prepare('SELECT url FROM item_images WHERE item_id = ? ORDER BY sort_order LIMIT 1').get(item.id)?.url || '';
         db.prepare(`
           INSERT INTO transactions (id, item_id, item_title, item_image, amount, buyer_id, seller_id, method, provider_ref, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'auction', ?, 'pending')
+          VALUES (?, ?, ?, ?, ?, ?, ?, 'auction', ?, 'awaiting_payment')
         `).run(uuidv4(), item.id, item.title, image, item.current_bid, item.current_bidder_id, item.seller_id, `auction_${item.id}`);
         db.prepare("UPDATE items SET status = 'sold', auction_status = 'ended' WHERE id = ?").run(item.id);
         db.prepare(`
           INSERT INTO notifications (id, user_id, type, title, body, data)
           VALUES (?, ?, 'sale', 'You won the auction!', ?, ?)
-        `        ).run(uuidv4(), item.current_bidder_id, `Your winning bid of ₦${Number(item.current_bid).toLocaleString('en-NG')} for "${item.title}" is held in escrow.`, JSON.stringify({ itemId: item.id }));
+        `        ).run(uuidv4(), item.current_bidder_id, `Your winning bid of ₦${Number(item.current_bid).toLocaleString('en-NG')} for "${item.title}" is awaiting payment. Complete checkout to claim it.`, JSON.stringify({ itemId: item.id }));
         db.prepare(`
           INSERT INTO notifications (id, user_id, type, title, body, data)
           VALUES (?, ?, 'sale', 'Auction ended with a sale', ?, ?)
-        `        ).run(uuidv4(), item.seller_id, `"${item.title}" sold at auction for ₦${Number(item.current_bid).toLocaleString('en-NG')}.`, JSON.stringify({ itemId: item.id }));
+        `        ).run(uuidv4(), item.seller_id, `"${item.title}" sold at auction for ₦${Number(item.current_bid).toLocaleString('en-NG')}. You will be credited once the winner's payment clears.`, JSON.stringify({ itemId: item.id }));
         logger.info(`Auction sold: ${item.title} (${item.id}) for ₦${item.current_bid}`);
       } else {
         db.prepare("UPDATE items SET auction_status = 'ended' WHERE id = ?").run(item.id);

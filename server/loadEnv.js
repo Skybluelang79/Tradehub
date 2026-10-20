@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import fs from 'fs';
 import dotenv from 'dotenv';
 
 // import.meta.url is unavailable when esbuild bundles this file to CommonJS
@@ -24,6 +25,21 @@ try {
 // environments (and the test suites, which assign process.env directly before
 // importing) still win.
 const result = dotenv.config({ path: join(here, '.env') });
+
+export const ENV_FILE = join(here, '.env');
+
+// dotenv only reads the file once at boot. A running dev server (node --watch
+// does not watch .env) would otherwise keep validating admin logins against a
+// password the operator has already replaced on disk. Re-read the file on
+// demand so edits take effect immediately, without a restart.
+export function readEnvFileValue(name) {
+  try {
+    const parsed = dotenv.parse(fs.readFileSync(ENV_FILE));
+    return Object.prototype.hasOwnProperty.call(parsed, name) ? parsed[name] : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 if (result.error) {
   console.warn(

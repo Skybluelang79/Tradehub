@@ -3,11 +3,25 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
+import { formatMoney } from '../../shared/currencies.js';
+import {
+  paystack,
+  isPaystackConfigured,
+  PAYSTACK_PUBLIC_KEY,
+  DEFAULT_CURRENCY,
+  toMinorUnits,
+} from '../src/paystack.js';
 import logger from '../src/logger.js';
 
 const router = Router();
 
 const GIFT_CARD_TYPES = ['digital', 'physical'];
+
+// Same rule as item checkout: demo transactions are only minted outside
+// production or when DEMO_MODE is explicitly enabled.
+const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production';
+const MIN_PURCHASE_CENTS = 10000;
+const MAX_PURCHASE_CENTS = 10000000;
 
 const DEFAULT_BRANDS = [
   { name: 'Amazon Gift Card', category: 'retail', description: 'Shop anything on Amazon with this balance.', frontImage: '/uploads/amazon-gift-card.png' },
@@ -57,6 +71,16 @@ function seedDefaultBrands() {
   for (const name of RETIRED_BRANDS) {
     db.prepare('UPDATE gift_card_brands SET active = 0 WHERE name = ?').run(name);
   }
+
+  // Only the TradeHub-branded card can be sold in the mall by default: its
+  // value is platform credit, whereas third-party brands are catalog-only.
+  // The backfill flag keeps an admin's later "sellable" toggle from being
+  // overwritten on the next seed.
+  const backfilled = db.prepare("SELECT value FROM platform_settings WHERE key = 'gift_card_sellable_backfill'").get();
+  if (!backfilled) {
+    db.prepare("UPDATE gift_card_brands SET sellable = 1 WHERE name = 'TradeHub Gift Card'").run();
+    db.prepare("INSERT OR REPLACE INTO platform_settings (key, value) VALUES ('gift_card_sellable_backfill', '1')").run();
+  }
 }
 
 function generateGiftCode(prefix = 'TRADE') {
@@ -94,6 +118,52 @@ function redeemGiftCard(code, userId) {
   return balance;
 }
 
+function notify(userId, type, title, body) {
+  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
+    .run(uuidv4(), userId, type, title, body);
+}
+
+// Completes a paid gift-card purchase: mints a redeemed card, credits the
+// buyer's store credit, and records the card on the purchase. Idempotent.
+export function completeGiftCardPurchase(purchaseId) {
+  const purchase = db.prepare('SELECT * FROM gift_card_purchases WHERE id = ?').get(purchaseId);
+  if (!purchase || purchase.status !== 'pending') return null;
+
+  const brand = purchase.brand_id
+    ? db.prepare('SELECT name FROM gift_card_brands WHERE id = ?').get(purchase.brand_id)
+    : null;
+  const brandName = brand?.name || 'TradeHub Gift Card';
+  const cardId = uuidv4();
+  const code = generateGiftCode('TRADE');
+
+  db.prepare(`
+    INSERT INTO gift_cards (id, code, brand_id, card_type, original_cents, purchase_cents, balance_cents, issued_by, note, status, redeemed_by, redeemed_at, sold_to, sold_at, payment_reference)
+    VALUES (?, ?, ?, 'digital', ?, ?, 0, NULL, ?, 'redeemed', ?, datetime('now'), ?, datetime('now'), ?)
+  `).run(
+    cardId, code, purchase.brand_id || null, purchase.amount_cents, purchase.amount_cents,
+    'Purchased in Gift Mall', purchase.user_id, purchase.user_id, purchase.reference
+  );
+
+  getWallet(purchase.user_id);
+  db.prepare("UPDATE wallets SET credit_cents = credit_cents + ?, updated_at = datetime('now') WHERE user_id = ?")
+    .run(purchase.amount_cents, purchase.user_id);
+  db.prepare("UPDATE gift_card_purchases SET status = 'completed', card_id = ?, completed_at = datetime('now') WHERE id = ?")
+    .run(cardId, purchase.id);
+
+  notify(
+    purchase.user_id,
+    'payment',
+    'Gift Card Credited',
+    `${formatMoney(purchase.amount_cents / 100)} was added to your store credit from your ${brandName} purchase.`
+  );
+
+  return db.prepare(`
+    SELECT g.*, b.name as brand_name, b.front_image as brand_front_image, b.back_image as brand_back_image
+    FROM gift_cards g LEFT JOIN gift_card_brands b ON b.id = g.brand_id
+    WHERE g.id = ?
+  `).get(cardId);
+}
+
 // ---- Brands -----------------------------------------------------------------
 
 router.get('/brands', authenticateToken, (req, res) => {
@@ -120,13 +190,13 @@ router.get('/brands/all', adminAuth, (req, res) => {
 
 router.post('/brands', adminAuth, (req, res) => {
   try {
-    const { name, description = '', category = 'general', frontImage = '', backImage = '', active = 1 } = req.body;
+    const { name, description = '', category = 'general', frontImage = '', backImage = '', active = 1, sellable = 0 } = req.body;
     if (!name || !name.trim()) return res.status(400).json({ error: 'Brand name required' });
     const id = uuidv4();
     db.prepare(`
-      INSERT INTO gift_card_brands (id, name, description, category, front_image, back_image, active)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, name.trim(), description, category, frontImage, backImage, active ? 1 : 0);
+      INSERT INTO gift_card_brands (id, name, description, category, front_image, back_image, active, sellable)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, name.trim(), description, category, frontImage, backImage, active ? 1 : 0, sellable ? 1 : 0);
     res.status(201).json({ brand: db.prepare('SELECT * FROM gift_card_brands WHERE id = ?').get(id) });
   } catch (err) {
     logger.error('Create brand error:', err);
@@ -138,7 +208,7 @@ router.put('/brands/:id', adminAuth, (req, res) => {
   try {
     const brand = db.prepare('SELECT * FROM gift_card_brands WHERE id = ?').get(req.params.id);
     if (!brand) return res.status(404).json({ error: 'Brand not found' });
-    const { name, description, category, frontImage, backImage, active } = req.body;
+    const { name, description, category, frontImage, backImage, active, sellable } = req.body;
     const next = {
       name: name?.trim() || brand.name,
       description: description !== undefined ? description : brand.description,
@@ -146,11 +216,12 @@ router.put('/brands/:id', adminAuth, (req, res) => {
       frontImage: frontImage !== undefined ? frontImage : brand.front_image,
       backImage: backImage !== undefined ? backImage : brand.back_image,
       active: active !== undefined ? (active ? 1 : 0) : brand.active,
+      sellable: sellable !== undefined ? (sellable ? 1 : 0) : brand.sellable,
     };
     db.prepare(`
-      UPDATE gift_card_brands SET name = ?, description = ?, category = ?, front_image = ?, back_image = ?, active = ?
+      UPDATE gift_card_brands SET name = ?, description = ?, category = ?, front_image = ?, back_image = ?, active = ?, sellable = ?
       WHERE id = ?
-    `).run(next.name, next.description, next.category, next.frontImage, next.backImage, next.active, brand.id);
+    `).run(next.name, next.description, next.category, next.frontImage, next.backImage, next.active, next.sellable, brand.id);
     res.json({ brand: db.prepare('SELECT * FROM gift_card_brands WHERE id = ?').get(brand.id) });
   } catch (err) {
     logger.error('Update brand error:', err);
@@ -236,6 +307,119 @@ router.put('/designs/:id/status', adminAuth, (req, res) => {
   }
 });
 
+// ---- Buying gift cards ------------------------------------------------------
+
+router.post('/purchase-intent', authenticateToken, async (req, res) => {
+  try {
+    const { brandId, amountCents } = req.body || {};
+    const amount = Math.round(Number(amountCents));
+    if (!brandId) return res.status(400).json({ error: 'Choose a gift card brand' });
+    const brand = db.prepare('SELECT * FROM gift_card_brands WHERE id = ?').get(brandId);
+    if (!brand || !brand.active) return res.status(404).json({ error: 'Gift card brand not found' });
+    if (!brand.sellable) return res.status(400).json({ error: 'This gift card is not available for purchase' });
+    if (!Number.isFinite(amount) || amount < MIN_PURCHASE_CENTS) {
+      return res.status(400).json({ error: `Minimum gift card value is ${formatMoney(MIN_PURCHASE_CENTS / 100)}` });
+    }
+    if (amount > MAX_PURCHASE_CENTS) {
+      return res.status(400).json({ error: `Maximum gift card value is ${formatMoney(MAX_PURCHASE_CENTS / 100)}` });
+    }
+
+    const id = uuidv4();
+    const currency = DEFAULT_CURRENCY;
+    db.prepare(`
+      INSERT INTO gift_card_purchases (id, user_id, brand_id, amount_cents, currency, reference, status, payment_method)
+      VALUES (?, ?, ?, ?, ?, ?, 'pending', 'card')
+    `).run(id, req.user.id, brand.id, amount, currency, id);
+
+    if (!isPaystackConfigured()) {
+      if (!ALLOW_DEMO_PAYMENTS) {
+        db.prepare("UPDATE gift_card_purchases SET status = 'failed' WHERE id = ?").run(id);
+        return res.status(503).json({ error: 'Payments are not configured. Set PAYSTACK_SECRET_KEY or enable DEMO_MODE.' });
+      }
+      db.prepare("UPDATE gift_card_purchases SET reference = ?, payment_method = 'demo' WHERE id = ?").run(`demo_${id}`, id);
+      const card = completeGiftCardPurchase(id);
+      return res.json({
+        paid: true,
+        demo: true,
+        purchaseId: id,
+        reference: `demo_${id}`,
+        amountCents: amount,
+        currency,
+        creditCents: getWallet(req.user.id).credit_cents,
+        card,
+      });
+    }
+
+    const initialized = await paystack.initializeTransaction({
+      amountMinor: toMinorUnits(amount / 100, currency),
+      currency,
+      email: req.user.email,
+      reference: id,
+      channels: ['card'],
+      metadata: { giftCardPurchaseId: id, buyerId: req.user.id, brandId: brand.id, tradehub_gift_card: true },
+      callbackUrl: process.env.PAYSTACK_CALLBACK_URL,
+    });
+
+    res.json({
+      purchaseId: id,
+      reference: id,
+      accessCode: initialized.access_code,
+      authorizationUrl: initialized.authorization_url,
+      publicKey: PAYSTACK_PUBLIC_KEY,
+      amountCents: amount,
+      currency,
+      status: 'awaiting_payment',
+    });
+  } catch (err) {
+    logger.error('Gift card purchase intent error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/purchase/verify/:reference', authenticateToken, async (req, res) => {
+  try {
+    const purchase = db.prepare('SELECT * FROM gift_card_purchases WHERE reference = ?').get(req.params.reference);
+    if (!purchase) return res.status(404).json({ error: 'Gift card purchase not found' });
+    if (purchase.user_id !== req.user.id && !req.user.isAdmin) return res.status(403).json({ error: 'Not authorized' });
+
+    const cardFor = (cardId) => db.prepare(`
+      SELECT g.*, b.name as brand_name, b.front_image as brand_front_image, b.back_image as brand_back_image
+      FROM gift_cards g LEFT JOIN gift_card_brands b ON b.id = g.brand_id
+      WHERE g.id = ?
+    `).get(cardId);
+
+    if (purchase.status === 'completed') {
+      return res.json({
+        success: true,
+        alreadyProcessed: true,
+        status: 'completed',
+        creditCents: getWallet(purchase.user_id).credit_cents,
+        card: purchase.card_id ? cardFor(purchase.card_id) : null,
+      });
+    }
+    if (purchase.status !== 'pending') {
+      return res.status(400).json({ error: `Purchase is not awaiting payment (${purchase.status})` });
+    }
+
+    if (String(purchase.reference).startsWith('demo_')) {
+      if (isPaystackConfigured() || !ALLOW_DEMO_PAYMENTS) {
+        return res.status(400).json({ error: 'Demo purchase cannot be verified' });
+      }
+    } else {
+      const verified = await paystack.verifyTransaction(purchase.reference);
+      if (verified.status !== 'success') {
+        return res.status(400).json({ error: `Payment not successful (${verified.status})` });
+      }
+    }
+
+    const card = completeGiftCardPurchase(purchase.id);
+    res.json({ success: true, status: 'completed', creditCents: getWallet(purchase.user_id).credit_cents, card });
+  } catch (err) {
+    logger.error('Verify gift card purchase error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // ---- Issue / analytics / management -----------------------------------------
 
 router.post('/issue', adminAuth, (req, res) => {
@@ -280,6 +464,7 @@ router.get('/analytics', adminAuth, (req, res) => {
     const redeemed = db.prepare("SELECT COUNT(*) as c, COALESCE(SUM(original_cents),0) as v FROM gift_cards WHERE status = 'redeemed'").get();
     const active = db.prepare("SELECT COUNT(*) as c, COALESCE(SUM(balance_cents),0) as v FROM gift_cards WHERE status = 'active'").get();
     const voided = db.prepare("SELECT COUNT(*) as c FROM gift_cards WHERE status = 'voided'").get().c;
+    const sales = db.prepare("SELECT COUNT(*) as c, COALESCE(SUM(amount_cents),0) as v FROM gift_card_purchases WHERE status = 'completed'").get();
     const margin = Math.max(0, issued.v - (issued.p || 0));
     const byBrand = db.prepare(`
       SELECT b.id, b.name, COUNT(g.id) as issued, COALESCE(SUM(g.original_cents),0) as value,
@@ -294,6 +479,8 @@ router.get('/analytics', adminAuth, (req, res) => {
         activeCount: active.c, activeValue: active.v,
         voidedCount: voided,
         margin,
+        storeSalesCount: sales.c,
+        storeSalesCents: sales.v,
         byBrand,
       },
     });

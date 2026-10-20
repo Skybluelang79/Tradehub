@@ -59,16 +59,46 @@ async function adminDownload(path, filename) {
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { Authorization: `Bearer ${localStorage.getItem('tradehub_admin_token') || ''}` },
   });
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  if (!res.ok) {
+    let message = `Download failed: ${res.status}`;
+    try {
+      const data = await res.json();
+      if (data?.error) message = data.error;
+    } catch {}
+    throw new Error(message);
+  }
   const blob = await res.blob();
+  if (!blob.size) throw new Error('Download failed: the server returned an empty file');
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const match = /filename="?([^";]+)"?/i.exec(disposition);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = filename;
+  a.download = match?.[1] || filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function adminUpload(path, file) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem('tradehub_admin_token') || ''}`,
+      'Content-Type': 'application/octet-stream',
+    },
+    body: file,
+  });
+  const text = await res.text();
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {}
+  }
+  if (!res.ok) throw new Error((data && data.error) || `Upload failed: ${res.status}`);
+  return data;
 }
 
 export { setToken, getToken };
@@ -183,6 +213,8 @@ export const api = {
     redeemGiftCard: (code) => request('/payments/gift-cards/redeem', { method: 'POST', body: JSON.stringify({ code }) }),
     giftCardBrands: () => request('/payments/gift-cards/brands'),
     giftCardMall: () => request('/payments/gift-cards/mall'),
+    purchaseGiftCard: (data) => request('/payments/gift-cards/purchase-intent', { method: 'POST', body: JSON.stringify(data) }),
+    verifyGiftCardPurchase: (reference) => request(`/payments/gift-cards/purchase/verify/${reference}`, { method: 'POST' }),
     submitGiftCardDesign: (data) => request('/payments/gift-cards/designs', { method: 'POST', body: JSON.stringify(data) }),
     giftCardDesigns: (params) => adminRequest(`/payments/gift-cards/designs?status=${params?.status || 'all'}`),
     updateGiftCardDesign: (id, status) => adminRequest(`/payments/gift-cards/designs/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
@@ -320,6 +352,7 @@ export const api = {
     settingsUpdate: (data) => adminRequest('/admin/settings', { method: 'PUT', body: JSON.stringify(data) }),
     backup: () => adminDownload('/admin/backup', `tradehub-backup-${Date.now()}.db`),
 restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.stringify({ data }) }),
+    restoreFile: (file) => adminUpload('/admin/backup/raw', file),
     verifications: (params = {}) => adminRequest(`/admin/verifications?${new URLSearchParams(params).toString()}`),
     verificationApprove: (id) => adminRequest(`/admin/verifications/${id}/approve`, { method: 'POST' }),
     verificationReject: (id, note = '') => adminRequest(`/admin/verifications/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) }),

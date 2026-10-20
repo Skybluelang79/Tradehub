@@ -52,7 +52,9 @@ export const AdminProvider = ({ children }) => {
           ? 'Cannot reach the server. Make sure the backend is running.'
           : isRateLimited
             ? message
-            : 'Invalid admin credentials'
+            : message && !/invalid admin credentials/i.test(message)
+              ? `Admin login failed: ${message}`
+              : 'Invalid admin credentials'
       );
       return false;
     }

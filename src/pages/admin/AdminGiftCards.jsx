@@ -51,7 +51,7 @@ export default function AdminGiftCards() {
 
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [editingBrand, setEditingBrand] = useState(null);
-  const [brandForm, setBrandForm] = useState({ name: '', description: '', category: 'general', frontImage: '', backImage: '', active: true });
+  const [brandForm, setBrandForm] = useState({ name: '', description: '', category: 'general', frontImage: '', backImage: '', active: true, sellable: false });
   const [uploadingImg, setUploadingImg] = useState('');
 
   const [showIssueModal, setShowIssueModal] = useState(false);
@@ -152,7 +152,8 @@ export default function AdminGiftCards() {
       frontImage: brand.front_image || '',
       backImage: brand.back_image || '',
       active: !!brand.active,
-    } : { name: '', description: '', category: 'general', frontImage: '', backImage: '', active: true });
+      sellable: !!brand.sellable,
+    } : { name: '', description: '', category: 'general', frontImage: '', backImage: '', active: true, sellable: false });
     setShowBrandModal(true);
   };
 
@@ -417,6 +418,14 @@ export default function AdminGiftCards() {
               </div>
 
               <div className="gc-section">
+                <h3 className="gc-sub-title">Store sales (Gift Mall)</h3>
+                <div className="gc-balance-grid">
+                  <div className="gc-balance-cell"><span>Cards sold</span><strong>{analytics.storeSalesCount || 0}</strong></div>
+                  <div className="gc-balance-cell"><span>Revenue</span><strong>{fmt(analytics.storeSalesCents || 0)}</strong></div>
+                </div>
+              </div>
+
+              <div className="gc-section">
                 <h3 className="gc-sub-title">By brand</h3>
                 <table className="admin-table">
                   <thead>
@@ -607,6 +616,10 @@ export default function AdminGiftCards() {
               <label className="gc-checkbox">
                 <input type="checkbox" checked={brandForm.active} onChange={(e) => setBrandForm({ ...brandForm, active: e.target.checked })} />
                 Active (shown to buyers)
+              </label>
+              <label className="gc-checkbox">
+                <input type="checkbox" checked={brandForm.sellable} onChange={(e) => setBrandForm({ ...brandForm, sellable: e.target.checked })} />
+                Sellable (buyers can purchase with card)
               </label>
               <div className="payout-actions" style={{ marginTop: 4 }}>
                 <button className="btn-secondary" onClick={() => setShowBrandModal(false)}>Cancel</button>

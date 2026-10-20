@@ -131,30 +131,113 @@ router.post('/:id/cancel', authenticateToken, (req, res) => {
   }
 });
 
-router.put('/:id/status', adminAuth, (req, res) => {
+// A payout moves pending -> approved -> completed, or pending/approved -> rejected.
+// Anything else (e.g. re-completing or rejecting an already-completed payout)
+// would double-adjust the wallet, so it is refused.
+const ALLOWED_TRANSITIONS = {
+  approved: ['pending'],
+  rejected: ['pending', 'approved'],
+  completed: ['pending', 'approved'],
+};
+
+async function initiatePayoutTransfer(payout, notes) {
+  let details = {};
+  try { details = JSON.parse(payout.method_details || '{}'); } catch { details = {}; }
+  const accountNumber = String(details.accountNumber || '').trim();
+  const bankCode = String(details.bankCode || '').trim();
+  const accountName = String(details.accountName || details.bankName || '').trim() || 'TradeHub Seller';
+  if (!accountNumber || !bankCode) {
+    const err = new Error('Payout bank details are incomplete; cannot transfer');
+    err.status = 400;
+    throw err;
+  }
+
+  let recipientCode = payout.recipient_code;
+  if (!recipientCode) {
+    const recipient = await paystack.createTransferRecipient({
+      name: accountName,
+      accountNumber,
+      bankCode,
+      currency: payout.currency || 'NGN',
+    });
+    recipientCode = recipient && recipient.recipient_code;
+    if (!recipientCode) {
+      const err = new Error('Paystack did not return a recipient code');
+      err.status = 502;
+      throw err;
+    }
+  }
+
+  const reference = `payout_${payout.id}`;
+  const transfer = await paystack.initiateTransfer({
+    amountMinor: payout.amount_cents,
+    recipientCode,
+    reference,
+    reason: 'TradeHub payout',
+  });
+  const transferCode = transfer && (transfer.transfer_code || transfer.code);
+
+  // Status stays 'approved' until Paystack confirms via webhook; the wallet's
+  // pending_cents is settled then, so a failed transfer never loses money.
+  db.prepare("UPDATE payouts SET status = 'approved', recipient_code = ?, transfer_code = ?, admin_notes = ? WHERE id = ?")
+    .run(recipientCode, transferCode || null, notes, payout.id);
+
+  return { transferCode, recipientCode };
+}
+
+function finalizePayout(payout, notes) {
+  db.prepare("UPDATE wallets SET pending_cents = pending_cents - ?, updated_at = datetime('now') WHERE user_id = ?")
+    .run(payout.amount_cents, payout.user_id);
+  db.prepare("UPDATE payouts SET status = 'completed', admin_notes = ?, processed_at = datetime('now') WHERE id = ?")
+    .run(notes, payout.id);
+  notify(payout.user_id, 'payment', 'Payout Sent', `Your payout of ₦${(payout.amount_cents / 100).toFixed(2)} has been sent.`);
+}
+
+router.put('/:id/status', adminAuth, async (req, res) => {
   try {
     const { status, notes = '' } = req.body;
     const payout = db.prepare('SELECT * FROM payouts WHERE id = ?').get(req.params.id);
     if (!payout) return res.status(404).json({ error: 'Payout not found' });
     if (!['approved', 'completed', 'rejected'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
-    if (status === 'rejected' && payout.status !== 'rejected') {
-      db.prepare('UPDATE wallets SET available_cents = available_cents + ?, pending_cents = pending_cents - ?, updated_at = datetime(\'now\') WHERE user_id = ?')
-        .run(payout.amount_cents, payout.amount_cents, payout.user_id);
-      notify(payout.user_id, 'payment', 'Payout Rejected', `Your payout of ₦${(payout.amount_cents / 100).toFixed(2)} was rejected.`);
-    }
-    if (status === 'completed') {
-      db.prepare("UPDATE wallets SET pending_cents = pending_cents - ?, updated_at = datetime('now') WHERE user_id = ?")
-        .run(payout.amount_cents, payout.user_id);
-      notify(payout.user_id, 'payment', 'Payout Sent', `Your payout of ₦${(payout.amount_cents / 100).toFixed(2)} has been sent.`);
+    const from = payout.status;
+    if (from === 'cancelled') return res.status(400).json({ error: 'This payout was cancelled by the seller' });
+    const allowedFrom = ALLOWED_TRANSITIONS[status];
+    if (!allowedFrom.includes(from)) {
+      return res.status(409).json({ error: `Cannot change a ${from} payout to ${status}` });
     }
 
-    db.prepare("UPDATE payouts SET status = ?, admin_notes = ?, processed_at = datetime('now') WHERE id = ?")
-      .run(status, notes, payout.id);
-    res.json({ success: true, payout: db.prepare('SELECT * FROM payouts WHERE id = ?').get(payout.id) });
+    if (status === 'rejected') {
+      db.prepare('UPDATE wallets SET available_cents = available_cents + ?, pending_cents = pending_cents - ?, updated_at = datetime(\'now\') WHERE user_id = ?')
+        .run(payout.amount_cents, payout.amount_cents, payout.user_id);
+      db.prepare("UPDATE payouts SET status = 'rejected', admin_notes = ?, processed_at = datetime('now') WHERE id = ?")
+        .run(notes, payout.id);
+      notify(payout.user_id, 'payment', 'Payout Rejected', `Your payout of ₦${(payout.amount_cents / 100).toFixed(2)} was rejected.`);
+      return res.json({ success: true, payout: db.prepare('SELECT * FROM payouts WHERE id = ?').get(payout.id) });
+    }
+
+    if (status === 'approved') {
+      db.prepare("UPDATE payouts SET status = 'approved', admin_notes = ? WHERE id = ?").run(notes, payout.id);
+      return res.json({ success: true, payout: db.prepare('SELECT * FROM payouts WHERE id = ?').get(payout.id) });
+    }
+
+    // status === 'completed': actually move the money.
+    if (isPaystackConfigured()) {
+      const result = await initiatePayoutTransfer(payout, notes);
+      return res.json({
+        success: true,
+        pending: true,
+        message: 'Transfer initiated with Paystack; wallet settles when the transfer completes.',
+        payout: db.prepare('SELECT * FROM payouts WHERE id = ?').get(payout.id),
+        ...result,
+      });
+    }
+
+    finalizePayout(payout, notes);
+    return res.json({ success: true, payout: db.prepare('SELECT * FROM payouts WHERE id = ?').get(payout.id) });
   } catch (err) {
     logger.error('Update payout status error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(err.status || 500).json({ error: err.message || 'Internal server error' });
   }
 });
 

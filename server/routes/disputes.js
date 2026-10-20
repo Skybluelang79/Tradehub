@@ -131,8 +131,10 @@ router.put('/:id/resolve', adminAuth, async (req, res) => {
     if (!txn) return res.status(404).json({ error: 'Transaction not found' });
 
     const amountCents = Math.round(convert(txn.amount, txn.currency || DEFAULT_CURRENCY, 'NGN') * 100);
-    const feeCents = Math.round(amountCents * getFeeRateForSeller(txn.seller_id));
+    const feeRate = getFeeRateForSeller(txn.seller_id);
+    const feeCents = Math.round(amountCents * feeRate);
     const netCents = amountCents - feeCents;
+    const feePercent = Math.round(feeRate * 1000) / 10;
 
     if (action === 'refund_buyer') {
       await refundTxn(txn);
@@ -148,7 +150,7 @@ router.put('/:id/resolve', adminAuth, async (req, res) => {
         creditFirstPurchase(txn.buyer_id);
       }
       notify(txn.buyer_id, 'system', 'Dispute Resolved', `Your dispute for "${txn.item_title}" was resolved in the seller's favor.`);
-      notify(txn.seller_id, 'system', 'Dispute Resolved', `The dispute for "${txn.item_title}" was resolved in your favor. Payment released.`);
+      notify(txn.seller_id, 'system', 'Dispute Resolved', `The dispute for "${txn.item_title}" was resolved in your favor. ${formatMoney(netCents / 100)} was released to your wallet after the ${feePercent}% platform fee (${formatMoney(feeCents / 100)}).`);
     }
 
     db.prepare(`

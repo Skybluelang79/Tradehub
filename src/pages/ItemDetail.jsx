@@ -30,7 +30,7 @@ import { AdBanner } from '../components/features';
 import { useApp } from '../context';
 import { categories, conditionOptions } from '../services/api';
 import { formatPrice, formatDistance, formatDate, normalizeReview } from '../utils/helpers';
-import { getCurrencySymbol } from '../utils/currency.js';
+import { getCurrencySymbol, formatMoney } from '../utils/currency.js';
 import '../styles/globals.css';
 import './ItemDetail.css';
 
@@ -40,6 +40,17 @@ const conditionLabels = {
   good: 'Good',
   fair: 'Fair',
 };
+
+function isSaleActive(item) {
+  if (!item) return false;
+  return !!(item.salePrice && item.salePrice > 0 && item.salePrice < item.price
+    && !(item.saleEndsAt && new Date(item.saleEndsAt) < new Date()));
+}
+
+function effectivePrice(item) {
+  if (!item) return '';
+  return isSaleActive(item) ? item.salePrice : item.price;
+}
 
 function FlagIconSvg({ size = 20 }) {
   return (
@@ -229,7 +240,7 @@ export default function ItemDetail() {
       window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }));
       return;
     }
-    setOfferAmount(selectedItem?.salePrice || selectedItem?.price || '');
+    setOfferAmount(effectivePrice(selectedItem) || '');
     setOfferMessage('');
     setShowOfferModal(true);
   };
@@ -1455,7 +1466,10 @@ export default function ItemDetail() {
       <Modal isOpen={showOfferModal} onClose={() => setShowOfferModal(false)} title="Make an Offer">
         <div>
           <p className="checkout-price-line">
-            Listed at <strong>{formatPrice(selectedItem?.price || 0, selectedItem?.currency)}</strong>
+            Listed at <strong>{formatMoney(selectedItem?.price || 0, selectedItem?.currency)}</strong>
+            {isSaleActive(selectedItem) && (
+              <> · Now <strong>{formatMoney(selectedItem.salePrice, selectedItem.currency)}</strong></>
+            )}
           </p>
           <div className="input-group" style={{ marginTop: 12 }}>
             <label className="input-label">Your offer ({getCurrencySymbol(selectedItem?.currency)})</label>

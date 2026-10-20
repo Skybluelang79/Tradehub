@@ -73,14 +73,7 @@ const AdminSystem = () => {
     if (!window.confirm('Restoring will overwrite the entire database. Continue?')) return;
     setRestoring(true);
     try {
-      const dataUrl = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = () => reject(new Error('Failed to read file'));
-        reader.readAsDataURL(file);
-      });
-      const base64 = dataUrl.split(',')[1];
-      await api.admin.restore(base64);
+      await api.admin.restoreFile(file);
       addToast('Database restored successfully', 'success');
       setFileName('');
       if (fileInputRef.current) fileInputRef.current.value = '';

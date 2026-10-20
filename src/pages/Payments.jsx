@@ -5,7 +5,6 @@ import Modal from '../components/ui/Modal';
 import { GiftCardModal } from '../components/features';
 import { useToast } from '../components/ui/Toast';
 import { ShieldIcon, PlusIcon, CheckIcon, ClockIcon, GiftIcon, TrendingUpIcon } from '../components/ui/Icons';
-import { getBankLogo } from '../utils/bankLogos';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/client';
@@ -715,7 +714,11 @@ export default function Payments() {
         </div>
       </Modal>
 
-      <GiftCardModal isOpen={showGiftCardModal} onClose={() => setShowGiftCardModal(false)} />
+      <GiftCardModal
+        isOpen={showGiftCardModal}
+        onClose={() => setShowGiftCardModal(false)}
+        onPurchased={refresh}
+      />
 
       <Modal isOpen={showPayoutModal} onClose={() => { setShowPayoutModal(false); setPayoutFields({}); }} title="Request Payout"
         footer={
@@ -766,10 +769,8 @@ export default function Payments() {
                   >
                     {(() => {
                       const selected = banks.find((b) => (b.code || b.name) === payoutFields[f]);
-                      const logo = selected && getBankLogo(selected);
                       return (
                         <span className="bank-select-value">
-                          {logo && <img className="bank-logo" src={logo} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />}
                           <span>{selected ? `${selected.name}${selected._country ? ` (${selected._country})` : ''}` : (banksLoading ? 'Loading banks...' : 'Select your bank')}</span>
                         </span>
                       );
@@ -792,7 +793,6 @@ export default function Payments() {
                           {banks
                             .filter((b) => !bankSearch || b.name?.toLowerCase().includes(bankSearch.toLowerCase()))
                             .map((b) => {
-                              const logo = getBankLogo(b);
                               const value = b.code || b.name;
                               return (
                                 <button
@@ -805,9 +805,6 @@ export default function Payments() {
                                     setBankSearch('');
                                   }}
                                 >
-                                  {logo
-                                    ? <img className="bank-logo" src={logo} alt="" loading="lazy" onError={(e) => { e.target.style.display = 'none'; }} />
-                                    : <span className="bank-logo bank-logo-fallback">{(b.name || '?').charAt(0).toUpperCase()}</span>}
                                   <span>{b.name}{b._country ? ` (${b._country})` : ''}</span>
                                 </button>
                               );

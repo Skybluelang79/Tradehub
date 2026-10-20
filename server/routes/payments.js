@@ -47,7 +47,7 @@ export function normalizePaymentMethod(method) {
   if (['bank_transfer', 'ussd', 'qr', 'mobile_money'].includes(raw)) return raw;
   return 'card';
 }
-import { convert } from '../../shared/currencies.js';
+import { convert, formatMoney } from '../../shared/currencies.js';
 
 const router = Router();
 
@@ -470,6 +470,10 @@ function buildCheckout(req) {
     if (offer.buyer_id !== req.user.id) { const err = new Error('Not authorized to purchase with this offer'); err.status = 403; throw err; }
     if (offer.status !== 'accepted') { const err = new Error('Offer has not been accepted yet'); err.status = 400; throw err; }
     if (offer.item_id !== item.id) { const err = new Error('Offer does not match this item'); err.status = 400; throw err; }
+    if (item.status === 'sold') {
+      const ownLiveTxn = db.prepare("SELECT id FROM transactions WHERE item_id = ? AND buyer_id = ? AND status IN ('pending', 'awaiting_payment')").get(item.id, req.user.id);
+      if (!ownLiveTxn) { const err = new Error('Item is already sold'); err.status = 400; throw err; }
+    }
   } else {
     if (item.status === 'sold') { const err = new Error('Item is already sold'); err.status = 400; throw err; }
   }
@@ -1052,14 +1056,20 @@ export async function expireAwaitingPayment(txn) {
 
 export function finalizeCompleted(txn) {
   if (!txn || txn.status === 'completed') return false;
+  // Only a transaction that has actually been paid ('pending' = funds held in
+  // escrow) may release money to the seller. An 'awaiting_payment' row (e.g. an
+  // unpaid auction win) must never credit anyone.
+  if (!['pending', 'completed'].includes(txn.status)) return false;
   db.prepare("UPDATE transactions SET status = 'completed', completed_at = datetime('now') WHERE id = ?").run(txn.id);
   db.prepare("UPDATE items SET status = 'sold' WHERE id = ?").run(txn.item_id);
 
   // Wallets are held in NGN, so a transaction charged in a foreign currency is
   // converted at the static rates before the seller's balance is credited.
   const amountCents = Math.round(convert(txn.amount, txn.currency || DEFAULT_CURRENCY, DEFAULT_CURRENCY) * 100);
-  const feeCents = Math.round(amountCents * getFeeRateForSeller(txn.seller_id));
+  const feeRate = getFeeRateForSeller(txn.seller_id);
+  const feeCents = Math.round(amountCents * feeRate);
   const netCents = amountCents - feeCents;
+  const feePercent = Math.round(feeRate * 1000) / 10;
   db.prepare('UPDATE transactions SET fee_amount = ?, net_amount = ? WHERE id = ?').run(feeCents / 100, netCents / 100, txn.id);
 
   getWallet(txn.seller_id);
@@ -1071,7 +1081,7 @@ export function finalizeCompleted(txn) {
   creditFirstPurchase(txn.buyer_id);
 
   notify(txn.buyer_id, 'payment', 'Payment Released', `Payment of ${txn.amount} ${txn.currency} for "${txn.item_title}" has been released.`);
-  notify(txn.seller_id, 'sale', 'Item Sold', `"${txn.item_title}" has been sold for ${txn.amount} ${txn.currency}!`);
+  notify(txn.seller_id, 'sale', 'Item Sold', `"${txn.item_title}" sold for ${txn.amount} ${txn.currency}. The ${feePercent}% platform fee (${formatMoney(feeCents / 100)}) was deducted, so ${formatMoney(netCents / 100)} was added to your wallet.`);
 
   try {
     const buyer = db.prepare('SELECT email FROM users WHERE id = ?').get(txn.buyer_id);
@@ -1080,7 +1090,7 @@ export function finalizeCompleted(txn) {
       sendNotificationEmail(buyer.email, 'Your order is complete', `Your payment of ${txn.amount} ${txn.currency} for "${txn.item_title}" has been released to the seller. Thank you for shopping on TradeHub!`).catch(() => {});
     }
     if (seller?.email) {
-      sendNotificationEmail(seller.email, 'You made a sale!', `Congratulations! "${txn.item_title}" was sold for ${txn.amount} ${txn.currency}. The funds are now in your wallet.`).catch(() => {});
+      sendNotificationEmail(seller.email, 'You made a sale!', `Congratulations! "${txn.item_title}" was sold for ${txn.amount} ${txn.currency}. A ${feePercent}% platform fee (${formatMoney(feeCents / 100)}) was deducted and ${formatMoney(netCents / 100)} is now in your wallet.`).catch(() => {});
     }
   } catch {}
   return true;
@@ -1132,9 +1142,15 @@ export async function refundTxn(txn, opts = {}) {
     }
   }
 
-  // 4. Update status + reactivate the item so it can be re-listed/sold.
+  // 4. Update status + reactivate the item so it can be re-listed/sold, but
+  //    only if no other live transaction still holds it (e.g. a re-sale).
   db.prepare("UPDATE transactions SET status = 'refunded', completed_at = NULL WHERE id = ?").run(txn.id);
-  db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
+  const stillHeld = db.prepare(
+    "SELECT id FROM transactions WHERE item_id = ? AND id != ? AND status IN ('pending', 'completed')"
+  ).get(txn.item_id, txn.id);
+  if (!stillHeld) {
+    db.prepare("UPDATE items SET status = 'active' WHERE id = ?").run(txn.item_id);
+  }
   return true;
 }
 
@@ -1213,8 +1229,13 @@ router.post('/refund/:txnId', authenticateToken, async (req, res) => {
   try {
     const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(req.params.txnId);
     if (!txn) return res.status(404).json({ error: 'Transaction not found' });
-    if (txn.seller_id !== req.user.id && txn.buyer_id !== req.user.id && !req.user.isAdmin) {
-      return res.status(403).json({ error: 'Not authorized' });
+    // Only the buyer or an admin may force a refund. A seller must not be able
+    // to reverse a payment that was already released to them.
+    if (txn.buyer_id !== req.user.id && !req.user.isAdmin) {
+      return res.status(403).json({ error: 'Only the buyer or an admin can request a refund' });
+    }
+    if (!['pending', 'completed'].includes(txn.status)) {
+      return res.status(400).json({ error: `Cannot refund a transaction in status "${txn.status}"` });
     }
     await refundTxn(txn);
     notify(txn.buyer_id, 'system', 'Payment Refunded', `Payment for "${txn.item_title}" has been refunded.`);

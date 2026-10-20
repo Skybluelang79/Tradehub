@@ -186,3 +186,49 @@ describe('Cart', () => {
     expect(res.body.error).toBe('Your cart is empty');
   });
 });
+
+describe('Platform fee on processed trades', () => {
+  it('deducts the 4% fee automatically and tells the seller the breakdown', async () => {
+    const item = await supertest(app)
+      .post('/api/items')
+      .set('Authorization', `Bearer ${sellerToken}`)
+      .send({ title: 'Fee Item', description: 'fee test', price: 50, category: 'electronics', condition: 'good' });
+    const feeItemId = item.body.item?.id || item.body.id;
+
+    const buyer = await authUser('fee-buyer@test.com', 'Fee Buyer');
+    await creditBuyer(buyer, 6000);
+
+    const intent = await supertest(app)
+      .post('/api/payments/create-intent')
+      .set('Authorization', `Bearer ${buyer}`)
+      .send({ itemId: feeItemId, method: 'credit' });
+    expect(intent.status).toBe(200);
+    expect(intent.body.paid).toBe(true);
+
+    const confirm = await supertest(app)
+      .post(`/api/payments/transactions/${intent.body.transactionId}/confirm-receipt`)
+      .set('Authorization', `Bearer ${buyer}`);
+    expect(confirm.status).toBe(200);
+
+    const receipt = await supertest(app)
+      .get(`/api/payments/transactions/${intent.body.transactionId}`)
+      .set('Authorization', `Bearer ${buyer}`);
+    expect(receipt.body.receipt.status).toBe('completed');
+    expect(receipt.body.receipt.fee_amount).toBe(2);
+    expect(receipt.body.receipt.net_amount).toBe(48);
+
+    const wallet = await supertest(app)
+      .get('/api/payments/wallet')
+      .set('Authorization', `Bearer ${sellerToken}`);
+    expect(wallet.body.wallet.available_cents).toBe(4800);
+
+    const notifications = await supertest(app)
+      .get('/api/notifications')
+      .set('Authorization', `Bearer ${sellerToken}`);
+    const sold = notifications.body.notifications.find((n) => n.title === 'Item Sold');
+    expect(sold).toBeTruthy();
+    expect(sold.body).toContain('4% platform fee');
+    expect(sold.body).toContain('₦2');
+    expect(sold.body).toContain('₦48');
+  });
+});

@@ -5,6 +5,7 @@ import db from '../db.js';
 import { verifyPaystackWebhook } from '../src/paystack.js';
 import { refundTxn, reserveItem } from './payments.js';
 import { activatePlan, planIdForCode } from './subscriptions.js';
+import { completeGiftCardPurchase } from './giftcards.js';
 import logger from '../src/logger.js';
 
 const router = Router();
@@ -50,6 +51,14 @@ router.post('/paystack', express.raw({ type: 'application/json' }), async (req, 
           db.prepare("UPDATE transactions SET status = 'pending' WHERE id = ?").run(txn.id);
           reserveItem(txn.item_id);
           notify(txn.buyer_id, 'payment', 'Payment Received', `Payment for "${txn.item_title}" was received and is held in escrow.`);
+        }
+
+        const giftPurchase = db.prepare(
+          "SELECT id FROM gift_card_purchases WHERE reference = ? AND status = 'pending'"
+        ).get(reference);
+        if (giftPurchase) {
+          completeGiftCardPurchase(giftPurchase.id);
+          logger.info(`Gift card purchase completed via webhook: ${reference}`);
         }
 
         // Save the reusable authorization so the buyer can check out faster next time.
@@ -182,6 +191,10 @@ router.post('/paystack', express.raw({ type: 'application/json' }), async (req, 
             UPDATE transactions SET status = 'failed'
             WHERE paystack_reference = ? AND status = 'awaiting_payment'
           `).run(reference);
+          db.prepare(`
+            UPDATE gift_card_purchases SET status = 'failed'
+            WHERE reference = ? AND status = 'pending'
+          `).run(reference);
           logger.warn(`Paystack charge failed: ${reference}`);
         }
         break;
@@ -193,6 +206,10 @@ router.post('/paystack', express.raw({ type: 'application/json' }), async (req, 
           db.prepare(`
             UPDATE transactions SET status = 'failed'
             WHERE paystack_reference = ? AND status = 'awaiting_payment'
+          `).run(reference);
+          db.prepare(`
+            UPDATE gift_card_purchases SET status = 'failed'
+            WHERE reference = ? AND status = 'pending'
           `).run(reference);
           logger.warn(`Paystack charge abandoned: ${reference}`);
         }

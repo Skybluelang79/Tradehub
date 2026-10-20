@@ -62,7 +62,7 @@ router.post('/question', optionalAuth, aiLimiter, async (req, res) => {
   }
 });
 
-router.post('/price-guide', optionalAuth, async (req, res) => {
+router.post('/price-guide', optionalAuth, aiLimiter, async (req, res) => {
   try {
     const { itemId, category, price, title } = req.body || {};
     if (itemId) {
@@ -78,7 +78,7 @@ router.post('/price-guide', optionalAuth, async (req, res) => {
   }
 });
 
-router.get('/recommendations', optionalAuth, async (req, res) => {
+router.get('/recommendations', optionalAuth, aiLimiter, async (req, res) => {
   try {
     const itemId = String(req.query.itemId || '');
     const limit = req.query.limit;
