@@ -20,6 +20,33 @@ function resolveBoost(boosted, boostExpiresAt) {
   if (!Number.isFinite(end) || end <= now) end = now + 7 * 86400000;
   if (end > cap) end = cap;
   return { boosted: 1, boostExpiresAt: new Date(end).toISOString() };
+function ensurePremiumForAuction(userId) {
+  try {
+    const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);
+    if (sub && sub.status === 'active' && ['premium', 'pro'].includes(sub.plan)) {
+      return { upgraded: false, plan: sub.plan };
+    }
+    const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const endStr = end.toISOString().replace('T', ' ').split('.')[0];
+    if (sub) {
+      db.prepare(
+        "UPDATE subscriptions SET plan = 'premium', status = 'active', current_period_start = datetime('now'), current_period_end = ?, trial_end = NULL, cancelled_at = NULL, updated_at = datetime('now') WHERE user_id = ?"
+      ).run(endStr, userId);
+    } else {
+      db.prepare(
+        `INSERT INTO subscriptions (id, user_id, plan, status, current_period_start, current_period_end, created_at, updated_at)
+         VALUES (?, ?, 'premium', 'active', datetime('now'), ?, datetime('now'), datetime('now'))`
+      ).run(uuidv4(), userId, endStr);
+    }
+    try {
+      db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
+        .run(uuidv4(), userId, 'subscription', 'Premium Activated', 'You have been upgraded to Premium because you created an auction listing.');
+    } catch {}
+    return { upgraded: true, plan: 'premium' };
+  } catch (e) {
+    logger.error('ensurePremiumForAuction error:', e);
+    return { upgraded: false };
+  }
 }
 
 function calculateDistance(lat1, lng1, lat2, lng2) {
@@ -273,6 +300,9 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
     const id = uuidv4();
     const auction = is_auction === true;
     const boost = resolveBoost(boosted, boost_expires_at);
+    if (auction) {
+      ensurePremiumForAuction(req.user.id);
+    }
 
     db.prepare(`
       INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, current_bid, current_bidder_id, status)
@@ -333,6 +363,11 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
     if (item.seller_id !== req.user.id) return res.status(403).json({ error: 'Not authorized' });
 
     const data = req.validatedBody;
+    const wasAuction = item.is_auction === 1 || item.is_auction === true;
+    const enablingAuction = data.is_auction === true && !wasAuction;
+    if (enablingAuction) {
+      ensurePremiumForAuction(req.user.id);
+    }
 
     const boostTouched = data.boosted !== undefined || data.boost_expires_at !== undefined;
     const boost = boostTouched
@@ -635,3 +670,4 @@ router.get('/premium/sellers', (req, res) => {
 });
 
 export default router;
+
