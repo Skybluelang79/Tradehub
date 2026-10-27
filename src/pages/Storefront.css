@@ -1,0 +1,84 @@
+.storefront-page {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.storefront-header {
+  margin-bottom: 2rem;
+}
+
+.storefront-banner {
+  height: 200px;
+  background-size: cover;
+  background-position: center;
+  border-radius: 12px 12px 0 0;
+}
+
+.storefront-info {
+  display: flex;
+  gap: 1.5rem;
+  padding: 0 2rem 2rem;
+  background: var(--card-bg);
+  border-radius: 0 0 12px 12px;
+  border: 1px solid var(--border-color);
+  border-top: none;
+}
+
+.storefront-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  border: 4px solid var(--card-bg);
+  margin-top: -50px;
+  object-fit: cover;
+}
+
+.storefront-details {
+  flex: 1;
+  margin-top: 1rem;
+}
+
+.storefront-name {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin: 0;
+}
+
+.storefront-username {
+  color: var(--text-secondary);
+  margin: 0.25rem 0 0.75rem;
+}
+
+.storefront-bio {
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+}
+
+.storefront-stats {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  color: var(--text-secondary);
+}
+
+.storefront-badge {
+  color: var(--primary-color);
+  font-weight: 600;
+}
+
+.storefront-content {
+  padding: 0 1rem;
+}
+
+.storefront-loading,
+.storefront-empty {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-secondary);
+}
+
+.items-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+}

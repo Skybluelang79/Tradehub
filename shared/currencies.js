@@ -8,6 +8,22 @@
 
 export const DEFAULT_CURRENCY = 'NGN';
 
+// Major global currencies for worldwide trading
+export const GLOBAL_CURRENCIES = [
+  { code: 'USD', name: 'US Dollar', symbol: '$', countries: ['United States'] },
+  { code: 'EUR', name: 'Euro', symbol: '€', countries: ['Eurozone'] },
+  { code: 'GBP', name: 'British Pound', symbol: '£', countries: ['United Kingdom'] },
+  { code: 'CAD', name: 'Canadian Dollar', symbol: 'CA$', countries: ['Canada'] },
+  { code: 'AUD', name: 'Australian Dollar', symbol: 'AU$', countries: ['Australia'] },
+  { code: 'JPY', name: 'Japanese Yen', symbol: '¥', countries: ['Japan'] },
+  { code: 'CHF', name: 'Swiss Franc', symbol: 'CHF', countries: ['Switzerland'] },
+  { code: 'CNY', name: 'Chinese Yuan', symbol: '¥', countries: ['China'] },
+  { code: 'INR', name: 'Indian Rupee', symbol: '₹', countries: ['India'] },
+  { code: 'SGD', name: 'Singapore Dollar', symbol: 'S$', countries: ['Singapore'] },
+  { code: 'HKD', name: 'Hong Kong Dollar', symbol: 'HK$', countries: ['Hong Kong'] },
+  { code: 'NZD', name: 'New Zealand Dollar', symbol: 'NZ$', countries: ['New Zealand'] },
+];
+
 // Currencies Paystack can actually charge. Everything else is priced and
 // stored in its own currency but settled in NGN at checkout (see payments.js).
 export const PAYSTACK_CURRENCIES = ['NGN', 'GHS', 'KES', 'ZAR', 'UGX'];
@@ -59,6 +75,20 @@ export const AFRICAN_CURRENCIES = [
 
 // Approximate static rates: units per 1 USD (2025 order of magnitude).
 export const USD_RATES = {
+  // Global currencies
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  CAD: 1.38,
+  AUD: 1.52,
+  JPY: 149.5,
+  CHF: 0.88,
+  CNY: 7.24,
+  INR: 83.5,
+  SGD: 1.34,
+  HKD: 7.82,
+  NZD: 1.64,
+  // African currencies
   AOA: 915, BIF: 2900, BWP: 13.5, CDF: 2850, CVE: 102, DJF: 177.7,
   DZD: 133, EGP: 48, ERN: 15, ETB: 130, GHS: 10.5, GMD: 70, GNF: 8600,
   KES: 129, KMF: 455, LRD: 197, LSL: 18, LYD: 4.8, MAD: 9.2, MGA: 4400,
@@ -67,7 +97,7 @@ export const USD_RATES = {
   UGX: 3650, XAF: 605, XOF: 605, ZAR: 18, ZMW: 28, ZWG: 13.5,
 };
 
-const BY_CODE = Object.fromEntries(AFRICAN_CURRENCIES.map((c) => [c.code, c]));
+const BY_CODE = Object.fromEntries([...AFRICAN_CURRENCIES, ...GLOBAL_CURRENCIES].map((c) => [c.code, c]));
 
 export function normalizeCurrency(c) {
   return String(c || '').toUpperCase();

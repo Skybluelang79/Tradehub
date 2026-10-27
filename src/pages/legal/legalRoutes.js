@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-export const LEGAL_ROUTES = ['/terms', '/privacy', '/faq', '/contact', '/report'];
+export const LEGAL_ROUTES = ['/terms', '/privacy', '/faq', '/contact', '/report', '/refund-policy', '/prohibited', '/cookies'];
 
 export function getLegalPath() {
   const path = window.location.pathname.replace(/\/+$/, '') || '/';
