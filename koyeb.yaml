@@ -1,0 +1,28 @@
+services:
+  - name: tradehub
+    type: web
+    instance_type: free
+    regions:
+      - fra
+    build:
+      type: docker
+      dockerfile: Dockerfile
+    ports:
+      - port: 3001
+        protocol: http
+    routes:
+      - path: /
+        port: 3001
+    env:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: DB_PATH
+        value: /var/lib/data/tradehub.db
+      - key: UPLOADS_DIR
+        value: /var/lib/data/uploads
+    volumes:
+      - name: tradehub-data
+        mount_path: /var/lib/data
+        size: 1GB

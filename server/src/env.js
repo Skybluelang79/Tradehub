@@ -41,8 +41,11 @@ export function isProduction() {
 
 export function allowedOrigins() {
   if (process.env.APP_URL) {
-    return process.env.APP_URL.split(',').map((s) => s.trim()).filter(Boolean);
+    const origins = process.env.APP_URL.split(',').map((s) => s.trim()).filter(Boolean);
+    if (origins.length) return origins;
   }
-  if (isProduction()) return [];
+  if (isProduction()) {
+    return true;
+  }
   return ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3001'];
 }

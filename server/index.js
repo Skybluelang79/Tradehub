@@ -21,6 +21,18 @@ const __dirname = dirname(__filename);
 
 const server = createServer(app);
 const UPLOADS_DIR = process.env.UPLOADS_DIR || join(__dirname, 'uploads');
+const DB_PATH = process.env.DB_PATH || join(__dirname, '..', 'tradehub.db');
+
+try {
+  if (!fs.existsSync(dirname(UPLOADS_DIR))) fs.mkdirSync(dirname(UPLOADS_DIR), { recursive: true });
+} catch {}
+try {
+  fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+} catch {}
+try {
+  if (!fs.existsSync(dirname(DB_PATH))) fs.mkdirSync(dirname(DB_PATH), { recursive: true });
+} catch {}
+
 const JWT_SECRET = requiredSecret('JWT_SECRET');
 const io = new Server(server, {
   cors: {
