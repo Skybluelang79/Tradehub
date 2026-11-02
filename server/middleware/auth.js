@@ -15,7 +15,7 @@ export function authenticateToken(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, identity_verified, kyc_status, two_factor_enabled, store_slug, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
@@ -49,7 +49,7 @@ export async function authenticateFirebaseToken(req, res, next) {
       return res.status(401).json({ error: 'Invalid Firebase token' });
     }
 
-    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE firebase_uid = ? OR email = ?').get(decoded.uid, decoded.email);
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, identity_verified, kyc_status, two_factor_enabled, store_slug, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE firebase_uid = ? OR email = ?').get(decoded.uid, decoded.email);
 
     if (!user) {
       return res.status(401).json({ error: 'User not found. Please sign up first.' });
@@ -77,7 +77,7 @@ export function optionalAuth(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
+    const user = db.prepare('SELECT id, name, username, email, avatar, bio, phone, verified, identity_verified, kyc_status, two_factor_enabled, store_slug, rating, review_count, location_lat, location_lng, location_address, status, is_admin AS isAdmin, created_at FROM users WHERE id = ?').get(decoded.userId);
     req.user = user && user.status === 'active' ? user : null;
   } catch (err) {
     req.user = null;

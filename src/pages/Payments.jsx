@@ -55,6 +55,10 @@ export default function Payments() {
   const [payoutMethod, setPayoutMethod] = useState('bank');
   const [payoutFields, setPayoutFields] = useState({});
   const [payoutBusy, setPayoutBusy] = useState(false);
+  const [payoutCode, setPayoutCode] = useState('');
+  const [payoutError, setPayoutError] = useState('');
+  const [payoutKycVerified, setPayoutKycVerified] = useState(null);
+  const [payoutTwoFactorEnabled, setPayoutTwoFactorEnabled] = useState(null);
   const [banks, setBanks] = useState([]);
   const [banksLoading, setBanksLoading] = useState(false);
   const [bankDropdownOpen, setBankDropdownOpen] = useState(false);
@@ -65,21 +69,30 @@ export default function Payments() {
   const [disputeDetails, setDisputeDetails] = useState('');
   const [disputeBusy, setDisputeBusy] = useState(false);
 
+  const [disputes, setDisputes] = useState([]);
+  const [activeDispute, setActiveDispute] = useState(null);
+  const [activeDisputeLoading, setActiveDisputeLoading] = useState(false);
+  const [evidenceText, setEvidenceText] = useState('');
+  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+
   const refresh = useCallback(async () => {
     if (!isAuthenticated) return;
     try {
-      const [me, w, t, m, p] = await Promise.all([
+      const [me, w, t, m, p, d] = await Promise.all([
         api.auth.me(),
         api.payments.wallet(),
         api.payments.transactions('all'),
         api.payments.methods(),
         api.payouts.list(),
+        api.disputes.list().catch(() => ({ disputes: [] })),
       ]);
       setMyId(me.user?.id || authUser?.id);
       setWallet(w.wallet);
       setBackendTransactions(t.transactions);
       setBackendMethods(m.methods);
       setPayouts(p.payouts);
+      setDisputes(d.disputes || []);
     } catch (err) {
       if (err.message !== 'Failed to fetch') {
         addToast(err.message || 'Could not load payment data', 'error');
@@ -93,6 +106,14 @@ export default function Payments() {
 
   useEffect(() => {
     if (showPayoutModal) {
+      setPayoutError('');
+      setPayoutCode('');
+      api.verification.status()
+        .then((res) => setPayoutKycVerified(Boolean(res.identityVerified || res.kyc?.status === 'verified')))
+        .catch(() => setPayoutKycVerified(null));
+      api.auth.twoFactorStatus()
+        .then((res) => setPayoutTwoFactorEnabled(Boolean(res.enabled)))
+        .catch(() => setPayoutTwoFactorEnabled(null));
       setBanksLoading(true);
       api.payouts.banks('africa')
         .then((res) => setBanks(res.banks || []))
@@ -214,14 +235,82 @@ export default function Payments() {
     }
     setDisputeBusy(true);
     try {
-      await api.disputes.open({ transactionId: disputeTxn.id, reason: disputeReason, description: disputeDetails });
-      addToast('Dispute opened. A mediator will review it within 24 hours.', 'success');
+      const res = await api.disputes.open({ transactionId: disputeTxn.id, reason: disputeReason, description: disputeDetails });
+      const hours = res.evidenceWindowHours || 72;
+      addToast(`Dispute opened. Add your evidence within ${hours} hours.`, 'success');
       setDisputeTxn(null);
       refresh();
     } catch (err) {
       addToast(err.message || 'Could not open dispute', 'error');
     } finally {
       setDisputeBusy(false);
+    }
+  };
+
+  const openDisputeView = async (txn) => {
+    const match = disputes.find((d) => d.transaction_id === txn.id);
+    if (!match) {
+      addToast('Could not find the dispute for this transaction', 'error');
+      return;
+    }
+    setActiveDisputeLoading(true);
+    setEvidenceText('');
+    setEvidenceUrl('');
+    try {
+      const detail = await api.disputes.get(match.id);
+      setActiveDispute(detail);
+    } catch (err) {
+      addToast(err.message || 'Could not load the dispute', 'error');
+    } finally {
+      setActiveDisputeLoading(false);
+    }
+  };
+
+  const reloadActiveDispute = async () => {
+    if (!activeDispute?.dispute?.id) return;
+    const detail = await api.disputes.get(activeDispute.dispute.id);
+    setActiveDispute(detail);
+    refresh();
+  };
+
+  const handleEvidenceFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setEvidenceBusy(true);
+    try {
+      const res = await api.upload.single(file);
+      if (!res?.file?.url) throw new Error('Upload failed');
+      setEvidenceUrl(res.file.url);
+      addToast('Evidence attached', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not upload evidence', 'error');
+    } finally {
+      setEvidenceBusy(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSubmitEvidence = async () => {
+    if (!activeDispute?.dispute?.id) return;
+    if (!evidenceText.trim() && !evidenceUrl) {
+      addToast('Describe the evidence or attach a file', 'error');
+      return;
+    }
+    setEvidenceBusy(true);
+    try {
+      await api.disputes.evidence(activeDispute.dispute.id, {
+        type: evidenceUrl ? 'image' : 'text',
+        content: evidenceText.trim(),
+        url: evidenceUrl,
+      });
+      setEvidenceText('');
+      setEvidenceUrl('');
+      await reloadActiveDispute();
+      addToast('Evidence submitted', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not submit evidence', 'error');
+    } finally {
+      setEvidenceBusy(false);
     }
   };
 
@@ -292,14 +381,32 @@ export default function Payments() {
       return;
     }
     setPayoutBusy(true);
+    setPayoutError('');
     try {
-      await api.payouts.request({ amountCents, method: payoutMethod, details: details });
+      await api.payouts.request({
+        amountCents,
+        method: payoutMethod,
+        details,
+        twoFactorCode: payoutCode.trim() || undefined,
+      });
       addToast('Payout requested!', 'success');
       setShowPayoutModal(false);
       setPayoutAmount('');
       setPayoutFields({});
+      setPayoutCode('');
       refresh();
     } catch (err) {
+      if (err.code === 'kyc_required') {
+        setPayoutKycVerified(false);
+        setPayoutError('Verify your identity before requesting a payout.');
+      } else if (err.code === '2fa_required') {
+        setPayoutTwoFactorEnabled(true);
+        setPayoutError('Enter your two-factor authentication code to continue.');
+      } else if (err.code === 'invalid_2fa') {
+        setPayoutError('That authentication code is invalid. Try the next code from your app.');
+      } else {
+        setPayoutError(err.message || 'Could not request payout');
+      }
       addToast(err.message || 'Could not request payout', 'error');
     } finally {
       setPayoutBusy(false);
@@ -601,10 +708,20 @@ export default function Payments() {
                     </button>
                   )}
                   {status === 'disputed' && (
-                    <span className="escrow-badge">
-                      <ShieldIcon size={12} />
-                      Under Review
-                    </span>
+                    <>
+                      <span className="escrow-badge">
+                        <ShieldIcon size={12} />
+                        Under Review
+                      </span>
+                      <button className="dispute-btn" onClick={() => openDisputeView(txn)}>
+                        View Dispute
+                      </button>
+                    </>
+                  )}
+                  {status !== 'disputed' && disputes.some((d) => d.transaction_id === txn.id) && (
+                    <button className="dispute-btn" onClick={() => openDisputeView(txn)}>
+                      View Dispute
+                    </button>
                   )}
                 </div>
               </div>
@@ -722,11 +839,40 @@ export default function Payments() {
 
       <Modal isOpen={showPayoutModal} onClose={() => { setShowPayoutModal(false); setPayoutFields({}); }} title="Request Payout"
         footer={
-          <Button block onClick={handleRequestPayout} disabled={payoutBusy}>
+          <Button block onClick={handleRequestPayout} disabled={payoutBusy || payoutKycVerified === false || (payoutTwoFactorEnabled && !payoutCode.trim())}>
             {payoutBusy ? 'Requesting...' : 'Request Payout'}
           </Button>
         }>
         <div className="modal-form">
+          {payoutError && (
+            <p style={{ color: 'var(--error)', fontSize: 13, marginBottom: 12 }}>{payoutError}</p>
+          )}
+          {payoutKycVerified === false && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4 }}>Identity verification required</div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 10 }}>
+                Payouts are only available after your identity is verified. This protects buyers and sellers from fraud.
+              </p>
+              <Button block onClick={() => { setShowPayoutModal(false); setActiveTab('profile'); }}>
+                Verify my identity
+              </Button>
+            </div>
+          )}
+          {payoutTwoFactorEnabled && (
+            <div className="input-group">
+              <label className="input-label">Two-factor authentication code</label>
+              <input
+                type="text"
+                className="input"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={20}
+                placeholder="6-digit code or backup code"
+                value={payoutCode}
+                onChange={(e) => { setPayoutCode(e.target.value); if (payoutError) setPayoutError(''); }}
+              />
+            </div>
+          )}
           <div className="input-group">
             <label className="input-label">Amount (₦)</label>
             <input
@@ -861,6 +1007,101 @@ export default function Payments() {
             <ShieldIcon size={12} /> Funds stay in escrow until the dispute is resolved. Our team reviews within 24 hours.
           </p>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={!!activeDispute || activeDisputeLoading}
+        onClose={() => { setActiveDispute(null); setEvidenceText(''); setEvidenceUrl(''); }}
+        title="Dispute Details"
+      >
+        {activeDisputeLoading ? (
+          <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading dispute…</p>
+        ) : activeDispute && (
+          <div className="modal-form">
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                <strong>{activeDispute.dispute.item_title}</strong>
+                <span className={`transaction-status ${activeDispute.dispute.status === 'open' ? 'pending' : 'completed'}`}>
+                  {activeDispute.dispute.status === 'open' ? 'Open' : 'Resolved'}
+                </span>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginTop: 6 }}>
+                {activeDispute.dispute.reason}
+              </p>
+              {activeDispute.dispute.description && (
+                <p style={{ fontSize: 13, marginTop: 6 }}>{activeDispute.dispute.description}</p>
+              )}
+              {activeDispute.dispute.resolution && (
+                <p style={{ fontSize: 13, marginTop: 8 }}>
+                  <strong>Ruling:</strong> {activeDispute.dispute.resolution}
+                </p>
+              )}
+              {activeDispute.dispute.status === 'open' && activeDispute.dispute.evidence_deadline && (
+                <p style={{ color: 'var(--text-secondary)', fontSize: 12, marginTop: 8 }}>
+                  <ClockIcon size={12} />
+                  {' '}Evidence window {activeDispute.evidenceWindowOpen ? 'closes' : 'closed'}{' '}
+                  {new Date(String(activeDispute.dispute.evidence_deadline).replace(' ', 'T') + 'Z').toLocaleString()}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <div className="input-label" style={{ marginBottom: 6 }}>Evidence ({activeDispute.evidence?.length || 0})</div>
+              {activeDispute.evidence?.length ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {activeDispute.evidence.map((item) => (
+                    <div key={item.id} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
+                        <strong style={{ color: 'var(--text-primary)' }}>{item.user_name || 'User'}</strong>
+                        <span>{item.created_at ? new Date(String(item.created_at).replace(' ', 'T') + 'Z').toLocaleString() : ''}</span>
+                      </div>
+                      {item.content && <p style={{ fontSize: 13, marginTop: 6 }}>{item.content}</p>}
+                      {item.url && (
+                        <a href={item.url} target="_blank" rel="noreferrer" style={{ fontSize: 13, marginTop: 6, display: 'inline-block' }}>
+                          {item.filename || 'Open attachment'}
+                        </a>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No evidence submitted yet.</p>
+              )}
+            </div>
+
+            {activeDispute.dispute.status === 'open' && activeDispute.evidenceWindowOpen && (
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                <div className="input-label" style={{ marginBottom: 6 }}>Add your evidence</div>
+                <div className="input-group">
+                  <textarea
+                    className="input"
+                    rows="3"
+                    maxLength={2000}
+                    placeholder="Explain what happened and include any tracking or order details…"
+                    value={evidenceText}
+                    onChange={(e) => setEvidenceText(e.target.value)}
+                    disabled={evidenceBusy}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <label className="auth-link-btn" style={{ cursor: 'pointer' }}>
+                    {evidenceBusy ? 'Working…' : evidenceUrl ? 'Replace image' : 'Attach image'}
+                    <input type="file" accept="image/*" hidden onChange={handleEvidenceFile} disabled={evidenceBusy} />
+                  </label>
+                  {evidenceUrl && (
+                    <>
+                      <img src={evidenceUrl} alt="Evidence preview" style={{ width: 56, height: 56, objectFit: 'cover', borderRadius: 6 }} />
+                      <button type="button" className="auth-link-btn" onClick={() => setEvidenceUrl('')} disabled={evidenceBusy}>Remove</button>
+                    </>
+                  )}
+                  <Button onClick={handleSubmitEvidence} disabled={evidenceBusy}>
+                    {evidenceBusy ? 'Submitting…' : 'Submit Evidence'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
     </div>
   );

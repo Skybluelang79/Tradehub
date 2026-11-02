@@ -69,7 +69,7 @@ const PLATFORMS = [
   { id: 'microsoft', name: 'Microsoft', icon: MicrosoftIcon },
 ];
 
-export default function SocialAuthButtons({ onClose }) {
+export default function SocialAuthButtons({ onClose, onTwoFactorRequired }) {
   const { socialLogin } = useAuth();
   const { addToast } = useToast();
   const [busy, setBusy] = useState(null);
@@ -84,6 +84,10 @@ export default function SocialAuthButtons({ onClose }) {
     if (result.success) {
       addToast('Welcome to TradeHub!', 'success');
       if (onClose) onClose();
+    } else if (result.twoFactorRequired && onTwoFactorRequired) {
+      onTwoFactorRequired(result.challengeToken);
+    } else if (result.twoFactorRequired) {
+      addToast('Two-factor authentication is enabled. Sign in with email to enter your code.', 'error');
     } else {
       addToast(result.error || 'Social login failed', 'error');
     }

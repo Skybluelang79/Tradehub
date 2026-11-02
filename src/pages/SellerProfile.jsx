@@ -231,6 +231,18 @@ export default function SellerProfile({ userId, onClose, onItemOpen }) {
                 <button className="seller-profile-message" onClick={handleMessage}>
                   Message
                 </button>
+                {user.store_slug && (
+                  <button
+                    className="seller-profile-message"
+                    onClick={() => {
+                      window.history.pushState({}, '', `/store/${user.store_slug}`);
+                      window.dispatchEvent(new PopStateEvent('popstate'));
+                      if (onClose) onClose();
+                    }}
+                  >
+                    Visit store
+                  </button>
+                )}
               </div>
             </div>
 

@@ -46,7 +46,11 @@ async function request(path, options = {}) {
       localStorage.removeItem('tradehub_admin_token');
       window.dispatchEvent(new CustomEvent('adminSessionExpired'));
     }
-    throw new Error((data && data.error) || `Request failed: ${res.status}`);
+    const error = new Error((data && data.error) || `Request failed: ${res.status}`);
+    error.status = res.status;
+    error.code = data?.code;
+    error.data = data;
+    throw error;
   }
   return data;
 }
@@ -118,6 +122,14 @@ export const api = {
     verifyEmail: (token) => request('/auth/verify-email', { method: 'POST', body: JSON.stringify({ token }) }),
     resendVerification: () => request('/auth/resend-verification', { method: 'POST' }),
     deleteAccount: (data) => request('/auth/me', { method: 'DELETE', body: JSON.stringify(data) }),
+    verifyTwoFactorLogin: (data) => request('/auth/2fa/verify-login', { method: 'POST', body: JSON.stringify(data) }),
+    twoFactorStatus: () => request('/auth/2fa/status'),
+    twoFactorSetup: () => request('/auth/2fa/setup', { method: 'POST' }),
+    twoFactorEnable: (code) => request('/auth/2fa/enable', { method: 'POST', body: JSON.stringify({ code }) }),
+    twoFactorDisable: (data) => request('/auth/2fa/disable', { method: 'POST', body: JSON.stringify(data) }),
+    twoFactorBackupCodes: (data) => request('/auth/2fa/backup-codes', { method: 'POST', body: JSON.stringify(data) }),
+    getStore: () => request('/auth/store'),
+    updateStore: (data) => request('/auth/store', { method: 'PUT', body: JSON.stringify(data) }),
   },
 
   phoneAuth: {
@@ -242,6 +254,8 @@ export const api = {
     open: (data) => request('/disputes', { method: 'POST', body: JSON.stringify(data) }),
     list: () => request('/disputes'),
     get: (id) => request(`/disputes/${id}`),
+    adminGet: (id) => adminRequest(`/disputes/${id}`),
+    evidence: (id, data) => request(`/disputes/${id}/evidence`, { method: 'POST', body: JSON.stringify(data) }),
     all: () => adminRequest('/disputes'),
     resolve: (id, data) => adminRequest(`/disputes/${id}/resolve`, { method: 'PUT', body: JSON.stringify(data) }),
   },
@@ -268,6 +282,10 @@ export const api = {
   reviews: {
     forUser: (userId) => request(`/reviews/user/${userId}`),
     create: (data) => request('/reviews', { method: 'POST', body: JSON.stringify(data) }),
+  },
+
+  storefront: {
+    bySlug: (slug) => request(`/store/${encodeURIComponent(slug)}`),
   },
 
   follows: {

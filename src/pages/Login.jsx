@@ -9,6 +9,7 @@ import './Auth.css';
 export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
   const {
     login,
+    verifyTwoFactorLogin,
     isLoading,
     error,
     clearError,
@@ -32,6 +33,10 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
   const [busy, setBusy] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
   const [passkeyInfo, setPasskeyInfo] = useState({ supported: false, platform: false, conditional: false });
+  const [challengeToken, setChallengeToken] = useState('');
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorBusy, setTwoFactorBusy] = useState(false);
+  const [twoFactorError, setTwoFactorError] = useState('');
 
   const passkeySupported = isPasskeySupported();
   const activeBusy = busy || isLoading;
@@ -153,8 +158,30 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
     if (result.success) {
       addToast('Welcome back!', 'success');
       if (onClose) onClose();
+    } else if (result.twoFactorRequired) {
+      setChallengeToken(result.challengeToken);
+      setTwoFactorCode('');
+      setTwoFactorError('');
     } else {
       addToast(result.error || 'Login failed', 'error');
+    }
+  };
+
+  const handleTwoFactorSubmit = async (e) => {
+    e.preventDefault();
+    if (!twoFactorCode.trim()) {
+      setTwoFactorError('Enter your authentication code');
+      return;
+    }
+    setTwoFactorBusy(true);
+    setTwoFactorError('');
+    const result = await verifyTwoFactorLogin(challengeToken, twoFactorCode.trim());
+    setTwoFactorBusy(false);
+    if (result.success) {
+      addToast('Welcome back!', 'success');
+      if (onClose) onClose();
+    } else {
+      setTwoFactorError(result.error || 'Invalid authentication code');
     }
   };
 
@@ -171,6 +198,10 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
       if (result.success) {
         addToast('Signed in with your fingerprint', 'success');
         if (onClose) onClose();
+      } else if (result.twoFactorRequired) {
+        setChallengeToken(result.challengeToken);
+        setTwoFactorCode('');
+        setTwoFactorError('');
       } else {
         addToast(result.error || 'Fingerprint sign-in failed', 'error');
       }
@@ -199,6 +230,75 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
     setCodeSent(false);
     if (error) clearError();
   };
+
+  if (challengeToken) {
+    return (
+      <div className="auth-page">
+        <div className="auth-container">
+          <div className="auth-header">
+            <div className="auth-logo">
+              <TradeHubLogo size={48} />
+            </div>
+            <h1>Two-Step Verification</h1>
+            <p>Enter the 6-digit code from your authenticator app, or one of your backup codes.</p>
+          </div>
+
+          <form className="auth-form" onSubmit={handleTwoFactorSubmit}>
+            {twoFactorError && (
+              <div className="auth-error">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                {twoFactorError}
+              </div>
+            )}
+
+            <div className="form-group">
+              <label htmlFor="twoFactorCode">Authentication code</label>
+              <div className="input-wrapper">
+                <svg className="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+                <input
+                  type="text"
+                  id="twoFactorCode"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                  maxLength={20}
+                  placeholder="123456 or backup code"
+                  value={twoFactorCode}
+                  onChange={(e) => {
+                    setTwoFactorCode(e.target.value);
+                    if (twoFactorError) setTwoFactorError('');
+                  }}
+                />
+              </div>
+            </div>
+
+            <button type="submit" className="auth-submit-btn" disabled={twoFactorBusy || isLoading}>
+              {twoFactorBusy || isLoading ? <span className="loading-spinner"></span> : 'Verify & Sign In'}
+            </button>
+
+            <button
+              type="button"
+              className="auth-link-btn"
+              onClick={() => {
+                setChallengeToken('');
+                setTwoFactorCode('');
+                setTwoFactorError('');
+              }}
+            >
+              Back to sign in
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-page">
@@ -457,7 +557,14 @@ export default function Login({ onSwitchToSignup, onForgotPassword, onClose }) {
           </div>
         )}
 
-        <SocialAuthButtons onClose={onClose} />
+        <SocialAuthButtons
+          onClose={onClose}
+          onTwoFactorRequired={(token) => {
+            setChallengeToken(token);
+            setTwoFactorCode('');
+            setTwoFactorError('');
+          }}
+        />
 
         <div className="auth-footer">
           <p>

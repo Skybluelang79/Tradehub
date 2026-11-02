@@ -5,10 +5,23 @@ import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import logger from '../src/logger.js';
 import { paystack, isPaystackConfigured } from '../src/paystack.js';
+import { verifyTotp, consumeBackupCode } from '../src/totp.js';
 
 const router = Router();
 
 const PAYOUT_METHODS = ['bank'];
+
+function consumeSecondFactor(user, code) {
+  const value = String(code || '').trim();
+  if (!value) return false;
+  if (user.two_factor_secret && verifyTotp(user.two_factor_secret, value)) return true;
+
+  const remaining = consumeBackupCode(user.two_factor_backup_codes, value);
+  if (!remaining) return false;
+  db.prepare("UPDATE users SET two_factor_backup_codes = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(JSON.stringify(remaining), user.id);
+  return true;
+}
 
 function getWallet(userId) {
   let w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);
@@ -93,6 +106,26 @@ router.post('/', authenticateToken, (req, res) => {
     if (!amount || amount < 100) return res.status(400).json({ error: 'Amount must be at least $1.00' });
     if (!PAYOUT_METHODS.includes(method)) return res.status(400).json({ error: 'Invalid payout method' });
     if (!details || (typeof details !== 'object')) return res.status(400).json({ error: 'Payout details required' });
+
+    const account = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    const kycVerified = account?.kyc_status === 'verified' || Boolean(account?.identity_verified);
+    if (!kycVerified) {
+      return res.status(403).json({
+        error: 'Verify your identity before requesting a payout',
+        code: 'kyc_required',
+      });
+    }
+    if (account.two_factor_enabled) {
+      if (!req.body.twoFactorCode) {
+        return res.status(403).json({
+          error: 'Enter your two-factor authentication code to continue',
+          code: '2fa_required',
+        });
+      }
+      if (!consumeSecondFactor(account, req.body.twoFactorCode)) {
+        return res.status(401).json({ error: 'Invalid authentication code', code: 'invalid_2fa' });
+      }
+    }
 
     const wallet = getWallet(req.user.id);
     if (wallet.available_cents < amount) {

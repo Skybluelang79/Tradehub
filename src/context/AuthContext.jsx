@@ -52,6 +52,9 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const data = await api.auth.login({ email, password });
+      if (data?.twoFactorRequired && data?.challengeToken) {
+        return { success: false, twoFactorRequired: true, challengeToken: data.challengeToken };
+      }
       setToken(data.token);
       localStorage.setItem('tradehub_token', data.token);
       setUser(data.user);
@@ -59,6 +62,24 @@ export function AuthProvider({ children }) {
       return { success: true };
     } catch (err) {
       setError(err.message || 'Invalid email or password');
+      return { success: false, error: err.message };
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const verifyTwoFactorLogin = useCallback(async (challengeToken, code) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await api.auth.verifyTwoFactorLogin({ challengeToken, code });
+      setToken(data.token);
+      localStorage.setItem('tradehub_token', data.token);
+      setUser(data.user);
+      setIsAuthenticated(true);
+      return { success: true };
+    } catch (err) {
+      setError(err.message || 'Invalid authentication code');
       return { success: false, error: err.message };
     } finally {
       setIsLoading(false);
@@ -126,6 +147,9 @@ export function AuthProvider({ children }) {
     }
     try {
       const data = await loginWithPasskey(email, options);
+      if (data?.twoFactorRequired && data?.challengeToken) {
+        return { success: false, twoFactorRequired: true, challengeToken: data.challengeToken };
+      }
       setToken(data.token);
       localStorage.setItem('tradehub_token', data.token);
       setUser(data.user);
@@ -144,6 +168,9 @@ export function AuthProvider({ children }) {
     setError(null);
     try {
       const data = await api.auth.social({ provider, token });
+      if (data?.twoFactorRequired && data?.challengeToken) {
+        return { success: false, twoFactorRequired: true, challengeToken: data.challengeToken };
+      }
       setToken(data.token);
       localStorage.setItem('tradehub_token', data.token);
       setUser(data.user);
@@ -395,6 +422,7 @@ export function AuthProvider({ children }) {
     isLoading,
     error,
     login,
+    verifyTwoFactorLogin,
     signup,
     socialLogin,
     logout,

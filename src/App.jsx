@@ -9,8 +9,7 @@ import { OfflineIndicator, AuthGate } from './components/features';
 import { AUTH_GATED_TABS, GATE_COPY } from './config/authGate';
 
 
-import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, ResetPassword, Favorites, Notifications, GiftMall, SellerProfile, Cart } from './pages';
-import Storefront from './pages/Storefront';
+import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, ResetPassword, Favorites, Notifications, GiftMall, SellerProfile, Cart, Store } from './pages';
 import TermsOfService from './pages/legal/TermsOfService';
 import PrivacyPolicy from './pages/legal/PrivacyPolicy';
 import RefundPolicy from './pages/legal/RefundPolicy';
@@ -41,6 +40,16 @@ import {
   AdminSettings
 } from './pages/admin';
 import './styles/globals.css';
+
+function getStoreSlugFromPath() {
+  const match = /^\/store\/([^/]+)\/?$/i.exec(window.location.pathname);
+  if (!match) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
+}
 
 function AuthPages({ onAuthSuccess, initialView = 'login', resetToken = null }) {
   const [authView, setAuthView] = useState(initialView);
@@ -101,6 +110,7 @@ function AppContent() {
   const [showGiftMall, setShowGiftMall] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [sellerProfileId, setSellerProfileId] = useState(null);
+  const [storeSlug, setStoreSlug] = useState(() => getStoreSlugFromPath());
   const [authRedirectTab, setAuthRedirectTab] = useState(null);
   const [authInitialView, setAuthInitialView] = useState('login');
   const [authResetToken, setAuthResetToken] = useState(null);
@@ -111,7 +121,10 @@ function AppContent() {
   // The legal pages are plain URL paths rather than app state, so back/forward
   // and the in-page links that push history have to re-evaluate the location.
   useEffect(() => {
-    const sync = () => setLegalPath(getLegalPath());
+    const sync = () => {
+      setLegalPath(getLegalPath());
+      setStoreSlug(getStoreSlugFromPath());
+    };
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
   }, []);
@@ -252,9 +265,32 @@ function AppContent() {
     }
   };
 
+  const handleStoreBack = () => {
+    window.history.pushState({}, '', '/');
+    setStoreSlug(null);
+    setSelectedItem(null);
+    setActiveTab('home');
+  };
+
   const renderPage = () => {
     if (selectedItem) {
       return <ItemDetail />;
+    }
+
+    if (storeSlug) {
+      return (
+        <Store
+          slug={storeSlug}
+          onBack={handleStoreBack}
+          onItemOpen={(item) => {
+            if (!isAuthenticated) {
+              window.dispatchEvent(new CustomEvent('openAuthModal', { detail: 'login' }));
+              return;
+            }
+            setSelectedItem(item);
+          }}
+        />
+      );
     }
 
     switch (activeTab) {
@@ -303,7 +339,7 @@ function AppContent() {
       ? GATE_COPY.item
       : GATE_COPY[activeTab] || GATE_COPY.home;
 
-  const showGate = !isAuthenticated && (overlayOpen || !!selectedItem || AUTH_GATED_TABS.includes(activeTab));
+  const showGate = !isAuthenticated && !storeSlug && (overlayOpen || !!selectedItem || AUTH_GATED_TABS.includes(activeTab));
 
   if (isAdminMode) {
     return (
@@ -320,6 +356,9 @@ function AppContent() {
   if (legalPath === '/faq') return <Faq />;
   if (legalPath === '/contact') return <Contact />;
   if (legalPath === '/report') return <ReportProblem />;
+  if (legalPath === '/refund-policy') return <RefundPolicy />;
+  if (legalPath === '/prohibited') return <ProhibitedItems />;
+  if (legalPath === '/cookies') return <CookiePolicy />;
 
   // Hold the splash only while auth is hydrating on first paint, otherwise the
   // login/signup modal would be torn away mid-request (isLoading toggles there too).
@@ -355,7 +394,7 @@ function AppContent() {
         </div>
       </main>
       
-      {!selectedItem && (
+      {!selectedItem && !storeSlug && (
         <BottomNav
           activeTab={activeTab}
           onTabChange={handleTabChange}

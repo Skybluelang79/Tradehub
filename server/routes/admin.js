@@ -313,7 +313,10 @@ router.post('/verifications/:id/approve', adminAuth, (req, res) => {
     const request = db.prepare("SELECT * FROM verification_requests WHERE id = ? AND status = 'pending'").get(req.params.id);
     if (!request) return res.status(400).json({ error: 'Pending verification request not found' });
     db.prepare("UPDATE verification_requests SET status = 'approved', admin_id = ?, reviewed_at = datetime('now') WHERE id = ?").run(req.adminId, request.id);
-    db.prepare('UPDATE users SET identity_verified = 1 WHERE id = ?').run(request.user_id);
+    db.prepare(`
+      UPDATE users SET identity_verified = 1, kyc_status = 'verified', kyc_verified_at = datetime('now'),
+      updated_at = datetime('now') WHERE id = ?
+    `).run(request.user_id);
     db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
       .run(uuidv4(), request.user_id, 'verification', 'Verification Approved',
         'Congratulations! Your seller identity has been verified. You can now list with the Verified Seller badge.');
@@ -331,6 +334,7 @@ router.post('/verifications/:id/reject', adminAuth, (req, res) => {
     if (!request) return res.status(400).json({ error: 'Pending verification request not found' });
     const note = String(req.body.note || '').trim().slice(0, 500);
     db.prepare("UPDATE verification_requests SET status = 'rejected', admin_note = ?, admin_id = ?, reviewed_at = datetime('now') WHERE id = ?").run(note, req.adminId, request.id);
+    db.prepare("UPDATE users SET kyc_status = 'rejected', updated_at = datetime('now') WHERE id = ?").run(request.user_id);
     db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
       .run(uuidv4(), request.user_id, 'verification', 'Verification Request Update',
         note ? `Your verification request was rejected: ${note}` : 'Your verification request was rejected. Please resubmit with a clearer document photo.');
@@ -431,6 +435,12 @@ router.delete('/users/:id', adminAuth, (req, res) => {
     db.prepare('DELETE FROM referrals WHERE referrer_id = ? OR referred_id = ?').run(uid, uid);
     db.prepare('DELETE FROM user_reports WHERE reported_user_id = ? OR reporter_id = ?').run(uid, uid);
     db.prepare('DELETE FROM reports WHERE reporter_id = ?').run(uid);
+    db.prepare(`
+      DELETE FROM dispute_evidence WHERE user_id = ? OR dispute_id IN (
+        SELECT id FROM disputes WHERE opened_by = ?
+        OR transaction_id IN (SELECT id FROM transactions WHERE buyer_id = ? OR seller_id = ?)
+      )
+    `).run(uid, uid, uid, uid);
     db.prepare('DELETE FROM disputes WHERE opened_by = ? OR transaction_id IN (SELECT id FROM transactions WHERE buyer_id = ? OR seller_id = ?)').run(uid, uid, uid);
     db.prepare('DELETE FROM subscriptions WHERE user_id = ?').run(uid);
     db.prepare('DELETE FROM wallets WHERE user_id = ?').run(uid);

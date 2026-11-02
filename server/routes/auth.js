@@ -1,22 +1,59 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { generateToken, authenticateToken } from '../middleware/auth.js';
 import validate, {
-  signupSchema, loginSchema, updateProfileSchema,
+  signupSchema, loginSchema, updateProfileSchema, storeProfileSchema, twoFactorCodeSchema,
   changePasswordSchema, forgotPasswordSchema, resetPasswordSchema,
 } from '../src/validation.js';
-import { authLimiter } from '../src/rateLimiter.js';
+import { authLimiter, writeLimiter } from '../src/rateLimiter.js';
 import { requiredSecret, requiredEnv } from '../src/env.js';
 import { sendVerificationEmail, sendPasswordResetEmail, isEmailConfigured } from '../src/email.js';
 import logger from '../src/logger.js';
 import { applyReferral } from './referrals.js';
+import {
+  generateSecret, verifyTotp, otpauthUrl, generateBackupCodes, consumeBackupCode,
+} from '../src/totp.js';
 
 const router = Router();
 
 const JWT_SECRET = requiredSecret('JWT_SECRET');
 const REFRESH_SECRET = requiredSecret('REFRESH_SECRET');
+
+function publicUser(user) {
+  const {
+    password, two_factor_secret: secret, two_factor_backup_codes: backupCodes, kyc_data: kycData, ...safe
+  } = user;
+  void password;
+  void secret;
+  void backupCodes;
+  void kycData;
+  return safe;
+}
+
+function consumeSecondFactor(user, code) {
+  const value = String(code || '').trim();
+  if (!value) return false;
+  if (user.two_factor_secret && verifyTotp(user.two_factor_secret, value)) return true;
+
+  const remaining = consumeBackupCode(user.two_factor_backup_codes, value);
+  if (!remaining) return false;
+
+  db.prepare("UPDATE users SET two_factor_backup_codes = ?, updated_at = datetime('now') WHERE id = ?")
+    .run(JSON.stringify(remaining), user.id);
+  user.two_factor_backup_codes = JSON.stringify(remaining);
+  return true;
+}
+
+function issueSession(user) {
+  return {
+    token: generateToken(user.id),
+    refreshToken: generateRefreshToken(user.id),
+    user: publicUser(user),
+  };
+}
 
 export function generateRefreshToken(userId) {
   const token = uuidv4();
@@ -106,13 +143,216 @@ router.post('/login', authLimiter, validate(loginSchema), (req, res) => {
       return res.status(403).json({ error: 'Your account has been suspended', reason: user.banned_reason || '' });
     }
 
-    const token = generateToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
-    const { password: _, ...userWithoutPassword } = user;
+    if (user.two_factor_enabled) {
+      const challengeToken = jwt.sign(
+        { userId: user.id, purpose: '2fa_login' },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ twoFactorRequired: true, challengeToken });
+    }
 
-    res.json({ token, refreshToken, user: userWithoutPassword });
+    res.json(issueSession(user));
   } catch (err) {
     logger.error('Login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/2fa/verify-login', authLimiter, (req, res) => {
+  try {
+    const { challengeToken, code } = req.body || {};
+    if (!challengeToken || !code) {
+      return res.status(400).json({ error: 'Challenge token and code are required' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(challengeToken, JWT_SECRET);
+    } catch {
+      return res.status(401).json({ error: 'Your sign-in session expired. Please log in again.' });
+    }
+    if (decoded.purpose !== '2fa_login') {
+      return res.status(401).json({ error: 'Invalid sign-in challenge' });
+    }
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(decoded.userId);
+    if (!user || !user.two_factor_enabled) {
+      return res.status(401).json({ error: 'Two-factor authentication is not enabled for this account' });
+    }
+    if (user.status === 'banned' || user.status === 'suspended') {
+      return res.status(403).json({ error: 'Your account is not available', reason: user.banned_reason || '' });
+    }
+    if (!consumeSecondFactor(user, code)) {
+      return res.status(401).json({ error: 'Invalid authentication code' });
+    }
+
+    res.json(issueSession(user));
+  } catch (err) {
+    logger.error('2FA login error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/2fa/status', authenticateToken, (req, res) => {
+  try {
+    const user = db.prepare('SELECT two_factor_enabled, two_factor_backup_codes FROM users WHERE id = ?').get(req.user.id);
+    let remaining = 0;
+    try { remaining = JSON.parse(user?.two_factor_backup_codes || '[]').length; } catch { remaining = 0; }
+    res.json({ enabled: Boolean(user?.two_factor_enabled), backupCodesRemaining: remaining });
+  } catch (err) {
+    logger.error('2FA status error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/2fa/setup', authenticateToken, writeLimiter, (req, res) => {
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (user.two_factor_enabled) {
+      return res.status(400).json({ error: 'Two-factor authentication is already enabled' });
+    }
+
+    const secret = generateSecret();
+    db.prepare("UPDATE users SET two_factor_secret = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(secret, user.id);
+
+    res.json({
+      secret,
+      otpauthUrl: otpauthUrl({ secret, label: user.email || user.username || user.name }),
+      issuer: 'TradeHub',
+    });
+  } catch (err) {
+    logger.error('2FA setup error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/2fa/enable', authenticateToken, writeLimiter, validate(twoFactorCodeSchema), (req, res) => {
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (user.two_factor_enabled) {
+      return res.status(400).json({ error: 'Two-factor authentication is already enabled' });
+    }
+    if (!user.two_factor_secret) {
+      return res.status(400).json({ error: 'Start two-factor setup first' });
+    }
+    if (!verifyTotp(user.two_factor_secret, req.validatedBody.code)) {
+      return res.status(401).json({ error: 'Invalid authentication code' });
+    }
+
+    const { plain, hashed } = generateBackupCodes();
+    db.prepare(`
+      UPDATE users SET two_factor_enabled = 1, two_factor_backup_codes = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(JSON.stringify(hashed), user.id);
+
+    res.json({ enabled: true, backupCodes: plain });
+  } catch (err) {
+    logger.error('2FA enable error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/2fa/disable', authenticateToken, writeLimiter, (req, res) => {
+  try {
+    const { password, code } = req.body || {};
+    if (!password) return res.status(400).json({ error: 'Password is required' });
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ error: 'Password is incorrect' });
+    }
+    if (!consumeSecondFactor(user, code)) {
+      return res.status(401).json({ error: 'Invalid authentication code' });
+    }
+
+    db.prepare(`
+      UPDATE users SET two_factor_enabled = 0, two_factor_secret = '', two_factor_backup_codes = '[]',
+      updated_at = datetime('now') WHERE id = ?
+    `).run(user.id);
+
+    res.json({ enabled: false });
+  } catch (err) {
+    logger.error('2FA disable error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/2fa/backup-codes', authenticateToken, writeLimiter, (req, res) => {
+  try {
+    const { password, code } = req.body || {};
+    if (!password) return res.status(400).json({ error: 'Password is required' });
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    if (!bcrypt.compareSync(password, user.password)) {
+      return res.status(401).json({ error: 'Password is incorrect' });
+    }
+    if (!consumeSecondFactor(user, code)) {
+      return res.status(401).json({ error: 'Invalid authentication code' });
+    }
+
+    const { plain, hashed } = generateBackupCodes();
+    db.prepare("UPDATE users SET two_factor_backup_codes = ?, updated_at = datetime('now') WHERE id = ?")
+      .run(JSON.stringify(hashed), user.id);
+
+    res.json({ backupCodes: plain });
+  } catch (err) {
+    logger.error('2FA backup codes error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.get('/store', authenticateToken, (req, res) => {
+  try {
+    const user = db.prepare('SELECT store_slug, store_banner, store_description FROM users WHERE id = ?').get(req.user.id);
+    res.json({
+      store: {
+        slug: user?.store_slug || '',
+        banner: user?.store_banner || '',
+        description: user?.store_description || '',
+        url: user?.store_slug ? `/store/${user.store_slug}` : null,
+      },
+    });
+  } catch (err) {
+    logger.error('Get store settings error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.put('/store', authenticateToken, writeLimiter, validate(storeProfileSchema), (req, res) => {
+  try {
+    const { storeSlug = '', storeBanner = '', storeDescription = '' } = req.validatedBody;
+    const slug = String(storeSlug || '').trim().toLowerCase();
+
+    if (slug && !/^[a-z0-9](?:[a-z0-9_-]{1,28}[a-z0-9])?$/.test(slug)) {
+      return res.status(400).json({
+        error: 'Store link must be 3-30 characters using letters, numbers, hyphens or underscores',
+      });
+    }
+    if (storeBanner && !/^(\/uploads\/|https?:\/\/)/.test(storeBanner)) {
+      return res.status(400).json({ error: 'Banner must be an uploaded image or a valid URL' });
+    }
+    if (slug) {
+      const taken = db.prepare('SELECT id FROM users WHERE store_slug = ? AND id != ?').get(slug, req.user.id);
+      if (taken) return res.status(409).json({ error: 'That store link is already taken' });
+    }
+
+    db.prepare(`
+      UPDATE users SET store_slug = ?, store_banner = ?, store_description = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(slug || null, storeBanner || '', String(storeDescription || '').trim(), req.user.id);
+
+    res.json({
+      store: {
+        slug,
+        banner: storeBanner || '',
+        description: String(storeDescription || '').trim(),
+        url: slug ? `/store/${slug}` : null,
+      },
+    });
+  } catch (err) {
+    logger.error('Update store settings error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -191,10 +431,16 @@ router.post('/social', authLimiter, async (req, res) => {
       return res.status(403).json({ error: 'Your account has been suspended', reason: user.banned_reason || '' });
     }
 
-    const authToken = generateToken(user.id);
-    const refreshToken = generateRefreshToken(user.id);
-    const { password: _, ...userWithoutPassword } = user;
-    res.json({ token: authToken, refreshToken, user: userWithoutPassword });
+    if (user.two_factor_enabled) {
+      const challengeToken = jwt.sign(
+        { userId: user.id, purpose: '2fa_login' },
+        JWT_SECRET,
+        { expiresIn: '5m' }
+      );
+      return res.json({ twoFactorRequired: true, challengeToken });
+    }
+
+    res.json(issueSession(user));
   } catch (err) {
     logger.error('Social login error:', err);
     res.status(500).json({ error: 'Internal server error' });

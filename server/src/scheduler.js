@@ -165,6 +165,43 @@ export function runPriceDropAlerts() {
   }
 }
 
+export function runDisputeDeadlineSweep() {
+  try {
+    const due = db.prepare(`
+      SELECT * FROM disputes
+      WHERE status = 'open' AND auto_resolved_at IS NULL
+        AND evidence_deadline IS NOT NULL AND evidence_deadline <= datetime('now')
+    `).all();
+
+    for (const dispute of due) {
+      db.prepare("UPDATE disputes SET auto_resolved_at = datetime('now') WHERE id = ?").run(dispute.id);
+      db.prepare(`
+        INSERT INTO dispute_evidence (id, dispute_id, user_id, type, content)
+        VALUES (?, ?, 'system', 'system', ?)
+      `).run(uuidv4(), dispute.id, 'The evidence window has closed. The dispute is ready for admin review.');
+
+      const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(dispute.transaction_id);
+      if (txn) {
+        for (const userId of [txn.buyer_id, txn.seller_id]) {
+          db.prepare(`
+            INSERT INTO notifications (id, user_id, type, title, body, data)
+            VALUES (?, ?, 'dispute', 'Evidence Window Closed', ?, ?)
+          `).run(
+            uuidv4(),
+            userId,
+            `The evidence window for "${txn.item_title}" has closed. An admin will review the dispute.`,
+            JSON.stringify({ disputeId: dispute.id })
+          );
+        }
+      }
+    }
+
+    if (due.length) logger.info(`Dispute deadline sweep: ${due.length} dispute(s) ready for review`);
+  } catch (err) {
+    logger.error('Scheduler error (dispute deadline sweep):', err);
+  }
+}
+
 export function runScheduledJobs() {
   logger.info('Running scheduled jobs...');
 
@@ -200,6 +237,7 @@ export function runScheduledJobs() {
   runPriceDropAlerts();
   runSavedSearchAlerts();
   runAuctionFinalize();
+  runDisputeDeadlineSweep();
 }
 
 export function startScheduler() {

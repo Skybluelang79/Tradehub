@@ -30,6 +30,8 @@ export default function AdminDisputes() {
   const [busy, setBusy] = useState('');
   const [filter, setFilter] = useState('all');
   const [selected, setSelected] = useState(null);
+  const [selectedDetail, setSelectedDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [resolveAction, setResolveAction] = useState('refund_buyer');
   const [resolveNote, setResolveNote] = useState('');
 
@@ -52,6 +54,22 @@ export default function AdminDisputes() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  const openDispute = async (dispute) => {
+    setSelected(dispute);
+    setSelectedDetail(null);
+    setResolveAction('refund_buyer');
+    setResolveNote('');
+    setDetailLoading(true);
+    try {
+      const detail = await api.disputes.adminGet(dispute.id);
+      setSelectedDetail(detail);
+    } catch (err) {
+      console.error('Failed to load dispute detail:', err);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const handleResolve = async () => {
     if (!selected) return;
@@ -164,7 +182,7 @@ export default function AdminDisputes() {
                   <td>
                     <div className="payout-actions">
                       {d.status === 'open' && (
-                        <button className="btn-sm btn-primary" disabled={!!busy} onClick={() => { setSelected(d); setResolveAction('refund_buyer'); setResolveNote(''); }}>
+                        <button className="btn-sm btn-primary" disabled={!!busy} onClick={() => openDispute(d)}>
                           <CheckIcon size={14} /> Resolve
                         </button>
                       )}
@@ -195,6 +213,31 @@ export default function AdminDisputes() {
                   <strong>{selected.reason}</strong>
                   {selected.description && <p style={{ marginTop: 4, color: 'var(--text-secondary)' }}>{selected.description}</p>}
                 </div>
+              </div>
+              <div>
+                <label className="gift-label">Evidence ({selectedDetail?.evidence?.length || 0})</label>
+                {detailLoading ? (
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Loading evidence…</p>
+                ) : selectedDetail?.evidence?.length ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {selectedDetail.evidence.map((item) => (
+                      <div key={item.id} style={{ fontSize: 13, padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                          <strong>{item.user_name || 'User'}</strong>
+                          <span style={{ color: 'var(--text-secondary)' }}>{item.type}</span>
+                        </div>
+                        {item.content && <p style={{ marginTop: 4 }}>{item.content}</p>}
+                        {item.url && (
+                          <a href={item.url} target="_blank" rel="noreferrer" style={{ marginTop: 4, display: 'inline-block' }}>
+                            {item.filename || 'View attachment'}
+                          </a>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--text-secondary)' }}>No evidence submitted.</p>
+                )}
               </div>
               <div>
                 <label className="gift-label">Decision</label>

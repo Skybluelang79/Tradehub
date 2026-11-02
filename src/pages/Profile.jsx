@@ -145,6 +145,7 @@ export default function Profile() {
     { id: 'general', label: 'General', icon: '⚙' },
     { id: 'notifications', label: 'Notifications', icon: '🔔' },
     { id: 'security', label: 'Security', icon: '🔐' },
+    { id: 'store', label: 'Store', icon: '🏪' },
     { id: 'preferences', label: 'Preferences', icon: '✨' },
     { id: 'searches', label: 'Saved Searches', icon: '🔍' },
   ];
@@ -188,16 +189,34 @@ export default function Profile() {
   const [phoneCodeSent, setPhoneCodeSent] = useState(false);
   const [securityBusy, setSecurityBusy] = useState(false);
 
+  const [twoFactor, setTwoFactor] = useState({ enabled: false, backupCodesRemaining: 0, loading: true });
+  const [twoFactorSetupInfo, setTwoFactorSetupInfo] = useState(null);
+  const [twoFactorCode, setTwoFactorCode] = useState('');
+  const [twoFactorPassword, setTwoFactorPassword] = useState('');
+  const [twoFactorMode, setTwoFactorMode] = useState('');
+  const [twoFactorBusy, setTwoFactorBusy] = useState(false);
+  const [newBackupCodes, setNewBackupCodes] = useState([]);
+
+  const [storeSettings, setStoreSettings] = useState({ slug: '', banner: '', description: '' });
+  const [storeBusy, setStoreBusy] = useState(false);
+  const [storeBannerUploading, setStoreBannerUploading] = useState(false);
+
   const loadSecurity = useCallback(async () => {
-    const [keys, phone] = await Promise.all([
+    const [keys, phone, twoFactorStatus] = await Promise.all([
       listPasskeys(),
       phoneStatus(),
+      api.auth.twoFactorStatus().catch(() => null),
     ]);
     if (keys.success) setPasskeys(keys.credentials);
     if (phone.success) {
       setPhoneInfo({ phone: phone.phone, phoneVerified: phone.phoneVerified, available: phone.available });
       setPhoneInput(phone.phone || '');
     }
+    setTwoFactor({
+      enabled: Boolean(twoFactorStatus?.enabled),
+      backupCodesRemaining: twoFactorStatus?.backupCodesRemaining || 0,
+      loading: false,
+    });
   }, [listPasskeys, phoneStatus]);
 
   useEffect(() => {
@@ -290,6 +309,129 @@ export default function Profile() {
       }
     } finally {
       setSecurityBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!showSettingsModal || settingsTab !== 'store') return;
+    let cancelled = false;
+    api.auth.getStore()
+      .then(({ store }) => {
+        if (!cancelled) setStoreSettings({ slug: store?.slug || '', banner: store?.banner || '', description: store?.description || '' });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [showSettingsModal, settingsTab]);
+
+  const startTwoFactorSetup = async () => {
+    setTwoFactorBusy(true);
+    try {
+      const data = await api.auth.twoFactorSetup();
+      setTwoFactorSetupInfo(data);
+      setTwoFactorCode('');
+      setTwoFactorMode('setup');
+      setNewBackupCodes([]);
+    } catch (err) {
+      addToast(err.message || 'Could not start two-factor setup', 'error');
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const enableTwoFactor = async () => {
+    if (!twoFactorCode.trim()) {
+      addToast('Enter the code from your authenticator app', 'error');
+      return;
+    }
+    setTwoFactorBusy(true);
+    try {
+      const data = await api.auth.twoFactorEnable(twoFactorCode.trim());
+      setNewBackupCodes(data.backupCodes || []);
+      setTwoFactorSetupInfo(null);
+      setTwoFactorCode('');
+      setTwoFactorMode('');
+      setTwoFactor({ enabled: true, backupCodesRemaining: (data.backupCodes || []).length, loading: false });
+      addToast('Two-factor authentication enabled', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not enable two-factor authentication', 'error');
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const disableTwoFactor = async () => {
+    if (!twoFactorPassword) {
+      addToast('Enter your password', 'error');
+      return;
+    }
+    setTwoFactorBusy(true);
+    try {
+      await api.auth.twoFactorDisable({ password: twoFactorPassword, code: twoFactorCode.trim() });
+      setTwoFactor({ enabled: false, backupCodesRemaining: 0, loading: false });
+      setTwoFactorPassword('');
+      setTwoFactorCode('');
+      setTwoFactorMode('');
+      setNewBackupCodes([]);
+      addToast('Two-factor authentication disabled', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not disable two-factor authentication', 'error');
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const regenerateBackupCodes = async () => {
+    if (!twoFactorPassword) {
+      addToast('Enter your password', 'error');
+      return;
+    }
+    setTwoFactorBusy(true);
+    try {
+      const data = await api.auth.twoFactorBackupCodes({ password: twoFactorPassword, code: twoFactorCode.trim() });
+      setNewBackupCodes(data.backupCodes || []);
+      setTwoFactor((current) => ({ ...current, backupCodesRemaining: (data.backupCodes || []).length }));
+      setTwoFactorPassword('');
+      setTwoFactorCode('');
+      setTwoFactorMode('');
+      addToast('New backup codes generated', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not generate backup codes', 'error');
+    } finally {
+      setTwoFactorBusy(false);
+    }
+  };
+
+  const saveStoreSettings = async () => {
+    setStoreBusy(true);
+    try {
+      const { store } = await api.auth.updateStore({
+        storeSlug: storeSettings.slug,
+        storeBanner: storeSettings.banner,
+        storeDescription: storeSettings.description,
+      });
+      setStoreSettings({ slug: store.slug || '', banner: store.banner || '', description: store.description || '' });
+      addToast('Store settings saved', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not save store settings', 'error');
+    } finally {
+      setStoreBusy(false);
+    }
+  };
+
+  const handleStoreBannerChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setStoreBannerUploading(true);
+    try {
+      const res = await api.upload.single(file);
+      if (!res?.file?.url) throw new Error('Upload failed');
+      setStoreSettings((current) => ({ ...current, banner: res.file.url }));
+      addToast('Banner uploaded', 'success');
+    } catch (err) {
+      addToast(err.message || 'Failed to upload banner', 'error');
+    } finally {
+      setStoreBannerUploading(false);
+      e.target.value = '';
     }
   };
 
@@ -1389,6 +1531,151 @@ export default function Profile() {
 
         {settingsTab === 'security' && (
           <div className="settings-list">
+            <div className="settings-group-title">Two-Factor Authentication</div>
+            <div className="setting-item">
+              <div className="setting-icon"><ShieldIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">
+                  {twoFactor.enabled ? 'Authenticator app enabled' : 'Protect your account with an authenticator app'}
+                </div>
+                <div className="setting-desc">
+                  {twoFactor.enabled
+                    ? `${twoFactor.backupCodesRemaining} backup code${twoFactor.backupCodesRemaining === 1 ? '' : 's'} remaining. You will be asked for a code when signing in and when requesting payouts.`
+                    : 'Use Google Authenticator, Authy or any TOTP app to generate a 6-digit code at sign-in.'}
+                </div>
+              </div>
+              {!twoFactor.enabled && !twoFactorSetupInfo && (
+                <button className="auth-passkey-btn" onClick={startTwoFactorSetup} disabled={twoFactorBusy || twoFactor.loading}>
+                  {twoFactorBusy ? <span className="loading-spinner"></span> : 'Set up'}
+                </button>
+              )}
+            </div>
+
+            {newBackupCodes.length > 0 && (
+              <div className="setting-item" style={{ display: 'block' }}>
+                <div className="setting-title">Save your backup codes</div>
+                <div className="setting-desc" style={{ marginBottom: 10 }}>
+                  Each code can be used once if you lose access to your authenticator app. They will not be shown again.
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8, fontFamily: 'monospace', fontSize: 14 }}>
+                  {newBackupCodes.map((code) => (
+                    <span key={code} style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 8px', textAlign: 'center' }}>{code}</span>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="auth-link-btn"
+                  style={{ marginTop: 10 }}
+                  onClick={() => {
+                    navigator.clipboard?.writeText(newBackupCodes.join('\n')).then(
+                      () => addToast('Backup codes copied', 'success'),
+                      () => addToast('Could not copy; write them down instead', 'error'),
+                    );
+                  }}
+                >
+                  Copy codes
+                </button>
+              </div>
+            )}
+
+            {twoFactorSetupInfo && (
+              <div className="setting-item" style={{ display: 'block' }}>
+                <div className="setting-title">Add this account to your authenticator app</div>
+                <div className="setting-desc" style={{ marginBottom: 8 }}>
+                  Enter this setup key manually, then type the 6-digit code the app shows.
+                </div>
+                <div style={{ fontFamily: 'monospace', fontSize: 14, wordBreak: 'break-all', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px', marginBottom: 8 }}>
+                  {twoFactorSetupInfo.secret}
+                </div>
+                <div className="setting-desc" style={{ marginBottom: 10, wordBreak: 'break-all' }}>{twoFactorSetupInfo.otpauthUrl}</div>
+                <div className="form-group">
+                  <label htmlFor="two-factor-enable-code">6-digit code</label>
+                  <div className="input-wrapper">
+                    <input
+                      id="two-factor-enable-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={6}
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value)}
+                      disabled={twoFactorBusy}
+                    />
+                  </div>
+                </div>
+                <div className="payout-actions" style={{ justifyContent: 'flex-end' }}>
+                  <button className="auth-link-btn" onClick={() => { setTwoFactorSetupInfo(null); setTwoFactorCode(''); }} disabled={twoFactorBusy}>
+                    Cancel
+                  </button>
+                  <button className="auth-passkey-btn" onClick={enableTwoFactor} disabled={twoFactorBusy}>
+                    {twoFactorBusy ? <span className="loading-spinner"></span> : 'Enable two-factor'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {twoFactor.enabled && twoFactorMode === '' && (
+              <div className="setting-item">
+                <div className="setting-text">
+                  <div className="setting-title">Manage recovery options</div>
+                  <div className="setting-desc">Regenerate backup codes or turn off two-factor authentication.</div>
+                </div>
+                <div className="payout-actions">
+                  <button className="auth-link-btn" onClick={() => { setTwoFactorMode('regenerate'); setTwoFactorCode(''); setTwoFactorPassword(''); }}>New backup codes</button>
+                  <button className="auth-link-btn" onClick={() => { setTwoFactorMode('disable'); setTwoFactorCode(''); setTwoFactorPassword(''); }}>Turn off</button>
+                </div>
+              </div>
+            )}
+
+            {twoFactor.enabled && (twoFactorMode === 'regenerate' || twoFactorMode === 'disable') && (
+              <div className="setting-item" style={{ display: 'block' }}>
+                <div className="setting-title">{twoFactorMode === 'regenerate' ? 'Generate new backup codes' : 'Turn off two-factor authentication'}</div>
+                <div className="setting-desc" style={{ marginBottom: 10 }}>
+                  Confirm with your password and a current authenticator or backup code.
+                </div>
+                <div className="form-group">
+                  <label htmlFor="two-factor-password">Password</label>
+                  <div className="input-wrapper">
+                    <input
+                      id="two-factor-password"
+                      type="password"
+                      autoComplete="current-password"
+                      value={twoFactorPassword}
+                      onChange={(e) => setTwoFactorPassword(e.target.value)}
+                      disabled={twoFactorBusy}
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="two-factor-manage-code">Authentication code</label>
+                  <div className="input-wrapper">
+                    <input
+                      id="two-factor-manage-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={20}
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value)}
+                      disabled={twoFactorBusy}
+                    />
+                  </div>
+                </div>
+                <div className="payout-actions" style={{ justifyContent: 'flex-end' }}>
+                  <button className="auth-link-btn" onClick={() => { setTwoFactorMode(''); setTwoFactorCode(''); setTwoFactorPassword(''); }} disabled={twoFactorBusy}>
+                    Cancel
+                  </button>
+                  <button
+                    className="auth-passkey-btn"
+                    onClick={twoFactorMode === 'regenerate' ? regenerateBackupCodes : disableTwoFactor}
+                    disabled={twoFactorBusy}
+                  >
+                    {twoFactorBusy ? <span className="loading-spinner"></span> : twoFactorMode === 'regenerate' ? 'Generate codes' : 'Turn off'}
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="settings-group-title">Fingerprint &amp; Passkeys</div>
             {!passkeySupported && (
               <div className="setting-item">
@@ -1511,6 +1798,87 @@ export default function Profile() {
                 </button>
               </>
             )}
+          </div>
+        )}
+
+        {settingsTab === 'store' && (
+          <div className="settings-list">
+            <div className="settings-group-title">Seller Storefront</div>
+            <div className="setting-item">
+              <div className="setting-icon"><GlobeIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">Your public store link</div>
+                <div className="setting-desc">
+                  {storeSettings.slug
+                    ? `${window.location.origin}/store/${storeSettings.slug}`
+                    : 'Choose a link so buyers can browse all your listings in one place.'}
+                </div>
+              </div>
+              {storeSettings.slug && (
+                <button
+                  className="auth-link-btn"
+                  onClick={() => window.open(`/store/${storeSettings.slug}`, '_blank', 'noopener')}
+                >
+                  View store
+                </button>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="store-slug">Store link</label>
+              <div className="input-wrapper">
+                <input
+                  id="store-slug"
+                  type="text"
+                  placeholder="e.g. ada-thrifts"
+                  value={storeSettings.slug}
+                  onChange={(e) => setStoreSettings((current) => ({ ...current, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') }))}
+                  disabled={storeBusy}
+                />
+              </div>
+              <div className="setting-desc">3-30 characters: letters, numbers, hyphens or underscores.</div>
+            </div>
+
+            <div className="form-group">
+              <label>Banner</label>
+              {storeSettings.banner && (
+                <img src={storeSettings.banner} alt="Store banner" style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 10, marginBottom: 10 }} />
+              )}
+              <label className="auth-passkey-btn" style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <CameraIcon size={18} />
+                {storeBannerUploading ? 'Uploading…' : storeSettings.banner ? 'Replace banner' : 'Upload banner'}
+                <input type="file" accept="image/*" hidden onChange={handleStoreBannerChange} disabled={storeBannerUploading || storeBusy} />
+              </label>
+              {storeSettings.banner && (
+                <button
+                  type="button"
+                  className="auth-link-btn"
+                  style={{ marginLeft: 10 }}
+                  onClick={() => setStoreSettings((current) => ({ ...current, banner: '' }))}
+                  disabled={storeBannerUploading || storeBusy}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="store-description">About your store</label>
+              <textarea
+                id="store-description"
+                className="input"
+                rows="4"
+                maxLength={1000}
+                placeholder="Tell buyers what you sell and how you pack and ship."
+                value={storeSettings.description}
+                onChange={(e) => setStoreSettings((current) => ({ ...current, description: e.target.value }))}
+                disabled={storeBusy}
+              />
+            </div>
+
+            <button className="auth-passkey-btn" onClick={saveStoreSettings} disabled={storeBusy || storeBannerUploading}>
+              {storeBusy ? <span className="loading-spinner"></span> : 'Save store settings'}
+            </button>
           </div>
         )}
 

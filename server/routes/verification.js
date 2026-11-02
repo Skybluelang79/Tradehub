@@ -27,10 +27,15 @@ function notify(userId, type, title, body) {
 // Current user's verification status.
 router.get('/status', authenticateToken, (req, res) => {
   try {
-    const user = db.prepare('SELECT identity_verified FROM users WHERE id = ?').get(req.user.id);
+    const user = db.prepare('SELECT identity_verified, kyc_status, kyc_submitted_at, kyc_verified_at FROM users WHERE id = ?').get(req.user.id);
     const latest = getLatest(req.user.id);
     res.json({
       identityVerified: !!user?.identity_verified,
+      kyc: {
+        status: user?.kyc_status || (user?.identity_verified ? 'verified' : 'none'),
+        submittedAt: user?.kyc_submitted_at || null,
+        verifiedAt: user?.kyc_verified_at || null,
+      },
       request: latest || null,
     });
   } catch (err) {
@@ -74,6 +79,11 @@ router.post('/', authenticateToken, (req, res) => {
       INSERT INTO verification_requests (id, user_id, id_type, id_number, id_image_url, selfie_url, status)
       VALUES (?, ?, ?, ?, ?, ?, 'pending')
     `).run(id, req.user.id, idType, String(idNumber).trim(), idImageUrl, selfieUrl || null);
+
+    db.prepare(`
+      UPDATE users SET kyc_status = 'pending', kyc_submitted_at = datetime('now'), kyc_data = ?,
+      updated_at = datetime('now') WHERE id = ?
+    `).run(JSON.stringify({ idType, requestId: id }), req.user.id);
 
     notify(req.user.id, 'verification', 'Verification Submitted',
       'Your seller verification request has been submitted and is pending review.');

@@ -14,3 +14,4 @@ export { default as GiftMall } from './GiftMall';
 export { default as Cart } from './Cart';
 export { default as Offers } from './Offers';
 export { default as SellerProfile } from './SellerProfile';
+export { default as Store } from './Store';

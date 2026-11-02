@@ -209,6 +209,16 @@ function applySchema() {
       verified INTEGER DEFAULT 0,
       rating REAL DEFAULT 0,
       review_count INTEGER DEFAULT 0,
+      two_factor_enabled INTEGER DEFAULT 0,
+      two_factor_secret TEXT DEFAULT '',
+      two_factor_backup_codes TEXT DEFAULT '[]',
+      kyc_status TEXT DEFAULT 'none',
+      kyc_submitted_at TEXT,
+      kyc_verified_at TEXT,
+      kyc_data TEXT DEFAULT '{}',
+      store_slug TEXT UNIQUE,
+      store_banner TEXT DEFAULT '',
+      store_description TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -414,6 +424,19 @@ function applySchema() {
       resolution TEXT DEFAULT '',
       resolved_by TEXT,
       resolved_at TEXT,
+      evidence_deadline TEXT,
+      auto_resolved_at TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS dispute_evidence (
+      id TEXT PRIMARY KEY,
+      dispute_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      type TEXT DEFAULT 'text',
+      content TEXT DEFAULT '',
+      url TEXT DEFAULT '',
+      filename TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -760,6 +783,7 @@ function applySchema() {
     CREATE INDEX IF NOT EXISTS idx_favorites_item ON favorites(item_id);
     CREATE INDEX IF NOT EXISTS idx_disputes_transaction ON disputes(transaction_id);
     CREATE INDEX IF NOT EXISTS idx_disputes_status ON disputes(status);
+    CREATE INDEX IF NOT EXISTS idx_dispute_evidence_dispute ON dispute_evidence(dispute_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_admin ON audit_logs(admin_id);
     CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at);
     CREATE INDEX IF NOT EXISTS idx_follows_following ON follows(following_id);
@@ -843,6 +867,18 @@ function migrate() {
   ensureColumn('user_settings', 'fcm_token', "TEXT DEFAULT ''");
 ensureColumn('items', 'sold_to', 'TEXT');
 ensureColumn('users', 'identity_verified', 'INTEGER DEFAULT 0');
+ensureColumn('users', 'two_factor_enabled', 'INTEGER DEFAULT 0');
+ensureColumn('users', 'two_factor_secret', "TEXT DEFAULT ''");
+ensureColumn('users', 'two_factor_backup_codes', "TEXT DEFAULT '[]'");
+ensureColumn('users', 'kyc_status', "TEXT DEFAULT 'none'");
+ensureColumn('users', 'kyc_submitted_at', 'TEXT');
+ensureColumn('users', 'kyc_verified_at', 'TEXT');
+ensureColumn('users', 'kyc_data', "TEXT DEFAULT '{}'");
+ensureColumn('users', 'store_slug', 'TEXT');
+ensureColumn('users', 'store_banner', "TEXT DEFAULT ''");
+ensureColumn('users', 'store_description', "TEXT DEFAULT ''");
+ensureColumn('disputes', 'evidence_deadline', 'TEXT');
+ensureColumn('disputes', 'auto_resolved_at', 'TEXT');
 ensureColumn('users', 'referral_code', "TEXT DEFAULT ''");
 ensureColumn('users', 'public_key', "TEXT DEFAULT ''");
 ensureColumn('messages', 'type', "TEXT DEFAULT 'text'");
@@ -859,8 +895,35 @@ ensureColumn('messages', 'deleted_for_sender', 'INTEGER DEFAULT 0');
     UPDATE platform_settings SET value = 'NGN' WHERE key = 'currency' AND (value IS NULL OR value = '' OR value = 'USD');
   `);
 
+  db.exec(`
+    UPDATE users SET kyc_status = 'verified', kyc_verified_at = COALESCE(kyc_verified_at, datetime('now'))
+    WHERE identity_verified = 1 AND (kyc_status IS NULL OR kyc_status = 'none');
+  `);
+
   ensureUniquePhoneIndex();
+  ensureUniqueStoreSlugIndex();
   seedPlatformSettings();
+}
+
+function ensureUniqueStoreSlugIndex() {
+  const clashes = db.prepare(`
+    SELECT store_slug FROM users
+    WHERE store_slug IS NOT NULL AND store_slug != ''
+    GROUP BY store_slug HAVING COUNT(*) > 1
+  `).all();
+
+  for (const { store_slug: slug } of clashes) {
+    db.prepare(`
+      UPDATE users SET store_slug = NULL WHERE store_slug = ? AND id NOT IN (
+        SELECT id FROM users WHERE store_slug = ? ORDER BY created_at ASC, id ASC LIMIT 1
+      )
+    `).run(slug, slug);
+  }
+
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_users_store_slug_unique
+    ON users(store_slug) WHERE store_slug IS NOT NULL AND store_slug != '';
+  `);
 }
 
 // Phone sign-in looks a user up by number, so two accounts must never share

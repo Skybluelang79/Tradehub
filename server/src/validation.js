@@ -142,6 +142,16 @@ export const createTemplateSchema = z.object({
   variants: z.array(z.any()).optional().default([]),
 });
 
+export const storeProfileSchema = z.object({
+  storeSlug: z.string().trim().toLowerCase().max(30).optional().or(z.literal('')),
+  storeBanner: z.string().max(2000).optional().or(z.literal('')),
+  storeDescription: z.string().max(1000).optional().or(z.literal('')),
+});
+
+export const twoFactorCodeSchema = z.object({
+  code: z.string().trim().min(6, 'Enter the 6-digit code').max(20),
+});
+
 export const createDisputeSchema = z.object({
   transactionId: z.string().min(1),
   reason: z.string().min(1, 'Reason is required').max(500),
