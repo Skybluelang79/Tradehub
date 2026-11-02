@@ -23,8 +23,8 @@ describe('formatPrice', () => {
     expect(formatPrice(25000)).toBe('₦25,000');
   });
 
-  it('ignores a second argument rather than switching currency', () => {
-    expect(formatPrice(100, 'EUR')).toBe('₦100');
+  it('converts an amount from the supplied source currency', () => {
+    expect(formatPrice(100, 'EUR')).toContain('163,043');
   });
 
   it('drops fractional naira', () => {

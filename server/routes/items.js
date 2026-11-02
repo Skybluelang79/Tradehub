@@ -20,6 +20,8 @@ function resolveBoost(boosted, boostExpiresAt) {
   if (!Number.isFinite(end) || end <= now) end = now + 7 * 86400000;
   if (end > cap) end = cap;
   return { boosted: 1, boostExpiresAt: new Date(end).toISOString() };
+}
+
 function ensurePremiumForAuction(userId) {
   try {
     const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);

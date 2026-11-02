@@ -129,7 +129,7 @@ export function convert(amount, from, to) {
   const src = isValidCurrency(from) ? normalizeCurrency(from) : DEFAULT_CURRENCY;
   const dst = isValidCurrency(to) ? normalizeCurrency(to) : null;
   if (!dst || src === dst) return value;
-  const result = (value * USD_RATES[src]) / USD_RATES[dst];
+  const result = (value * USD_RATES[dst]) / USD_RATES[src];
   return Number(result.toFixed(2));
 }
 
