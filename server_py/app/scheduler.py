@@ -223,8 +223,58 @@ def run_price_drop_alerts():
         logger.exception("Scheduler error (price-drop alerts)")
 
 
+def run_listing_expiry_sweep():
+    try:
+        warning_window = db.all(
+            "SELECT id, seller_id, title, expires_at FROM items WHERE status = 'active' "
+            "AND expires_at IS NOT NULL AND expires_at <= datetime('now', '+3 days') "
+            "AND expires_at > datetime('now') "
+            "AND (expiry_warned_at IS NULL OR expiry_warned_at < datetime('now', '-1 day'))"
+        )
+
+        for item in warning_window:
+            notify(
+                item["seller_id"],
+                "system",
+                "Listing Expiring Soon",
+                f'"{item["title"]}" expires soon. Renew or edit it to keep it live.',
+                data=json.dumps({"itemId": item["id"]}),
+            )
+            db.run("UPDATE items SET expiry_warned_at = datetime('now') WHERE id = ?", (item["id"],))
+
+        expired = db.all(
+            "SELECT id, seller_id, title FROM items WHERE status = 'active' "
+            "AND expires_at IS NOT NULL AND expires_at <= datetime('now')"
+        )
+
+        for item in expired:
+            db.run(
+                "UPDATE items SET status = 'expired', locked_at = datetime('now'), "
+                "lock_reason = 'Listing duration ended' WHERE id = ?",
+                (item["id"],),
+            )
+            notify(
+                item["seller_id"],
+                "system",
+                "Listing Locked",
+                f'"{item["title"]}" has expired and is now locked. Renew it to publish again.',
+                data=json.dumps({"itemId": item["id"]}),
+            )
+
+        if warning_window or expired:
+            logger.info(
+                "Listing expiry sweep: %s warning(s), %s locked",
+                len(warning_window),
+                len(expired),
+            )
+    except Exception:
+        logger.exception("Scheduler error (listing expiry)")
+
+
 def run_scheduled_jobs():
     logger.info("Running scheduled jobs...")
+
+    run_listing_expiry_sweep()
 
     try:
         expired = db.all(

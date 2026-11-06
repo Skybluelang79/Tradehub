@@ -3,6 +3,7 @@ import logging
 import math
 import re
 import uuid
+from datetime import timedelta
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
@@ -11,6 +12,7 @@ from ..currencies import format_money, is_valid_currency
 from ..datetime_util import parse_iso, utc_now
 from ..deps import optional_user, require_user
 from ..notifications import notify
+from ..plans import get_effective_plan, get_plan
 from ..validation import raise_validation
 
 logger = logging.getLogger("tradehub")
@@ -26,6 +28,57 @@ DISTANCE_EXPR = (
     "POWER(SIN((? - i.location_lng) * 0.017453292519943295 / 2), 2)"
     "))"
 )
+
+
+def _future_sql_date(days):
+    return (utc_now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _seller_plan(user_id):
+    sub = db.get(
+        "SELECT plan, status, trial_end, current_period_end FROM subscriptions WHERE user_id = ?",
+        (user_id,),
+    )
+    return get_plan(get_effective_plan(sub))
+
+
+def _count_published_listings(user_id, exclude_id=None):
+    if exclude_id:
+        row = db.get(
+            "SELECT COUNT(*) as count FROM items WHERE seller_id = ? AND id != ? "
+            "AND status IN ('active', 'pending', 'reserved')",
+            (user_id, exclude_id),
+        )
+    else:
+        row = db.get(
+            "SELECT COUNT(*) as count FROM items WHERE seller_id = ? "
+            "AND status IN ('active', 'pending', 'reserved')",
+            (user_id,),
+        )
+    return row["count"]
+
+
+def _count_featured_listings(user_id, exclude_id=None):
+    if exclude_id:
+        row = db.get(
+            "SELECT COUNT(*) as count FROM items WHERE seller_id = ? AND id != ? AND boosted = 1 "
+            "AND (boost_expires_at IS NULL OR boost_expires_at > datetime('now'))",
+            (user_id, exclude_id),
+        )
+    else:
+        row = db.get(
+            "SELECT COUNT(*) as count FROM items WHERE seller_id = ? AND boosted = 1 "
+            "AND (boost_expires_at IS NULL OR boost_expires_at > datetime('now'))",
+            (user_id,),
+        )
+    return row["count"]
+
+
+def _listing_limit_error(plan):
+    return (
+        f"Your {plan['name']} plan allows {plan['maxListings']} active listings. "
+        "Upgrade to Gold for 120."
+    )
 
 
 def _is_number(v):
@@ -193,6 +246,28 @@ def _check_item_fields(payload, update=False):
 
     out["images"] = _clean_images(payload.get("images"), details)
 
+    if "video_url" in payload:
+        video_url = payload.get("video_url")
+        if video_url is None or video_url == "":
+            out["video_url"] = None
+        elif not isinstance(video_url, str):
+            details.append("video_url: Expected string, received ...")
+            out["video_url"] = None
+        elif len(video_url) > 25_000_000:
+            details.append("video_url: String must contain at most 25000000 character(s)")
+            out["video_url"] = None
+        elif not (
+            re.match(r"^https?://", video_url)
+            or video_url.startswith("/")
+            or video_url.startswith("data:video/")
+        ):
+            details.append("video_url: Video must be an uploaded file path or a valid URL")
+            out["video_url"] = None
+        else:
+            out["video_url"] = video_url
+    else:
+        out["video_url"] = "SKIP" if update else None
+
     out["location"] = _clean_location(payload.get("location"), details)
 
     quantity = payload.get("quantity")
@@ -224,6 +299,13 @@ def _check_item_fields(payload, update=False):
         out["boost_expires_at"] = payload.get("boost_expires_at")
     else:
         out["boost_expires_at"] = "SKIP" if update else None
+
+    is_distress = payload.get("is_distress")
+    if is_distress is None and not update:
+        is_distress = False
+    if is_distress is not None and not isinstance(is_distress, bool):
+        details.append("is_distress: Expected boolean, received ...")
+    out["is_distress"] = is_distress
 
     is_auction = payload.get("is_auction")
     if is_auction is None and not update:
@@ -321,28 +403,28 @@ def list_items(
     has_location = bool(user and user.get("location_lat") and user.get("location_lng"))
 
     if sort == "newest":
-        order = " ORDER BY i.created_at DESC"
+        order = " ORDER BY i.is_distress DESC, i.created_at DESC"
     elif sort == "oldest":
-        order = " ORDER BY i.created_at ASC"
+        order = " ORDER BY i.is_distress DESC, i.created_at ASC"
     elif sort == "price_low":
-        order = " ORDER BY i.price ASC"
+        order = " ORDER BY i.is_distress DESC, i.price ASC"
     elif sort == "price_high":
-        order = " ORDER BY i.price DESC"
+        order = " ORDER BY i.is_distress DESC, i.price DESC"
     elif sort == "popular":
-        order = " ORDER BY i.views DESC, i.favorites DESC"
+        order = " ORDER BY i.is_distress DESC, i.views DESC, i.favorites DESC"
     elif sort == "nearest":
         if has_location:
             select_part = select_part.replace("SELECT i.*", f"SELECT i.*, ({DISTANCE_EXPR}) as distance")
-            order = " ORDER BY distance ASC"
+            order = " ORDER BY i.is_distress DESC, distance ASC"
             nearest_params = [
                 float(user["location_lat"]),
                 float(user["location_lat"]),
                 float(user["location_lng"]),
             ]
         else:
-            order = " ORDER BY i.created_at DESC"
+            order = " ORDER BY i.is_distress DESC, i.created_at DESC"
     else:
-        order = " ORDER BY i.boosted DESC, i.created_at DESC"
+        order = " ORDER BY i.is_distress DESC, i.boosted DESC, i.created_at DESC"
 
     query = select_part + where_clause + order + " LIMIT ? OFFSET ?"
 
@@ -498,13 +580,41 @@ def create_item(
     auction = out["is_auction"] is True
     starting_bid = out["starting_bid"] if out["starting_bid"] is not None else out["price"]
     location = out["location"] or {}
+    status = out["status"] or "active"
+    plan = _seller_plan(user["id"])
+    images = out["images"] or []
+
+    if status != "draft":
+        if plan["maxListings"] != -1 and _count_published_listings(user["id"]) >= plan["maxListings"]:
+            raise HTTPException(status_code=403, detail={"error": _listing_limit_error(plan)})
+        if len(images) > plan["maxPhotos"]:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": f"{plan['name']} plan allows up to {plan['maxPhotos']} photos per listing."},
+            )
+        if out["video_url"] and plan["maxVideos"] < 1:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "Listing videos are a Gold subscription benefit."},
+            )
+        if out["boosted"] and _count_featured_listings(user["id"]) >= plan["featuredSlots"]:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": f"{plan['name']} plan allows {plan['featuredSlots']} featured slots."},
+            )
+
+    listing_status = (
+        "pending" if auction and status != "draft" and not plan["auctionAutoApprove"] else status
+    )
+    expires_at = None if listing_status == "draft" else _future_sql_date(plan["listingDays"])
+    distress = 1 if plan["distressPinned"] and out["is_distress"] else 0
 
     db.run(
         "INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, "
         "seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, "
         "boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, "
-        "current_bid, current_bidder_id, status) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "current_bid, current_bidder_id, status, expires_at, video_url, is_distress) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             item_id,
             out["title"],
@@ -529,7 +639,10 @@ def create_item(
             "active" if auction else "pending",
             starting_bid if auction else None,
             None,
-            out["status"] or "active",
+            listing_status,
+            expires_at,
+            out["video_url"] or None,
+            distress,
         ),
     )
 
@@ -550,7 +663,16 @@ def create_item(
     item = db.get("SELECT * FROM items WHERE id = ?", (item_id,))
     item = _item_with_images(item)
 
-    notify(user["id"], "system", "Listing Created", f'"{out["title"]}" is now live!')
+    notify(
+        user["id"],
+        "system",
+        "Listing Created",
+        (
+            f'"{out["title"]}" is now live!'
+            if listing_status == "active"
+            else f'"{out["title"]}" was submitted for review. Gold sellers get auction auto-approval.'
+        ),
+    )
 
     db.run(
         "INSERT INTO audit_logs (id, admin_id, action, entity_type, entity_id, details) "
@@ -573,17 +695,65 @@ def update_item(
     if item["seller_id"] != user["id"]:
         raise HTTPException(status_code=403, detail={"error": "Not authorized"})
 
+    if item.get("locked_at") or item["status"] == "expired":
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "This listing has expired and is locked. Renew it to make changes."},
+        )
+
     out, details = _check_item_fields(body, update=True)
     if details:
         raise_validation(details)
 
-    def pick(field):
-        value = out[field]
-        return item[field] if value == "SKIP" else value
+    plan = _seller_plan(user["id"])
+    was_auction = item["is_auction"] == 1
+    enabling_auction = out["is_auction"] is True and not was_auction
+    requested_status = out["status"] if out["status"] is not None else item["status"]
+    publishing = requested_status == "active" and item["status"] != "active"
 
-    def pick_opt(field):
-        value = out[field]
-        return item[field] if value == "SKIP" else value
+    if publishing and plan["maxListings"] != -1 and _count_published_listings(user["id"], item["id"]) >= plan["maxListings"]:
+        raise HTTPException(status_code=403, detail={"error": _listing_limit_error(plan)})
+    if out["images"] is not None and len(out["images"]) > plan["maxPhotos"]:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": f"{plan['name']} plan allows up to {plan['maxPhotos']} photos per listing."},
+        )
+    if out["video_url"] not in ("SKIP", None) and out["video_url"] != item["video_url"] and plan["maxVideos"] < 1:
+        raise HTTPException(
+            status_code=403,
+            detail={"error": "Listing videos are a Gold subscription benefit."},
+        )
+
+    next_status = (
+        "pending"
+        if enabling_auction and not plan["auctionAutoApprove"] and requested_status == "active"
+        else requested_status
+    )
+
+    boost_touched = out["boosted"] is not None or out["boost_expires_at"] != "SKIP"
+    next_boosted = out["boosted"] if out["boosted"] is not None else bool(item["boosted"])
+    if boost_touched and next_boosted:
+        if plan["featuredSlots"] < 1:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": "Featured listings are a Gold subscription benefit."},
+            )
+        if _count_featured_listings(user["id"], item["id"]) >= plan["featuredSlots"]:
+            raise HTTPException(
+                status_code=403,
+                detail={"error": f"{plan['name']} plan allows {plan['featuredSlots']} featured slots."},
+            )
+
+    expires_at = (
+        _future_sql_date(plan["listingDays"])
+        if next_status == "active" and not item["expires_at"]
+        else item["expires_at"]
+    )
+    next_distress = (
+        item["is_distress"]
+        if out["is_distress"] is None
+        else (1 if plan["distressPinned"] and out["is_distress"] else 0)
+    )
 
     location = out["location"]
     if location is None:
@@ -599,14 +769,15 @@ def update_item(
     starting_bid = item["starting_bid"] if out["starting_bid"] == "SKIP" else out["starting_bid"]
     min_increment = item["min_increment"] if out["min_increment"] == "SKIP" else (out["min_increment"] or 1)
     auction_ends = item["auction_ends_at"] if out["auction_ends_at"] == "SKIP" else out["auction_ends_at"]
-    auction_status = item["auction_status"]
+    auction_status = "active" if enabling_auction else item["auction_status"]
+    video_url = item["video_url"] if out["video_url"] == "SKIP" else out["video_url"]
 
     db.run(
         "UPDATE items SET title = ?, description = ?, price = ?, sale_price = ?, sale_ends_at = ?, "
         "category = ?, condition = ?, location_lat = ?, location_lng = ?, location_address = ?, "
         "quantity = ?, status = ?, boosted = ?, boost_expires_at = ?, updated_at = datetime('now'), "
         "is_auction = ?, starting_bid = ?, min_increment = ?, auction_ends_at = ?, auction_status = ?, "
-        "currency = ? WHERE id = ?",
+        "currency = ?, video_url = ?, expires_at = ?, is_distress = ? WHERE id = ?",
         (
             out["title"] if out["title"] is not None else item["title"],
             out["description"] if out["description"] is not None else item["description"],
@@ -619,7 +790,7 @@ def update_item(
             loc_lng,
             loc_addr,
             out["quantity"] if out["quantity"] is not None else item["quantity"],
-            out["status"] if out["status"] is not None else item["status"],
+            next_status,
             (1 if out["boosted"] is True else 0) if out["boosted"] is not None else item["boosted"],
             boost_expires,
             (1 if out["is_auction"] is True else 0) if out["is_auction"] is not None else item["is_auction"],
@@ -628,6 +799,9 @@ def update_item(
             auction_ends,
             auction_status,
             out["currency"] if out["currency"] is not None else item["currency"],
+            video_url,
+            expires_at,
+            next_distress,
             item_id,
         ),
     )
@@ -650,6 +824,27 @@ def update_item(
 
     updated = db.get("SELECT * FROM items WHERE id = ?", (item_id,))
     return {"item": _item_with_images(updated)}
+
+
+@router.post("/{item_id}/renew")
+def renew_item(item_id: str, user: dict = Depends(require_user)):
+    item = db.get("SELECT * FROM items WHERE id = ?", (item_id,))
+    if not item:
+        raise HTTPException(status_code=404, detail={"error": "Item not found"})
+    if item["seller_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail={"error": "Not authorized"})
+
+    plan = _seller_plan(user["id"])
+    if plan["maxListings"] != -1 and _count_published_listings(user["id"], item["id"]) >= plan["maxListings"]:
+        raise HTTPException(status_code=403, detail={"error": _listing_limit_error(plan)})
+
+    expires_at = _future_sql_date(plan["listingDays"])
+    db.run(
+        "UPDATE items SET status = 'active', expires_at = ?, expiry_warned_at = NULL, "
+        "locked_at = NULL, lock_reason = NULL, updated_at = datetime('now') WHERE id = ?",
+        (expires_at, item["id"]),
+    )
+    return {"success": True, "expires_at": expires_at}
 
 
 @router.delete("/{item_id}")
@@ -877,7 +1072,7 @@ def premium_sellers():
             "ORDER BY i.created_at DESC LIMIT 3",
             (seller["id"],),
         )
-        seller["badge"] = "Pro Seller" if seller["plan"] == "pro" else "Premium Seller"
+        seller["badge"] = "Pro Seller" if seller["plan"] == "pro" else "Gold Seller"
         enriched.append(seller)
 
     return {"sellers": enriched}

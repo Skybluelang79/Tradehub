@@ -50,7 +50,7 @@ def test_subscription_routes():
     assert current.status_code == 200, current.text
     sub = current.json()["subscription"]
     assert sub["plan"] == "premium"
-    assert sub["maxListings"] == -1
+    assert sub["maxListings"] == 120
     assert sub["isTrial"] is True
     assert sub["daysLeft"] >= 89
 
@@ -59,7 +59,7 @@ def test_subscription_routes():
 
     benefits = client.get("/api/subscription/benefits", headers=auth(token)).json()
     assert benefits["plan"] == "premium"
-    assert len(benefits["benefits"]) == 6
+    assert len(benefits["benefits"]) == 11
 
     # dev mode -> upgrade is free
     upgraded = client.post("/api/subscription/upgrade", json={"plan": "pro"}, headers=auth(token))

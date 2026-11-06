@@ -18,6 +18,7 @@ from ..paystack import (
     to_major_units,
     to_minor_units,
 )
+from ..plans import get_effective_plan, get_plan
 from ..promotions import consume_promo, release_promo, validate_and_apply_promo
 from ..referrals import credit_first_purchase
 
@@ -26,8 +27,6 @@ logger = logging.getLogger("tradehub")
 router = APIRouter()
 
 ALLOW_DEMO_PAYMENTS = config.DEMO_MODE or not config.IS_PRODUCTION
-
-PLAN_FEES = {"free": 0.04, "premium": 0.04, "pro": 0.04}
 
 # Paystack's NGN minimum for card charges is ₦50 (5000 kobo); a ₦1 charge is
 # rejected with a 400. The nominal amount is refunded after the card is saved.
@@ -76,21 +75,14 @@ def get_fee_rate_for_seller(seller_id):
     platform_rate = admin_percent / 100 if admin_percent >= 0 else 0.04
     try:
         sub = db.get(
-            "SELECT plan, status, trial_end FROM subscriptions "
-            "WHERE user_id = ? AND status IN ('trial', 'active') LIMIT 1",
+            "SELECT plan, status, trial_end, current_period_end FROM subscriptions WHERE user_id = ? LIMIT 1",
             (seller_id,),
         )
-        if sub and PLAN_FEES.get(sub["plan"]) is not None:
-            in_trial = (
-                sub["status"] == "trial"
-                and sub.get("trial_end")
-                and parse_iso(sub["trial_end"]) is not None
-                and parse_iso(sub["trial_end"]) > utc_now()
-            )
-            if sub["status"] == "active" or in_trial:
-                plan_rate = PLAN_FEES[sub["plan"]]
-                if plan_rate < platform_rate:
-                    return plan_rate
+        effective_plan = get_effective_plan(sub)
+        if effective_plan != "free":
+            plan_rate = get_plan(effective_plan)["fee"]
+            if plan_rate < platform_rate:
+                return plan_rate
     except Exception:
         pass
     return platform_rate

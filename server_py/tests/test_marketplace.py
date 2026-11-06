@@ -243,7 +243,7 @@ def test_premium_sellers():
     res = client.get("/api/items/premium/sellers")
     assert res.status_code == 200
     sellers = res.json()["sellers"]
-    assert any(s["id"] == seller_id and s["badge"] == "Premium Seller" for s in sellers)
+    assert any(s["id"] == seller_id and s["badge"] == "Gold Seller" for s in sellers)
 
 
 def test_reviews():

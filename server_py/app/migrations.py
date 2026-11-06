@@ -110,6 +110,12 @@ def apply():
     ensure_column("items", "current_bid", "REAL")
     ensure_column("items", "current_bidder_id", "TEXT")
     ensure_column("items", "currency", "TEXT DEFAULT 'NGN'")
+    ensure_column("items", "video_url", "TEXT")
+    ensure_column("items", "expires_at", "TEXT")
+    ensure_column("items", "expiry_warned_at", "TEXT")
+    ensure_column("items", "is_distress", "INTEGER DEFAULT 0")
+    ensure_column("items", "locked_at", "TEXT")
+    ensure_column("items", "lock_reason", "TEXT")
 
     ensure_column("users", "firebase_uid", "TEXT DEFAULT ''")
     ensure_column("users", "auth_provider", "TEXT DEFAULT 'local'")

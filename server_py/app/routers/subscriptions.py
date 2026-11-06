@@ -6,7 +6,7 @@ import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException
 
 from .. import config, db
-from ..currencies import DEFAULT_CURRENCY
+from ..currencies import DEFAULT_CURRENCY, convert
 from ..datetime_util import parse_iso, utc_now
 from ..deps import require_user
 from ..notifications import notify
@@ -17,32 +17,19 @@ from ..paystack import (
     paystack,
     to_minor_units,
 )
+from ..plans import PLANS, get_effective_plan
 
 logger = logging.getLogger("tradehub")
 
 router = APIRouter()
 
-# Flat 4% seller fee on every plan. `fee` here is what the plan/benefit
-# screens display, so it has to match PLAN_FEES in payments.py.
-PLANS = {
-    "free": {"name": "Free", "price": 0, "fee": 0.04, "boosts": 0, "maxListings": 5, "badge": None},
-    "premium": {
-        "name": "Premium",
-        "price": 3000,
-        "fee": 0.04,
-        "boosts": 2,
-        "maxListings": -1,
-        "badge": "Premium Seller",
-    },
-    "pro": {
-        "name": "Pro",
-        "price": 24.99,
-        "fee": 0.04,
-        "boosts": 5,
-        "maxListings": -1,
-        "badge": "Pro Seller",
-    },
-}
+
+def plan_charge_amount(plan_id):
+    plan = PLANS.get(plan_id)
+    if not plan or plan["priceUsd"] <= 0:
+        return 0
+    return convert(plan["priceUsd"], "USD", DEFAULT_CURRENCY)
+
 
 IS_PROD = config.IS_PRODUCTION
 
@@ -130,16 +117,16 @@ def write_plan_codes(mapping):
 
 def get_paystack_plan_code(plan_id):
     plan = PLANS.get(plan_id)
-    if not plan or plan["price"] <= 0 or not is_paystack_configured():
+    if not plan or plan["priceUsd"] <= 0 or not is_paystack_configured():
         return None
-    cache_key = f"{plan_id}:{DEFAULT_CURRENCY}"
+    cache_key = f"{plan_id}:{DEFAULT_CURRENCY}:{plan_charge_amount(plan_id)}"
     codes = read_plan_codes()
     if codes.get(cache_key):
         return codes[cache_key]
 
     created = paystack.create_plan(
         name=f"TradeHub {plan['name']}",
-        amount_minor=to_minor_units(plan["price"], DEFAULT_CURRENCY),
+        amount_minor=to_minor_units(plan_charge_amount(plan_id), DEFAULT_CURRENCY),
         interval="monthly",
         currency=DEFAULT_CURRENCY,
     )
@@ -165,7 +152,8 @@ def plan_id_for_code(code):
 @router.get("/current")
 def get_current(user: dict = Depends(require_user)):
     sub = get_subscription(user["id"])
-    plan = PLANS.get(sub["plan"]) or PLANS["free"]
+    effective_plan = get_effective_plan(sub)
+    plan = PLANS.get(effective_plan) or PLANS["free"]
     is_trial = _is_active_trial(sub)
     days_left = 0
     if is_trial:
@@ -174,10 +162,10 @@ def get_current(user: dict = Depends(require_user)):
     plan_details = {
         **sub,
         **plan,
-        "fee": plan["fee"],
-        "boosts": plan["boosts"],
-        "maxListings": plan["maxListings"],
-        "badge": plan["badge"],
+        "plan": effective_plan,
+        "effectivePlan": effective_plan,
+        "chargeAmount": plan_charge_amount(effective_plan),
+        "chargeCurrency": DEFAULT_CURRENCY,
         "isTrial": is_trial,
         "trialEndsAt": sub.get("trial_end"),
         "daysLeft": days_left,
@@ -187,7 +175,15 @@ def get_current(user: dict = Depends(require_user)):
 
 @router.get("/plans")
 def get_plans():
-    plans = [{"id": plan_id, **plan} for plan_id, plan in PLANS.items()]
+    plans = [
+        {
+            "id": plan_id,
+            **plan,
+            "chargeAmount": plan_charge_amount(plan_id),
+            "chargeCurrency": DEFAULT_CURRENCY,
+        }
+        for plan_id, plan in PLANS.items()
+    ]
     return {"plans": plans}
 
 
@@ -198,14 +194,14 @@ def upgrade(user: dict = Depends(require_user), body: dict = Body(...)):
         raise HTTPException(status_code=400, detail={"error": "Invalid plan"})
 
     sub = get_subscription(user["id"])
-    if target_plan == sub["plan"]:
+    if target_plan == get_effective_plan(sub):
         raise HTTPException(status_code=400, detail={"error": f"Already on the {target_plan} plan"})
 
     # Paid plans require payment. In production we charge through Paystack and
     # activate the plan after the charge succeeds (webhook or verify call). In
     # development/demo mode a free upgrade is kept so the feature can still be
     # demonstrated without a configured gateway.
-    is_paid = PLANS[target_plan]["price"] > 0
+    is_paid = PLANS[target_plan]["priceUsd"] > 0
     if is_paid and IS_PROD:
         if not is_paystack_configured():
             raise HTTPException(
@@ -213,7 +209,7 @@ def upgrade(user: dict = Depends(require_user), body: dict = Body(...)):
                 detail={"error": "Paid subscriptions require Paystack to be configured"},
             )
         reference = str(uuid.uuid4())
-        amount_minor = to_minor_units(PLANS[target_plan]["price"], DEFAULT_CURRENCY)
+        amount_minor = to_minor_units(plan_charge_amount(target_plan), DEFAULT_CURRENCY)
         # Passing the plan code turns this first charge into a recurring
         # subscription: Paystack auto-charges the buyer each month until it is
         # disabled via /cancel. If we can't mint a plan we fall back to a
@@ -354,8 +350,7 @@ def cancel(user: dict = Depends(require_user)):
 def get_benefits(user: dict = Depends(require_user)):
     sub = get_subscription(user["id"])
 
-    is_trial = _is_active_trial(sub)
-    effective_plan = "premium" if is_trial else sub["plan"]
+    effective_plan = get_effective_plan(sub)
     effective = PLANS.get(effective_plan) or PLANS["free"]
 
     benefits = [
@@ -365,24 +360,54 @@ def get_benefits(user: dict = Depends(require_user)):
             "desc": "Unlimited listings" if effective["maxListings"] == -1 else f"{effective['maxListings']} listings",
         },
         {
+            "icon": "🎞️",
+            "title": "Photos/Videos",
+            "desc": f"{effective['maxPhotos']} photos"
+            + (f" + {effective['maxVideos']} video" if effective["maxVideos"] else ""),
+        },
+        {
+            "icon": "📅",
+            "title": "Listing Duration",
+            "desc": f"{effective['listingDays']}-day listings",
+        },
+        {
             "icon": "💰",
             "title": "Transaction Fee",
             "desc": f"{effective['fee'] * 100:.1f}% per sale",
         },
         {
             "icon": "🚀",
+            "title": "Featured Slots",
+            "desc": (
+                f"{effective['featuredSlots']} featured slots"
+                if effective["featuredSlots"]
+                else "No featured slots"
+            ),
+        },
+        {
+            "icon": "🔨",
+            "title": "Auction Auto-Approval",
+            "desc": "Enabled" if effective["auctionAutoApprove"] else "Standard review",
+        },
+        {
+            "icon": "📌",
+            "title": "Distress Sales",
+            "desc": "Pinned to top" if effective["distressPinned"] else "Standard visibility",
+        },
+        {
+            "icon": "⚡",
             "title": "Free Boosts",
             "desc": f"{effective['boosts']} boosts per month",
         },
         {
             "icon": "⭐",
-            "title": "Premium Badge",
+            "title": "Seller Badge",
             "desc": f'Show "{effective["badge"]}" badge' if effective["badge"] else "No badge",
         },
         {
             "icon": "📊",
             "title": "Analytics",
-            "desc": "Full analytics dashboard" if effective_plan != "free" else "Basic analytics",
+            "desc": "Real-time analytics" if effective["analytics"] else "Basic analytics",
         },
         {
             "icon": "💬",

@@ -231,11 +231,11 @@ def test_confirm_receipt_finalizes_and_credits_seller():
     assert res.json()["success"] is True
     txn = db.get("SELECT * FROM transactions WHERE id = ?", (txn_id,))
     assert txn["status"] == "completed"
-    assert txn["fee_amount"] == 160.0
-    assert txn["net_amount"] == 3840.0
+    assert txn["fee_amount"] == 80.0
+    assert txn["net_amount"] == 3920.0
     wallet = db.get("SELECT * FROM wallets WHERE user_id = ?", (SELLER_ID,))
-    assert wallet["available_cents"] == 384000
-    assert wallet["lifetime_cents"] == 384000
+    assert wallet["available_cents"] == 392000
+    assert wallet["lifetime_cents"] == 392000
     assert db.get("SELECT status FROM items WHERE id = ?", (item["id"],))["status"] == "sold"
 
 
@@ -250,7 +250,7 @@ def test_refund_completed_claws_back_wallet():
     txn = db.get("SELECT * FROM transactions WHERE id = ?", (txn_id,))
     assert txn["status"] == "refunded"
     wallet = db.get("SELECT * FROM wallets WHERE user_id = ?", (SELLER_ID,))
-    assert wallet["available_cents"] == 384000  # only the 4000-item net was clawed back
+    assert wallet["available_cents"] == 392000  # only the 4000-item net was clawed back
     assert db.get("SELECT status FROM items WHERE id = ?", (item["id"],))["status"] == "active"
 
 

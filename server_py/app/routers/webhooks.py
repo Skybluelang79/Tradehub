@@ -50,6 +50,24 @@ def _handle_paystack_event(event_type, data):
                 f'Payment for "{txn["item_title"]}" was received and is held in escrow.',
             )
 
+        # Pending plan upgrade activated by reference. This covers callbacks
+        # that omit metadata but persisted pending_plan + paystack_reference.
+        pending_sub = db.get(
+            "SELECT * FROM subscriptions WHERE paystack_reference = ? AND pending_plan IS NOT NULL",
+            (reference,),
+        )
+        if pending_sub:
+            activate_plan(
+                pending_sub["user_id"],
+                pending_sub["pending_plan"],
+                {
+                    "subscriptionCode": data.get("subscription_code")
+                    or _obj(data.get("plan")).get("subscription_code"),
+                    "emailToken": _obj(data.get("customer")).get("email_token"),
+                },
+            )
+            logger.info("Subscription activated via webhook: %s", reference)
+
         # Save the reusable authorization so the buyer can check out faster next time.
         auth = _obj(data.get("authorization"))
         if auth.get("authorization_code") and auth.get("reusable") and len(txns) > 0:
