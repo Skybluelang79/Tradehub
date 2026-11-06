@@ -66,12 +66,17 @@ export const createItemSchema = z.object({
       'Images must be an uploaded file path or a valid URL'
     )
   ).max(20).optional().default([]),
+  video_url: z.string().max(25000000).refine(
+    (s) => /^https?:\/\//.test(s) || s.startsWith('/') || s.startsWith('data:video/'),
+    'Video must be an uploaded file path or a valid URL'
+  ).optional().nullable(),
   location: locationSchema,
   quantity: z.number().int().positive().optional().default(1),
   currency: z.string().optional().default('NGN').refine(isValidCurrency, 'Unsupported currency'),
   variants: z.array(variantSchema).optional().default([]),
   boosted: z.boolean().optional().default(false),
   boost_expires_at: z.string().optional().nullable(),
+  is_distress: z.boolean().optional().default(false),
   is_auction: z.boolean().optional().default(false),
   starting_bid: z.number().positive().optional().nullable(),
   min_increment: z.number().positive().optional().nullable(),

@@ -343,6 +343,15 @@
 }
 .premium-modal-cancel:hover { color: rgba(255,255,255,0.6); }
 
+.premium-modal-error {
+  color: #FCA5A5 !important;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px !important;
+}
+
 .premium-modal-spinner {
   width: 48px; height: 48px;
   border: 3px solid rgba(255,255,255,0.1);

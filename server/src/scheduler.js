@@ -202,8 +202,46 @@ export function runDisputeDeadlineSweep() {
   }
 }
 
+function runListingExpirySweep() {
+  try {
+    const warningWindow = db.prepare(
+      "SELECT id, seller_id, title, expires_at FROM items WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= datetime('now', '+3 days') AND expires_at > datetime('now') AND (expiry_warned_at IS NULL OR expiry_warned_at < datetime('now', '-1 day'))"
+    ).all();
+
+    for (const item of warningWindow) {
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, type, title, body)
+        VALUES (?, ?, 'system', 'Listing Expiring Soon', ?)
+      `).run(uuidv4(), item.seller_id, `"${item.title}" expires soon. Renew or edit it to keep it live.`);
+      db.prepare("UPDATE items SET expiry_warned_at = datetime('now') WHERE id = ?").run(item.id);
+    }
+
+    const expired = db.prepare(
+      "SELECT id, seller_id, title FROM items WHERE status = 'active' AND expires_at IS NOT NULL AND expires_at <= datetime('now')"
+    ).all();
+
+    for (const item of expired) {
+      db.prepare(
+        "UPDATE items SET status = 'expired', locked_at = datetime('now'), lock_reason = 'Listing duration ended' WHERE id = ?"
+      ).run(item.id);
+      db.prepare(`
+        INSERT INTO notifications (id, user_id, type, title, body)
+        VALUES (?, ?, 'system', 'Listing Locked', ?)
+      `).run(uuidv4(), item.seller_id, `"${item.title}" has expired and is now locked. Renew it to publish again.`);
+    }
+
+    if (warningWindow.length || expired.length) {
+      logger.info(`Listing expiry sweep: ${warningWindow.length} warning(s), ${expired.length} locked`);
+    }
+  } catch (err) {
+    logger.error('Scheduler error (listing expiry):', err);
+  }
+}
+
 export function runScheduledJobs() {
   logger.info('Running scheduled jobs...');
+
+  runListingExpirySweep();
 
   try {
     const expired = db.prepare(

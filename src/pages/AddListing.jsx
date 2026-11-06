@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Header } from '../components/layout';
 import { Input, Textarea, Select } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
@@ -67,6 +67,8 @@ function useEditItem(editItemId, items) {
   return {
     editingItem: item || null,
     initialImages: item?.images || [],
+    initialVideo: item?.videoUrl || '',
+    initialDistress: !!item?.isDistress,
     initialTitle: item?.title || '',
     initialDescription: item?.description || '',
     initialPrice: item ? String(item.price) : '',
@@ -94,7 +96,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
 
   const {
     editingItem,
-    initialImages, initialTitle, initialDescription,
+    initialImages, initialVideo, initialDistress, initialTitle, initialDescription,
     initialPrice, initialCategory, initialCondition, initialLocation,
     initialQuantity, initialSalePrice, initialSaleEndsAt,
     initialIsAuction, initialStartingBid, initialMinIncrement, initialAuctionEndsAt,
@@ -102,6 +104,12 @@ export default function AddListing({ editItemId, onEditComplete }) {
   } = useEditItem(editItemId, items);
 
   const [images, setImages] = useState(initialImages);
+  const [video, setVideo] = useState(initialVideo);
+  const [isDistress, setIsDistress] = useState(initialDistress);
+  const [plan, setPlan] = useState({
+    name: 'Free', maxPhotos: 6, maxVideos: 0, featuredSlots: 0,
+    listingDays: 30, auctionAutoApprove: false, distressPinned: false,
+  });
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
   const [price, setPrice] = useState(initialPrice);
@@ -139,6 +147,17 @@ export default function AddListing({ editItemId, onEditComplete }) {
 
   const existingTemplates = getTemplates();
 
+  useEffect(() => {
+    if (!api.subscription?.current) return undefined;
+    let active = true;
+    api.subscription.current()
+      .then((res) => {
+        if (active && res.subscription) setPlan((prev) => ({ ...prev, ...res.subscription }));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
   const suggestions = useMemo(() => {
     if (!category || category === 'all') return null;
     return getPriceSuggestions(items, category, currency);
@@ -159,8 +178,8 @@ export default function AddListing({ editItemId, onEditComplete }) {
 
   const handleImageUpload = async (e) => {
     const files = Array.from(e.target.files);
-    if (images.length + files.length > 6) {
-      addToast('Maximum 6 images allowed', 'error');
+    if (images.length + files.length > plan.maxPhotos) {
+      addToast(`Maximum ${plan.maxPhotos} images allowed on your ${plan.name} plan`, 'error');
       return;
     }
     for (const file of files) {
@@ -185,6 +204,24 @@ export default function AddListing({ editItemId, onEditComplete }) {
 
   const removeImage = (index) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleVideoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (plan.maxVideos < 1) {
+      addToast('Listing videos are a Gold subscription benefit', 'error');
+      return;
+    }
+    try {
+      const res = await api.upload.chatAttachment(file);
+      setVideo(res.file?.url || '');
+      addToast('Video uploaded', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not upload video', 'error');
+    } finally {
+      e.target.value = '';
+    }
   };
 
   const detectLocation = () => {
@@ -273,6 +310,8 @@ category,
       condition: condition || 'good',
       currency,
     images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=400'],
+    videoUrl: video || null,
+    isDistress: plan.distressPinned ? isDistress : false,
     location: {
       lat: userLocation?.lat || 40.7128,
       lng: userLocation?.lng || -74.006,
@@ -398,6 +437,8 @@ category,
   const resetForm = () => {
     if (!isBulkMode) {
       setImages([]);
+      setVideo('');
+      setIsDistress(false);
       setTitle('');
       setDescription('');
       setPrice('');
@@ -448,7 +489,7 @@ category,
               </button>
             </div>
           ))}
-          {images.length < 6 && (
+          {images.length < plan.maxPhotos && (
             <>
               <label className="upload-slot upload-slot--add">
                 <i className="bi bi-camera" />
@@ -462,6 +503,27 @@ category,
             </>
           )}
         </div>
+        <p className="image-limit-hint">{images.length}/{plan.maxPhotos} photos · {plan.name} plan</p>
+
+        {plan.maxVideos > 0 && (
+          <div className="input-group">
+            <label className="input-label">Listing Video (1 max)</label>
+            {video ? (
+              <div className="listing-video-preview">
+                <video src={video} controls preload="metadata" />
+                <button type="button" className="remove-image" onClick={() => setVideo('')}>
+                  <i className="bi bi-x" />
+                </button>
+              </div>
+            ) : (
+              <label className="upload-slot upload-slot--add">
+                <i className="bi bi-camera-video" />
+                <span>Add Video</span>
+                <input type="file" accept="video/*" onChange={handleVideoUpload} style={{ display: 'none' }} />
+              </label>
+            )}
+          </div>
+        )}
 
         <div className="input-group">
           <label className="input-label">Title *</label>
@@ -645,7 +707,10 @@ category,
                 <label className="input-label">Auction End Date</label>
                 <input type="datetime-local" className="input" value={auctionEndsAt} onChange={(e) => setAuctionEndsAt(e.target.value)} />
               </div>
-              <p className="auction-hint" style={{ marginTop: 8 }}>The buy-it-now price above is used as the fallback starting point and display value.</p>
+              <p className="auction-hint" style={{ marginTop: 8 }}>
+                The buy-it-now price above is used as the fallback starting point and display value.
+                {' '}{plan.auctionAutoApprove ? 'Gold auctions are auto-approved.' : 'Auctions require review on the Free plan.'}
+              </p>
             </div>
           )}
         </div>
@@ -660,6 +725,21 @@ category,
             ))}
           </div>
         </div>
+
+        {plan.distressPinned && (
+          <div className="input-group">
+            <label className="input-label">
+              <input
+                type="checkbox"
+                checked={isDistress}
+                onChange={(e) => setIsDistress(e.target.checked)}
+                style={{ marginRight: 8 }}
+              />
+              Pin as a distress sale
+            </label>
+            <p className="auction-hint">Gold distress sales are pinned to the top of search results.</p>
+          </div>
+        )}
 
         <div className="input-group">
           <label className="input-label">Location</label>
@@ -676,17 +756,21 @@ category,
               <i className="bi bi-lightning-fill" />
               <span>Boost Listing</span>
             </label>
-            <div className="boost-options">
-              <button type="button" className={`boost-option ${!boostListing ? 'active' : ''}`} onClick={() => setBoostListing(false)}>
-                <span className="boost-option-title">Standard</span>
-                <span className="boost-option-price">Free</span>
-              </button>
-              <button type="button" className={`boost-option ${boostListing ? 'active' : ''}`} onClick={() => setBoostListing(true)}>
-                <span className="boost-option-title">Boosted</span>
-                <span className="boost-option-price">₦5,000</span>
-                <span className="boost-option-desc">Top of search for {boostDuration} days</span>
-              </button>
-            </div>
+            {plan.featuredSlots > 0 ? (
+              <div className="boost-options">
+                <button type="button" className={`boost-option ${!boostListing ? 'active' : ''}`} onClick={() => setBoostListing(false)}>
+                  <span className="boost-option-title">Standard</span>
+                  <span className="boost-option-price">Free</span>
+                </button>
+                <button type="button" className={`boost-option ${boostListing ? 'active' : ''}`} onClick={() => setBoostListing(true)}>
+                  <span className="boost-option-title">Featured</span>
+                  <span className="boost-option-price">Included with Gold</span>
+                  <span className="boost-option-desc">{plan.featuredSlots} slots · top of search for {boostDuration} days</span>
+                </button>
+              </div>
+            ) : (
+              <p className="auction-hint">Featured slots are a Gold subscription benefit.</p>
+            )}
             {boostListing && (
               <div className="boost-duration">
                 <label className="boost-duration-label">Duration:</label>

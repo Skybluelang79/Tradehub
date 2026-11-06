@@ -23,57 +23,31 @@ const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE
 const MIN_PURCHASE_CENTS = 10000;
 const MAX_PURCHASE_CENTS = 10000000;
 
+// The catalog is intentionally limited to the TradeHub-branded card: its value
+// is platform credit, so every gift card sold on the marketplace is redeemable
+// for store credit. Third-party brands are retired below.
 const DEFAULT_BRANDS = [
-  { name: 'Amazon Gift Card', category: 'retail', description: 'Shop anything on Amazon with this balance.', frontImage: '/uploads/amazon-gift-card.png' },
-  { name: 'Apple Gift Card / iTunes Gift Card', category: 'digital', description: 'Apps, music, movies and more from Apple and iTunes.', frontImage: '/uploads/apple-itunes-gift-card.png' },
-  { name: 'Walmart Gift Card', category: 'retail', description: 'Groceries, electronics, fashion and more at Walmart.', frontImage: '/uploads/walmart-gift-card.png' },
-  { name: 'Starbucks Gift Card', category: 'food', description: 'Coffee, snacks and more at Starbucks.', frontImage: '/uploads/starbucks-gift-card.png' },
-  { name: 'American Express & Visa Gift Cards', category: 'finance', description: 'Prepaid cards accepted anywhere American Express or Visa cards are.', frontImage: '/uploads/amex-visa-gift-card.jpg' },
-  { name: 'Google Play Gift Card', category: 'digital', description: 'Apps, games, movies and books on Google Play.', frontImage: '/uploads/google-play-gift-card.jpg' },
-  { name: 'Sephora Gift Card', category: 'retail', description: 'Beauty, makeup and skincare at Sephora.', frontImage: '/uploads/sephora-gift-card.jpg' },
   { name: 'TradeHub Gift Card', category: 'general', description: "TradeHub's all-purpose gift card. Redeem for store credit to use on any listing, listing boost or subscription on the marketplace.", frontImage: '/uploads/tradehub-gift-card.svg', backImage: '/uploads/tradehub-gift-card-back.svg' },
 ];
-
-const BRAND_MERGES = [
-  { from: 'Apple Gift Card', to: 'Apple Gift Card / iTunes Gift Card', description: 'Apps, music, movies and more from Apple and iTunes.' },
-  { from: 'American Express Gift Card', to: 'American Express & Visa Gift Cards', description: 'Prepaid cards accepted anywhere American Express or Visa cards are.' },
-  { from: 'Amazon', to: 'Amazon Gift Card', description: 'Shop anything on Amazon with this balance.' },
-  { from: 'Starbucks', to: 'Starbucks Gift Card', description: 'Coffee, snacks and more at Starbucks.' },
-];
-
-const RETIRED_BRANDS = ['Steam', 'Netflix', 'iTunes Gift Card', 'Visa Gift Card', 'Amazon', 'Starbucks', 'Smoke Brand'];
 
 function seedDefaultBrands() {
   const find = (name) => db.prepare('SELECT * FROM gift_card_brands WHERE name = ?').get(name);
 
-  for (const m of BRAND_MERGES) {
-    const from = find(m.from);
-    if (!from) continue;
-    const to = find(m.to);
-    if (to) {
-      db.prepare('UPDATE gift_card_brands SET active = 0 WHERE id = ?').run(from.id);
-    } else {
-      db.prepare('UPDATE gift_card_brands SET name = ?, description = ? WHERE id = ?').run(m.to, m.description, from.id);
-    }
-  }
-
   const insert = db.prepare('INSERT INTO gift_card_brands (id, name, description, category) VALUES (?, ?, ?, ?)');
   for (const b of DEFAULT_BRANDS) {
     if (!find(b.name)) insert.run(uuidv4(), b.name, b.description, b.category);
-  }
-  for (const b of DEFAULT_BRANDS) {
     db.prepare("UPDATE gift_card_brands SET front_image = ? WHERE name = ? AND (front_image IS NULL OR front_image = '')").run(b.frontImage, b.name);
     if (b.backImage) {
       db.prepare("UPDATE gift_card_brands SET back_image = ? WHERE name = ? AND (back_image IS NULL OR back_image = '')").run(b.backImage, b.name);
     }
-    db.prepare('UPDATE gift_card_brands SET active = 1 WHERE name = ?').run(b.name);
-  }
-  for (const name of RETIRED_BRANDS) {
-    db.prepare('UPDATE gift_card_brands SET active = 0 WHERE name = ?').run(name);
   }
 
-  // Only the TradeHub-branded card can be sold in the mall by default: its
-  // value is platform credit, whereas third-party brands are catalog-only.
+  // Retire every other brand. Rows are kept (not deleted) so historical
+  // gift_cards / gift_card_purchases keep resolving their brand name, but they
+  // can no longer be listed or sold.
+  db.prepare("UPDATE gift_card_brands SET active = 0, sellable = 0 WHERE name != 'TradeHub Gift Card'").run();
+  db.prepare("UPDATE gift_card_brands SET active = 1 WHERE name = 'TradeHub Gift Card'").run();
+
   // The backfill flag keeps an admin's later "sellable" toggle from being
   // overwritten on the next seed.
   const backfilled = db.prepare("SELECT value FROM platform_settings WHERE key = 'gift_card_sellable_backfill'").get();

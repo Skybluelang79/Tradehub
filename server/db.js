@@ -856,6 +856,12 @@ function migrate() {
   ensureColumn('items', 'current_bid', 'REAL');
   ensureColumn('items', 'current_bidder_id', 'TEXT');
   ensureColumn('items', 'currency', "TEXT DEFAULT 'NGN'");
+  ensureColumn('items', 'video_url', 'TEXT');
+  ensureColumn('items', 'expires_at', 'TEXT');
+  ensureColumn('items', 'expiry_warned_at', 'TEXT');
+  ensureColumn('items', 'is_distress', 'INTEGER DEFAULT 0');
+  ensureColumn('items', 'locked_at', 'TEXT');
+  ensureColumn('items', 'lock_reason', 'TEXT');
 
   ensureColumn('users', 'firebase_uid', "TEXT DEFAULT ''");
   ensureColumn('users', 'auth_provider', "TEXT DEFAULT 'local'");

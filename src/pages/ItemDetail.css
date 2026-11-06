@@ -1314,3 +1314,16 @@
   background: var(--surface-hover);
   border-color: var(--border-light);
 }
+
+.detail-video-wrapper {
+  width: 100%;
+  background: #000;
+  margin-top: 12px;
+}
+
+.detail-main-video {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}

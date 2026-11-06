@@ -10,16 +10,16 @@ import {
   toMinorUnits,
 } from '../src/paystack.js';
 import logger from '../src/logger.js';
+import { convert } from '../../shared/currencies.js';
+import { PLANS, getEffectivePlan } from '../../shared/plans.js';
 
 const router = Router();
 
-// Flat 4% seller fee on every plan. `fee` here is what the plan/benefit
-// screens display, so it has to match PLAN_FEES in payments.js.
-const PLANS = {
-  free: { name: 'Free', price: 0, fee: 0.04, boosts: 0, maxListings: 5, badge: null },
-  premium: { name: 'Premium', price: 3000, fee: 0.04, boosts: 2, maxListings: -1, badge: 'Premium Seller' },
-  pro: { name: 'Pro', price: 24.99, fee: 0.04, boosts: 5, maxListings: -1, badge: 'Pro Seller' },
-};
+function planChargeAmount(planId) {
+  const plan = PLANS[planId];
+  if (!plan || plan.priceUsd <= 0) return 0;
+  return convert(plan.priceUsd, 'USD', DEFAULT_CURRENCY);
+}
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -96,14 +96,14 @@ function writePlanCodes(map) {
 
 async function getPaystackPlanCode(planId) {
   const plan = PLANS[planId];
-  if (!plan || plan.price <= 0 || !isPaystackConfigured()) return null;
-  const cacheKey = `${planId}:${DEFAULT_CURRENCY}`;
+  if (!plan || plan.priceUsd <= 0 || !isPaystackConfigured()) return null;
+  const cacheKey = `${planId}:${DEFAULT_CURRENCY}:${planChargeAmount(planId)}`;
   const codes = readPlanCodes();
   if (codes[cacheKey]) return codes[cacheKey];
 
   const created = await paystack.createPlan({
     name: `TradeHub ${plan.name}`,
-    amountMinor: toMinorUnits(plan.price, DEFAULT_CURRENCY),
+    amountMinor: toMinorUnits(planChargeAmount(planId), DEFAULT_CURRENCY),
     interval: 'monthly',
     currency: DEFAULT_CURRENCY,
   });
@@ -129,15 +129,16 @@ export function planIdForCode(code) {
 router.get('/current', authenticateToken, (req, res) => {
   try {
     const sub = getSubscription(req.user.id);
-    const plan = PLANS[sub.plan] || PLANS.free;
+    const effectivePlan = getEffectivePlan(sub);
+    const plan = PLANS[effectivePlan] || PLANS.free;
     const isTrial = sub.status === 'trial' && sub.trial_end && new Date(sub.trial_end) > new Date();
     const planDetails = {
       ...sub,
       ...plan,
-      fee: plan.fee,
-      boosts: plan.boosts,
-      maxListings: plan.maxListings,
-      badge: plan.badge,
+      plan: effectivePlan,
+      effectivePlan,
+      chargeAmount: planChargeAmount(effectivePlan),
+      chargeCurrency: DEFAULT_CURRENCY,
       isTrial,
       trialEndsAt: sub.trial_end,
       daysLeft: isTrial ? Math.ceil((new Date(sub.trial_end) - new Date()) / (1000 * 60 * 60 * 24)) : 0,
@@ -151,7 +152,12 @@ router.get('/current', authenticateToken, (req, res) => {
 
 router.get('/plans', (req, res) => {
   try {
-    const plans = Object.entries(PLANS).map(([id, p]) => ({ id, ...p }));
+    const plans = Object.entries(PLANS).map(([id, p]) => ({
+      id,
+      ...p,
+      chargeAmount: planChargeAmount(id),
+      chargeCurrency: DEFAULT_CURRENCY,
+    }));
     res.json({ plans });
   } catch (err) {
     logger.error('Get plans error:', err);
@@ -167,7 +173,7 @@ router.post('/upgrade', authenticateToken, async (req, res) => {
     }
 
     const sub = getSubscription(req.user.id);
-    if (targetPlan === sub.plan) {
+    if (targetPlan === getEffectivePlan(sub)) {
       return res.status(400).json({ error: `Already on the ${targetPlan} plan` });
     }
 
@@ -175,13 +181,13 @@ router.post('/upgrade', authenticateToken, async (req, res) => {
     // activate the plan after the charge succeeds (webhook or verify call). In
     // development/demo mode a free upgrade is kept so the feature can still be
     // demonstrated without a configured gateway.
-    const isPaid = PLANS[targetPlan].price > 0;
+    const isPaid = PLANS[targetPlan].priceUsd > 0;
     if (isPaid && IS_PROD) {
       if (!isPaystackConfigured()) {
         return res.status(503).json({ error: 'Paid subscriptions require Paystack to be configured' });
       }
       const reference = uuidv4();
-      const amountMinor = toMinorUnits(PLANS[targetPlan].price, DEFAULT_CURRENCY);
+      const amountMinor = toMinorUnits(planChargeAmount(targetPlan), DEFAULT_CURRENCY);
       // Passing the plan code turns this first charge into a recurring
       // subscription: Paystack auto-charges the buyer each month until it is
       // disabled via /cancel. If we can't mint a plan we fall back to a
@@ -311,16 +317,20 @@ router.get('/benefits', authenticateToken, (req, res) => {
   try {
     const sub = getSubscription(req.user.id);
 
-    const isTrial = sub.status === 'trial' && sub.trial_end && new Date(sub.trial_end) > new Date();
-    const effectivePlan = isTrial ? 'premium' : sub.plan;
+    const effectivePlan = getEffectivePlan(sub);
     const effective = PLANS[effectivePlan] || PLANS.free;
 
     const benefits = [
       { icon: '📦', title: 'Max Listings', desc: effective.maxListings === -1 ? 'Unlimited listings' : `${effective.maxListings} listings` },
+      { icon: '🖼️', title: 'Photos/Videos', desc: `${effective.maxPhotos} photos${effective.maxVideos ? ` + ${effective.maxVideos} video` : ''}` },
+      { icon: '⏱️', title: 'Listing Duration', desc: `${effective.listingDays}-day listings` },
       { icon: '💰', title: 'Transaction Fee', desc: `${(effective.fee * 100).toFixed(1)}% per sale` },
+      { icon: '🚀', title: 'Featured Slots', desc: effective.featuredSlots ? `${effective.featuredSlots} featured slots` : 'No featured slots' },
+      { icon: '⚡', title: 'Auction Auto-Approval', desc: effective.auctionAutoApprove ? 'Enabled' : 'Standard review' },
+      { icon: '📌', title: 'Distress Sales', desc: effective.distressPinned ? 'Pinned to top' : 'Standard visibility' },
       { icon: '🚀', title: 'Free Boosts', desc: `${effective.boosts} boosts per month` },
-      { icon: '⭐', title: 'Premium Badge', desc: effective.badge ? `Show "${effective.badge}" badge` : 'No badge' },
-      { icon: '📊', title: 'Analytics', desc: effectivePlan !== 'free' ? 'Full analytics dashboard' : 'Basic analytics' },
+      { icon: '⭐', title: 'Seller Badge', desc: effective.badge ? `Show "${effective.badge}" badge` : 'No badge' },
+      { icon: '📊', title: 'Analytics', desc: effective.analytics ? 'Real-time analytics' : 'Basic analytics' },
       { icon: '💬', title: 'Support', desc: effectivePlan === 'pro' ? 'Priority support' : effectivePlan === 'premium' ? 'Email support' : 'Standard support' },
     ];
 

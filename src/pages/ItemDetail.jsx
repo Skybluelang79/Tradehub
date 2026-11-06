@@ -792,9 +792,7 @@ export default function ItemDetail() {
           alt={selectedItem.title}
           className="detail-main-image"
           onClick={() => setShowLightbox(true)}
-          style={{ cursor: 'pointer' }}
         />
-
         {selectedItem.images.length > 1 && (
           <div className="detail-image-thumbs">
             {selectedItem.images.map((img, index) => (
@@ -811,6 +809,11 @@ export default function ItemDetail() {
           </div>
         )}
       </div>
+      {selectedItem.videoUrl && (
+        <div className="detail-video-wrapper">
+          <video src={selectedItem.videoUrl} controls preload="metadata" className="detail-main-video" />
+        </div>
+      )}
 
       <div className="detail-content">
         <div className="detail-price-row">

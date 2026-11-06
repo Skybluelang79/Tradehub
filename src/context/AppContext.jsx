@@ -45,6 +45,8 @@ function normalizeItem(item) {
     createdAt: item.created_at,
     updatedAt: item.updated_at,
     images: item.images || [],
+    videoUrl: item.video_url || '',
+    isDistress: !!item.is_distress,
     isAuction: !!item.is_auction,
     startingBid: item.starting_bid,
     minIncrement: item.min_increment,
@@ -52,6 +54,9 @@ function normalizeItem(item) {
     auctionStatus: item.auction_status,
     currentBid: item.current_bid,
     currentBidderId: item.current_bidder_id,
+    expiresAt: item.expires_at,
+    lockedAt: item.locked_at,
+    lockReason: item.lock_reason,
   };
 }
 
@@ -69,8 +74,10 @@ function toServerItem(item, images, status = 'active') {
     currency: item.currency || 'NGN',
     boosted: !!item.boosted,
     is_auction: !!item.isAuction,
+    is_distress: !!item.isDistress,
     status,
   };
+  if (item.videoUrl) payload.video_url = item.videoUrl;
   if (item.salePrice != null && item.salePrice !== '') payload.sale_price = Number(item.salePrice);
   if (item.saleEndsAt) payload.sale_ends_at = item.saleEndsAt;
   if (item.location) {
@@ -104,6 +111,8 @@ const UPDATE_FIELD_MAP = {
   category: 'category',
   condition: 'condition',
   images: 'images',
+  videoUrl: 'video_url',
+  isDistress: 'is_distress',
   quantity: 'quantity',
   status: 'status',
   boosted: 'boosted',
@@ -603,6 +612,18 @@ const [items, setItems] = useState([]);
     }
   }, [items, addNotification]);
 
+  const renewItem = useCallback(async (itemId) => {
+    await api.items.renew(itemId);
+    const fresh = await api.items.get(itemId).catch(() => null);
+    if (fresh?.item) {
+      const normalized = normalizeItem(fresh.item);
+      setItems((prev) => prev.some((item) => item.id === itemId)
+        ? prev.map((item) => item.id === itemId ? normalized : item)
+        : [normalized, ...prev]);
+    }
+    return fresh?.item || null;
+  }, []);
+
   const getUserListings = useCallback((userId) => {
     return items.filter((item) => item.sellerId === userId);
   }, [items]);
@@ -989,6 +1010,7 @@ const [items, setItems] = useState([]);
     addItem,
     updateItem,
     deleteItem,
+    renewItem,
     selectedItem,
     setSelectedItem,
     incrementItemViews,

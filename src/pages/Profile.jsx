@@ -58,7 +58,7 @@ export default function Profile() {
   const {
     items, getReviewsForUser, getUserRating, setActiveTab,
     deleteItem, updateItem, boostItem, getUserListings,
-    getUserDrafts, getUserActiveListings, getItemAnalytics,
+    getUserDrafts, getUserActiveListings, getItemAnalytics, renewItem,
     conversations, getSoldItems, getTotalRevenue,
     deleteTemplate, templates,
   } = useApp();
@@ -123,6 +123,8 @@ export default function Profile() {
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [showBoostModal, setShowBoostModal] = useState(null);
+  const [expiredItems, setExpiredItems] = useState([]);
+  const [renewingId, setRenewingId] = useState(null);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirm: '' });
   const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
@@ -130,6 +132,19 @@ export default function Profile() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [verificationSending, setVerificationSending] = useState(false);
   const avatarInputRef = useRef(null);
+
+  useEffect(() => {
+    if (!authUser?.id || activeTab !== 'listings') return undefined;
+    let cancelled = false;
+    api.items.byUser(authUser.id)
+      .then((res) => {
+        if (cancelled) return;
+        const locked = (res.items || []).filter((item) => item.status === 'expired' || item.locked_at);
+        setExpiredItems(locked);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [authUser?.id, activeTab, items]);
 
   const [settings, setSettings] = useState({
     notifications: true,
@@ -583,10 +598,24 @@ export default function Profile() {
     try {
       await api.items.delete(itemId);
       deleteItem(itemId);
+      setExpiredItems((prev) => prev.filter((item) => item.id !== itemId));
       setShowDeleteConfirm(null);
       addToast('Listing deleted', 'success');
     } catch (err) {
       addToast(err.message || 'Could not delete listing', 'error');
+    }
+  };
+
+  const handleRenewItem = async (itemId) => {
+    setRenewingId(itemId);
+    try {
+      await renewItem(itemId);
+      setExpiredItems((prev) => prev.filter((item) => item.id !== itemId));
+      addToast('Listing renewed', 'success');
+    } catch (err) {
+      addToast(err.message || 'Could not renew listing', 'error');
+    } finally {
+      setRenewingId(null);
     }
   };
 
@@ -999,7 +1028,41 @@ export default function Profile() {
                 </div>
               )}
 
-              {userActiveItems.length === 0 && userDrafts.length === 0 ? (
+              {expiredItems.length > 0 && (
+                <div className="listings-section">
+                  <h4 className="listings-section-title">
+                    <ClockIcon size={16} />
+                    Expired ({expiredItems.length})
+                  </h4>
+                  <div className="listings-list">
+                    {expiredItems.map((item) => (
+                      <div key={item.id} className="listing-card">
+                        <img src={firstImage(item)} alt={item.title} className="listing-card-img" />
+                        <div className="listing-card-body">
+                          <h4 className="listing-card-title">{item.title}</h4>
+                          <span className="listing-card-price">{formatPrice(item.price)}</span>
+                          <span className="listing-card-status draft">Expired</span>
+                        </div>
+                        <div className="listing-card-actions">
+                          <button
+                            className="listing-action-btn"
+                            onClick={() => handleRenewItem(item.id)}
+                            disabled={renewingId === item.id}
+                            title="Renew listing"
+                          >
+                            <ClockIcon size={16} />
+                          </button>
+                          <button className="listing-action-btn danger" onClick={() => setShowDeleteConfirm(item.id)} title="Delete">
+                            <TrashIcon size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {userActiveItems.length === 0 && userDrafts.length === 0 && expiredItems.length === 0 ? (
                 <div className="empty-state">
                   <h3 className="empty-title">No listings yet</h3>
                   <p className="empty-text">Start selling by creating your first listing</p>

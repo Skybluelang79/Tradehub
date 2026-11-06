@@ -808,3 +808,29 @@
     grid-template-columns: repeat(4, 1fr);
   }
 }
+
+.image-limit-hint {
+  margin: 6px 0 12px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.listing-video-preview {
+  position: relative;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.listing-video-preview video {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: contain;
+}
+
+.listing-video-preview .remove-image {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}

@@ -5,8 +5,46 @@ import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 import validate, { createItemSchema, updateItemSchema, placeBidSchema } from '../src/validation.js';
 import logger from '../src/logger.js';
 import { formatMoney } from '../../shared/currencies.js';
+import { getPlan, getEffectivePlan } from '../../shared/plans.js';
 
 const router = Router();
+
+function futureSqlDate(days) {
+  return new Date(Date.now() + days * 86400000).toISOString().replace('T', ' ').slice(0, 19);
+}
+
+function sellerPlan(userId) {
+  const sub = db.prepare(
+    'SELECT plan, status, trial_end, current_period_end FROM subscriptions WHERE user_id = ?'
+  ).get(userId);
+  return getPlan(getEffectivePlan(sub));
+}
+
+function countPublishedListings(userId, excludeId = null) {
+  const row = excludeId
+    ? db.prepare(
+      "SELECT COUNT(*) as count FROM items WHERE seller_id = ? AND id != ? AND status IN ('active', 'pending', 'reserved')"
+    ).get(userId, excludeId)
+    : db.prepare(
+      "SELECT COUNT(*) as count FROM items WHERE seller_id = ? AND status IN ('active', 'pending', 'reserved')"
+    ).get(userId);
+  return row.count;
+}
+
+function countFeaturedListings(userId, excludeId = null) {
+  const row = excludeId
+    ? db.prepare(
+      "SELECT COUNT(*) as count FROM items WHERE seller_id = ? AND id != ? AND boosted = 1 AND (boost_expires_at IS NULL OR boost_expires_at > datetime('now'))"
+    ).get(userId, excludeId)
+    : db.prepare(
+      "SELECT COUNT(*) as count FROM items WHERE seller_id = ? AND boosted = 1 AND (boost_expires_at IS NULL OR boost_expires_at > datetime('now'))"
+    ).get(userId);
+  return row.count;
+}
+
+function listingLimitError(plan) {
+  return `Your ${plan.name} plan allows ${plan.maxListings} active listings. Upgrade to Gold for 120.`;
+}
 
 // A boost is time-boxed by the server so a client cannot grant itself a
 // permanent (or arbitrarily long) top-of-search placement. Anything missing,
@@ -20,35 +58,6 @@ function resolveBoost(boosted, boostExpiresAt) {
   if (!Number.isFinite(end) || end <= now) end = now + 7 * 86400000;
   if (end > cap) end = cap;
   return { boosted: 1, boostExpiresAt: new Date(end).toISOString() };
-}
-
-function ensurePremiumForAuction(userId) {
-  try {
-    const sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);
-    if (sub && sub.status === 'active' && ['premium', 'pro'].includes(sub.plan)) {
-      return { upgraded: false, plan: sub.plan };
-    }
-    const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    const endStr = end.toISOString().replace('T', ' ').split('.')[0];
-    if (sub) {
-      db.prepare(
-        "UPDATE subscriptions SET plan = 'premium', status = 'active', current_period_start = datetime('now'), current_period_end = ?, trial_end = NULL, cancelled_at = NULL, updated_at = datetime('now') WHERE user_id = ?"
-      ).run(endStr, userId);
-    } else {
-      db.prepare(
-        `INSERT INTO subscriptions (id, user_id, plan, status, current_period_start, current_period_end, created_at, updated_at)
-         VALUES (?, ?, 'premium', 'active', datetime('now'), ?, datetime('now'), datetime('now'))`
-      ).run(uuidv4(), userId, endStr);
-    }
-    try {
-      db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-        .run(uuidv4(), userId, 'subscription', 'Premium Activated', 'You have been upgraded to Premium because you created an auction listing.');
-    } catch {}
-    return { upgraded: true, plan: 'premium' };
-  } catch (e) {
-    logger.error('ensurePremiumForAuction error:', e);
-    return { upgraded: false };
-  }
 }
 
 function calculateDistance(lat1, lng1, lat2, lng2) {
@@ -117,11 +126,11 @@ router.get('/', optionalAuth, (req, res) => {
     const countParams = [...params];
 
     switch (sort) {
-      case 'newest': query += ' ORDER BY i.created_at DESC'; break;
-      case 'oldest': query += ' ORDER BY i.created_at ASC'; break;
-      case 'price_low': query += ' ORDER BY i.price ASC'; break;
-      case 'price_high': query += ' ORDER BY i.price DESC'; break;
-      case 'popular': query += ' ORDER BY i.views DESC, i.favorites DESC'; break;
+      case 'newest': query += ' ORDER BY i.is_distress DESC, i.created_at DESC'; break;
+      case 'oldest': query += ' ORDER BY i.is_distress DESC, i.created_at ASC'; break;
+      case 'price_low': query += ' ORDER BY i.is_distress DESC, i.price ASC'; break;
+      case 'price_high': query += ' ORDER BY i.is_distress DESC, i.price DESC'; break;
+      case 'popular': query += ' ORDER BY i.is_distress DESC, i.views DESC, i.favorites DESC'; break;
       case 'nearest':
         if (req.user && req.user.location_lat && req.user.location_lng) {
           query = query.replace('SELECT i.*', `SELECT i.*, (
@@ -132,12 +141,12 @@ router.get('/', optionalAuth, (req, res) => {
             ))
           ) as distance`);
           params.push(req.user.location_lat, req.user.location_lat, req.user.location_lng);
-          query += ' ORDER BY distance ASC';
+          query += ' ORDER BY i.is_distress DESC, distance ASC';
         } else {
-          query += ' ORDER BY i.created_at DESC';
+          query += ' ORDER BY i.is_distress DESC, i.created_at DESC';
         }
         break;
-      default: query += ' ORDER BY i.boosted DESC, i.created_at DESC';
+      default: query += ' ORDER BY i.is_distress DESC, i.boosted DESC, i.created_at DESC';
     }
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -296,19 +305,44 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
       category, condition, images, location, quantity,
       variants, boosted, boost_expires_at,
       is_auction, starting_bid, min_increment, auction_ends_at,
-      status, currency,
+      status, currency, video_url, is_distress,
     } = req.validatedBody;
 
     const id = uuidv4();
     const auction = is_auction === true;
-    const boost = resolveBoost(boosted, boost_expires_at);
-    if (auction) {
-      ensurePremiumForAuction(req.user.id);
+    const plan = sellerPlan(req.user.id);
+
+    if (status !== 'draft') {
+      if (plan.maxListings !== -1 && countPublishedListings(req.user.id) >= plan.maxListings) {
+        return res.status(403).json({ error: listingLimitError(plan) });
+      }
+      if (images && images.length > plan.maxPhotos) {
+        return res.status(403).json({ error: `${plan.name} plan allows up to ${plan.maxPhotos} photos per listing.` });
+      }
+      if (video_url && plan.maxVideos < 1) {
+        return res.status(403).json({ error: 'Listing videos are a Gold subscription benefit.' });
+      }
+      if (boosted && countFeaturedListings(req.user.id) >= plan.featuredSlots) {
+        return res.status(403).json({ error: `${plan.name} plan allows ${plan.featuredSlots} featured slots.` });
+      }
     }
 
+    let boost = resolveBoost(boosted, boost_expires_at);
+    if (boosted && status !== 'draft') {
+      if (countFeaturedListings(req.user.id) >= plan.featuredSlots) {
+        boost = { boosted: 0, boostExpiresAt: null };
+      }
+    }
+
+    const listingStatus = auction && status !== 'draft' && !plan.auctionAutoApprove
+      ? 'pending'
+      : (status || 'active');
+    const expiresAt = listingStatus === 'draft' ? null : futureSqlDate(plan.listingDays);
+    const distress = plan.distressPinned && is_distress ? 1 : 0;
+
     db.prepare(`
-      INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, current_bid, current_bidder_id, status)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, current_bid, current_bidder_id, status, expires_at, video_url, is_distress)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, title, description, price,
       sale_price || null, sale_ends_at || null,
@@ -324,7 +358,10 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
       auction ? 'active' : 'pending',
       auction ? (starting_bid ?? price) : null,
       null,
-      status || 'active'
+      listingStatus,
+      expiresAt,
+      video_url || null,
+      distress
     );
 
     if (images && images.length > 0) {
@@ -344,7 +381,13 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
     db.prepare(`
       INSERT INTO notifications (id, user_id, type, title, body)
       VALUES (?, ?, 'system', 'Listing Created', ?)
-    `).run(uuidv4(), req.user.id, `"${title}" is now live!`);
+    `).run(
+      uuidv4(),
+      req.user.id,
+      listingStatus === 'active'
+        ? `"${title}" is now live!`
+        : `"${title}" was submitted for review. Gold sellers get auction auto-approval.`
+    );
 
     db.prepare(`
       INSERT INTO audit_logs (id, admin_id, action, entity_type, entity_id, details)
@@ -363,28 +406,60 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
     const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
     if (item.seller_id !== req.user.id) return res.status(403).json({ error: 'Not authorized' });
-
-    const data = req.validatedBody;
-    const wasAuction = item.is_auction === 1 || item.is_auction === true;
-    const enablingAuction = data.is_auction === true && !wasAuction;
-    if (enablingAuction) {
-      ensurePremiumForAuction(req.user.id);
+    if (item.locked_at || item.status === 'expired') {
+      return res.status(403).json({ error: 'This listing has expired and is locked. Renew it to make changes.' });
     }
 
+    const data = req.validatedBody;
+    const plan = sellerPlan(req.user.id);
+    const wasAuction = item.is_auction === 1 || item.is_auction === true;
+    const enablingAuction = data.is_auction === true && !wasAuction;
+    const requestedStatus = data.status ?? item.status;
+    const publishing = requestedStatus === 'active' && item.status !== 'active';
+
+    if (publishing && plan.maxListings !== -1 && countPublishedListings(req.user.id, item.id) >= plan.maxListings) {
+      return res.status(403).json({ error: listingLimitError(plan) });
+    }
+    if (data.images && data.images.length > plan.maxPhotos) {
+      return res.status(403).json({ error: `${plan.name} plan allows up to ${plan.maxPhotos} photos per listing.` });
+    }
+    if (data.video_url && data.video_url !== item.video_url && plan.maxVideos < 1) {
+      return res.status(403).json({ error: 'Listing videos are a Gold subscription benefit.' });
+    }
+
+    const nextStatus = enablingAuction && !plan.auctionAutoApprove && requestedStatus === 'active'
+      ? 'pending'
+      : requestedStatus;
+
     const boostTouched = data.boosted !== undefined || data.boost_expires_at !== undefined;
-    const boost = boostTouched
+    let boost = boostTouched
       ? resolveBoost(
         data.boosted !== undefined ? data.boosted : item.boosted,
         data.boost_expires_at !== undefined ? data.boost_expires_at : item.boost_expires_at
       )
       : { boosted: item.boosted, boostExpiresAt: item.boost_expires_at };
+    if (boostTouched && boost.boosted) {
+      if (plan.featuredSlots < 1) {
+        return res.status(403).json({ error: 'Featured listings are a Gold subscription benefit.' });
+      }
+      if (countFeaturedListings(req.user.id, item.id) >= plan.featuredSlots) {
+        return res.status(403).json({ error: `${plan.name} plan allows ${plan.featuredSlots} featured slots.` });
+      }
+    }
+
+    const expiresAt = nextStatus === 'active' && !item.expires_at
+      ? futureSqlDate(plan.listingDays)
+      : item.expires_at;
+    const nextDistress = data.is_distress === undefined
+      ? item.is_distress
+      : (plan.distressPinned && data.is_distress ? 1 : 0);
 
     db.prepare(`
       UPDATE items SET title = ?, description = ?, price = ?, sale_price = ?, sale_ends_at = ?,
         category = ?, condition = ?, location_lat = ?, location_lng = ?, location_address = ?,
         quantity = ?, status = ?, boosted = ?, boost_expires_at = ?, updated_at = datetime('now'),
         is_auction = ?, starting_bid = ?, min_increment = ?, auction_ends_at = ?, auction_status = ?,
-        currency = ?
+        currency = ?, video_url = ?, expires_at = ?, is_distress = ?
       WHERE id = ?
     `).run(
       data.title ?? item.title, data.description ?? item.description,
@@ -394,14 +469,17 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
       data.category ?? item.category, data.condition ?? item.condition,
       data.location?.lat ?? item.location_lat, data.location?.lng ?? item.location_lng,
       data.location?.address ?? item.location_address,
-      data.quantity ?? item.quantity, data.status ?? item.status,
+      data.quantity ?? item.quantity, nextStatus,
       boost.boosted, boost.boostExpiresAt,
       data.is_auction !== undefined ? (data.is_auction ? 1 : 0) : item.is_auction,
       data.starting_bid !== undefined ? data.starting_bid : item.starting_bid,
       data.min_increment !== undefined ? (data.min_increment || 1) : item.min_increment,
       data.auction_ends_at !== undefined ? data.auction_ends_at : item.auction_ends_at,
-      data.auction_status ?? item.auction_status,
+      enablingAuction ? 'active' : (data.auction_status ?? item.auction_status),
       data.currency ?? item.currency,
+      data.video_url !== undefined ? (data.video_url || null) : item.video_url,
+      expiresAt,
+      nextDistress,
       req.params.id
     );
 
@@ -424,6 +502,31 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
     res.json({ item: updated });
   } catch (err) {
     logger.error('Update item error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+router.post('/:id/renew', authenticateToken, (req, res) => {
+  try {
+    const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (item.seller_id !== req.user.id) return res.status(403).json({ error: 'Not authorized' });
+
+    const plan = sellerPlan(req.user.id);
+    if (plan.maxListings !== -1 && countPublishedListings(req.user.id, item.id) >= plan.maxListings) {
+      return res.status(403).json({ error: listingLimitError(plan) });
+    }
+
+    const expiresAt = futureSqlDate(plan.listingDays);
+    db.prepare(`
+      UPDATE items SET status = 'active', expires_at = ?, expiry_warned_at = NULL,
+        locked_at = NULL, lock_reason = NULL, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(expiresAt, item.id);
+
+    res.json({ success: true, expires_at: expiresAt });
+  } catch (err) {
+    logger.error('Renew item error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -659,7 +762,7 @@ router.get('/premium/sellers', (req, res) => {
 
       return {
         ...seller,
-        badge: seller.plan === 'pro' ? 'Pro Seller' : 'Premium Seller',
+        badge: seller.plan === 'pro' ? 'Pro Seller' : 'Gold Seller',
         items,
       };
     });

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { formatPrice } from '../../utils/helpers';
+import { api } from '../../services/client';
 import './PremiumSeller.css';
 
 const premiumSellers = [
@@ -38,15 +39,15 @@ const premiumSellers = [
   },
 ];
 
-const PLATFORM_FEE_RATE = 0.04;
+const PLATFORM_FEE_RATE = 0.02;
 
 const perks = [
   { icon: '👑', title: 'Priority Listing', desc: 'Your items appear first in search results' },
-  { icon: '⭐', title: 'Premium Badge', desc: 'Stand out with a gold verified badge' },
+  { icon: '⭐', title: 'Gold Seller Badge', desc: 'Stand out with a gold verified badge' },
   { icon: '📊', title: 'Seller Analytics', desc: 'Track views, clicks, and conversion rates' },
-  { icon: '🚀', title: 'Free Boosts', desc: '2 free listing boosts per month' },
-  { icon: '💬', title: 'Priority Support', desc: 'Direct line to our seller success team' },
-  { icon: '🏷️', title: 'Flat 4% Fee', desc: 'Every plan keeps the same 4% transaction fee' },
+  { icon: '🚀', title: '7 Featured Slots', desc: 'Keep seven listings featured at once' },
+  { icon: '📦', title: '120 Listings', desc: 'List up to 120 items for 90 days each' },
+  { icon: '🏷️', title: 'Reduced 2% Fee', desc: 'Gold cuts the transaction fee from 4% to 2%' },
 ];
 
 const plans = [
@@ -54,30 +55,32 @@ const plans = [
     id: 'free',
     name: 'Free',
     price: 0,
+    displayPrice: 'Free',
     period: '',
     color: '#6B6B7B',
-    features: ['5 listings', '4% transaction fee', 'Basic search visibility', 'Standard support'],
+    features: ['30 listings', '6 photos per listing', '30-day listings', '4% transaction fee', 'Standard support'],
     cta: 'Current Plan',
-    current: true,
   },
   {
     id: 'premium',
-    name: 'Premium',
-    price: 3000,
+    name: 'Gold',
+    price: 9.99,
+    displayPrice: '$9.99',
     period: '/mo',
     color: '#FBBF24',
-    features: ['Unlimited listings', '4% transaction fee', 'Priority search ranking', 'Premium badge', '2 free boosts/mo', 'Analytics dashboard'],
-    cta: 'Start Free Trial',
-    badge: 'Most Popular',
+    features: ['120 listings', '10 photos + 1 video', '90-day listings', '7 featured slots', 'Auctions auto-approved', '2% escrow fee', 'Real-time analytics', 'Distress sales pinned'],
+    cta: 'Subscribe',
+    badge: 'Best Value',
   },
   {
     id: 'pro',
     name: 'Pro',
-    price: 6000,
+    price: 24.99,
+    displayPrice: '$24.99',
     period: '/mo',
     color: '#A78BFA',
-    features: ['Everything in Premium', '4% transaction fee', 'Featured on homepage', 'API access', 'Priority support', 'Custom storefront'],
-    cta: 'Start Free Trial',
+    features: ['Unlimited listings', 'Everything in Gold', '2% escrow fee', 'Priority support', 'Custom storefront'],
+    cta: 'Subscribe',
     badge: 'For Power Sellers',
   },
 ];
@@ -105,6 +108,8 @@ export default function PremiumSeller() {
   const [activePerk, setActivePerk] = useState(null);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('premium');
+  const [currentPlan, setCurrentPlan] = useState('free');
+  const [upgradeError, setUpgradeError] = useState('');
   const [monthlySales, setMonthlySales] = useState(20);
   const [avgPrice, setAvgPrice] = useState(45000);
   const [upgradeStep, setUpgradeStep] = useState(0);
@@ -118,6 +123,15 @@ export default function PremiumSeller() {
       setCurrentSeller(prev => (prev + 1) % premiumSellers.length);
     }, 6000);
     return () => clearInterval(t);
+  }, []);
+
+  useEffect(() => {
+    if (!api.subscription?.current) return;
+    api.subscription.current()
+      .then((res) => {
+        if (res.subscription?.plan) setCurrentPlan(res.subscription.plan);
+      })
+      .catch(() => {});
   }, []);
 
   const monthlyRevenue = monthlySales * avgPrice;
@@ -139,21 +153,39 @@ export default function PremiumSeller() {
   }, []);
 
   const handleUpgradeClick = (planId) => {
+    if (planId === currentPlan || planId === 'free') return;
     setSelectedPlan(planId);
+    setUpgradeError('');
     setShowUpgrade(true);
     spawnParticles();
   };
 
-  const handleConfirmUpgrade = () => {
+  const handleConfirmUpgrade = async () => {
     setUpgradeStep(1);
+    setUpgradeError('');
     spawnParticles();
-    setTimeout(() => setUpgradeStep(2), 1500);
-    setTimeout(() => setUpgradeStep(3), 3000);
+    try {
+      const res = await api.subscription.upgrade(selectedPlan);
+      if (res.requires_payment) {
+        if (res.authorizationUrl) {
+          window.location.href = res.authorizationUrl;
+          return;
+        }
+        throw new Error('Could not start checkout. Please try again.');
+      }
+      setCurrentPlan(res.subscription?.plan || selectedPlan);
+      setUpgradeStep(2);
+      setTimeout(() => setUpgradeStep(3), 1500);
+    } catch (err) {
+      setUpgradeStep(0);
+      setUpgradeError(err.message || 'Could not start your subscription.');
+    }
   };
 
   const handleDismissUpgrade = () => {
     setShowUpgrade(false);
     setUpgradeStep(0);
+    setUpgradeError('');
   };
 
   return (
@@ -171,7 +203,7 @@ export default function PremiumSeller() {
           </svg>
         </div>
         <div className="premium-seller-title-group">
-          <h3 className="premium-seller-title">Premium Sellers</h3>
+          <h3 className="premium-seller-title">Gold Sellers</h3>
           <p className="premium-seller-subtitle">Top-rated sellers you can trust</p>
         </div>
       </div>
@@ -225,7 +257,7 @@ export default function PremiumSeller() {
       <div className="premium-seller-perks">
         <button className="premium-perks-toggle" onClick={() => setShowAllPerks(!showAllPerks)}>
           <span className="premium-perks-toggle-icon">💎</span>
-          <span className="premium-perks-toggle-text">{showAllPerks ? 'Hide' : 'See all'} Premium Benefits</span>
+          <span className="premium-perks-toggle-text">{showAllPerks ? 'Hide' : 'See all'} Gold Benefits</span>
           <svg className={`premium-perks-chevron ${showAllPerks ? 'rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
         </button>
         <div className={`premium-perks-grid ${showAllPerks ? 'visible' : ''}`}>
@@ -240,14 +272,14 @@ export default function PremiumSeller() {
         </div>
       </div>
 
-      {/* ── BECOME A PREMIUM SELLER ── */}
+      {/* BECOME A GOLD SELLER */}
       <div className="premium-upgrade-section">
         <button className="premium-upgrade-header" onClick={() => setShowUpgrade(!showUpgrade)}>
           <div className="premium-upgrade-header-left">
             <div className="premium-upgrade-crown">👑</div>
             <div>
-              <h4 className="premium-upgrade-title">Become a Premium Seller</h4>
-              <p className="premium-upgrade-sub">First 3 months free — cancel anytime</p>
+              <h4 className="premium-upgrade-title">Become a Gold Seller</h4>
+              <p className="premium-upgrade-sub">$9.99/month · cancel anytime</p>
             </div>
           </div>
           <svg className={`premium-upgrade-chevron ${showUpgrade ? 'rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
@@ -282,7 +314,7 @@ export default function PremiumSeller() {
                   <span className="premium-calc-result-value">{formatPrice(monthlyRevenue)}</span>
                 </div>
                 <div className="premium-calc-result free">
-                  <span className="premium-calc-result-label">TradeHub fee (4%)</span>
+                  <span className="premium-calc-result-label">Gold fee (2%)</span>
                   <span className="premium-calc-result-value">-{formatPrice(platformFee)}</span>
                 </div>
                 <div className="premium-calc-result savings">
@@ -294,38 +326,41 @@ export default function PremiumSeller() {
 
             {/* Plan Comparison */}
             <div className="premium-plans">
-              {plans.map((plan) => (
-                <div key={plan.id}
-                  className={`premium-plan-card ${selectedPlan === plan.id ? 'selected' : ''} ${plan.current ? 'current' : ''}`}
-                  onClick={() => !plan.current && setSelectedPlan(plan.id)}
-                  style={{ '--plan-color': plan.color }}>
-                  {plan.badge && <span className="premium-plan-badge" style={{ background: plan.color }}>{plan.badge}</span>}
-                  <div className="premium-plan-header">
-                    <h5 className="premium-plan-name">{plan.name}</h5>
-                    <div className="premium-plan-price">
-                      {plan.price === 0 ? 'Free' : <>
-                        <span className="premium-plan-amount">{formatPrice(plan.price)}</span>
-                        <span className="premium-plan-period">{plan.period}</span>
-                      </>}
+              {plans.map((plan) => {
+                const isCurrent = currentPlan === plan.id;
+                return (
+                  <div key={plan.id}
+                    className={`premium-plan-card ${selectedPlan === plan.id ? 'selected' : ''} ${isCurrent ? 'current' : ''}`}
+                    onClick={() => !isCurrent && plan.id !== 'free' && setSelectedPlan(plan.id)}
+                    style={{ '--plan-color': plan.color }}>
+                    {plan.badge && <span className="premium-plan-badge" style={{ background: plan.color }}>{plan.badge}</span>}
+                    <div className="premium-plan-header">
+                      <h5 className="premium-plan-name">{plan.name}</h5>
+                      <div className="premium-plan-price">
+                        {plan.price === 0 ? 'Free' : <>
+                          <span className="premium-plan-amount">{plan.displayPrice}</span>
+                          <span className="premium-plan-period">{plan.period}</span>
+                        </>}
+                      </div>
+                      {plan.savings && <span className="premium-plan-savings" style={{ color: plan.color }}>{plan.savings}</span>}
                     </div>
-                    {plan.savings && <span className="premium-plan-savings" style={{ color: plan.color }}>{plan.savings}</span>}
+                    <ul className="premium-plan-features">
+                      {plan.features.map((f, i) => (
+                        <li key={i}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke={plan.color} strokeWidth="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12" /></svg>
+                          {f}
+                        </li>
+                      ))}
+                    </ul>
+                    <button className="premium-plan-cta"
+                      disabled={isCurrent || plan.id === 'free'}
+                      style={!isCurrent && plan.id !== 'free' ? { background: plan.color } : {}}
+                      onClick={(e) => { e.stopPropagation(); handleUpgradeClick(plan.id); }}>
+                      {isCurrent ? 'Current Plan' : plan.cta}
+                    </button>
                   </div>
-                  <ul className="premium-plan-features">
-                    {plan.features.map((f, i) => (
-                      <li key={i}>
-                        <svg viewBox="0 0 24 24" fill="none" stroke={plan.color} strokeWidth="2.5" width="14" height="14"><polyline points="20 6 9 17 4 12" /></svg>
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <button className="premium-plan-cta"
-                    disabled={plan.current}
-                    style={!plan.current ? { background: plan.color } : {}}
-                    onClick={(e) => { e.stopPropagation(); handleUpgradeClick(plan.id); }}>
-                    {plan.cta}
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Upgrade Modal */}
@@ -347,14 +382,15 @@ export default function PremiumSeller() {
                     <div className="premium-modal-content">
                       <div className="premium-modal-icon">👑</div>
                       <h3>Upgrade to {plans.find(p => p.id === selectedPlan)?.name}</h3>
-                      <p>Start your free 3-month trial. No charge until trial ends.</p>
+                      <p>Unlock seller tools and lower fees. The NGN equivalent is charged at checkout.</p>
                       <div className="premium-modal-plan-summary">
                         <span>{plans.find(p => p.id === selectedPlan)?.name} Plan</span>
-                        <strong>{formatPrice(plans.find(p => p.id === selectedPlan)?.price || 0)}/mo</strong>
+                        <strong>{plans.find(p => p.id === selectedPlan)?.displayPrice}/mo</strong>
                       </div>
+                      {upgradeError && <p className="premium-modal-error">{upgradeError}</p>}
                       <button className="premium-modal-confirm" onClick={handleConfirmUpgrade}
                         style={{ background: plans.find(p => p.id === selectedPlan)?.color }}>
-                        Confirm Free Trial
+                        Continue to Payment
                       </button>
                       <button className="premium-modal-cancel" onClick={handleDismissUpgrade}>Maybe later</button>
                     </div>
@@ -364,7 +400,7 @@ export default function PremiumSeller() {
                     <div className="premium-modal-content">
                       <div className="premium-modal-spinner" />
                       <h3>Setting up your account...</h3>
-                      <p>Activating premium features</p>
+                      <p>Activating Gold features</p>
                     </div>
                   )}
 
@@ -373,7 +409,7 @@ export default function PremiumSeller() {
                       <div className="premium-modal-success">
                         <svg viewBox="0 0 24 24" fill="none" stroke="#4ADE80" strokeWidth="2.5"><polyline points="20 6 9 17 4 12" /></svg>
                       </div>
-                      <h3>You're Premium!</h3>
+                      <h3>You're all set!</h3>
                       <p>All benefits are now active. Welcome aboard!</p>
                     </div>
                   )}

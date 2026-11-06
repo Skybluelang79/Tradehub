@@ -165,6 +165,7 @@ export const api = {
     get: (id) => request(`/items/${id}`),
     create: (data) => request('/items', { method: 'POST', body: JSON.stringify(data) }),
     update: (id, data) => request(`/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    renew: (id) => request(`/items/${id}/renew`, { method: 'POST' }),
     delete: (id) => request(`/items/${id}`, { method: 'DELETE' }),
     favorite: (id) => request(`/items/${id}/favorite`, { method: 'POST' }),
     favorites: () => request('/items/favorites'),

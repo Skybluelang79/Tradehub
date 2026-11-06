@@ -17,6 +17,7 @@ import {
   isValidCurrency,
   isPaystackCurrency,
 } from '../src/paystack.js';
+import { getPlan, getEffectivePlan } from '../../shared/plans.js';
 
 // How each checkout option is presented by Paystack. The dedicated
 // `bank_transfer` option is handled separately because it uses the Charge API
@@ -68,10 +69,6 @@ const router = Router();
 // crediting sellers.
 const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production';
 
-// Every plan charges the same 4% seller fee. Keep in sync with the `fee`
-// values on PLANS in subscriptions.js, which back the plan/benefit screens.
-const PLAN_FEES = { free: 0.04, premium: 0.04, pro: 0.04 };
-
 // Fees, refunds and subscription commissions share this public helper so the
 // admin Paystack settings page can render the same numbers as the checkout.
 //
@@ -84,14 +81,12 @@ export function getFeeRateForSeller(sellerId) {
   const platformRate = Number.isFinite(adminPercent) && adminPercent >= 0 ? adminPercent / 100 : 0.04;
   try {
     const sub = db.prepare(
-      "SELECT plan, status, trial_end FROM subscriptions WHERE user_id = ? AND status IN ('trial', 'active') LIMIT 1"
+      'SELECT plan, status, trial_end, current_period_end FROM subscriptions WHERE user_id = ? LIMIT 1'
     ).get(sellerId);
-    if (sub && PLAN_FEES[sub.plan] != null) {
-      const inTrial = sub.status === 'trial' && sub.trial_end && new Date(sub.trial_end) > new Date();
-      if (sub.status === 'active' || inTrial) {
-        const planRate = PLAN_FEES[sub.plan];
-        if (planRate < platformRate) return planRate;
-      }
+    const effectivePlan = getEffectivePlan(sub);
+    if (effectivePlan !== 'free') {
+      const planRate = getPlan(effectivePlan).fee;
+      if (planRate < platformRate) return planRate;
     }
   } catch {}
   return platformRate;

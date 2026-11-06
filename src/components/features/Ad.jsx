@@ -110,7 +110,7 @@ const banners = [
       'https://images.unsplash.com/photo-1546868871-af0de0ae72e6?w=800',
       'https://images.unsplash.com/photo-1585386959984-a4155224a1ad?w=800',
     ],
-    title: 'Premium Finds',
+    title: 'Gold Picks',
     desc: 'Curated luxury items starting at ₦49,000',
     cta: 'Browse',
     category: '',
@@ -118,8 +118,8 @@ const banners = [
 ];
 
 const pushes = [
-  { title: 'Premium Seller?', desc: 'Get verified and appear first!', btn: 'Upgrade', action: 'upgrade' },
-  { title: 'List for Free!', desc: 'Zero fees on your first 10 listings', btn: 'Start Selling', action: 'add' },
+  { title: 'Go Gold', desc: 'Unlock featured slots for $9.99/month', btn: 'Upgrade', action: 'upgrade' },
+  { title: 'List for Free!', desc: 'Up to 30 active listings on the Free plan', btn: 'Start Selling', action: 'add' },
   { title: 'Safe Trading', desc: 'Escrow protection for every transaction', btn: 'Learn More', action: 'learn' },
   { title: 'Refer a Friend', desc: 'Earn ₦1,000 credit for each referral', btn: 'Invite', action: 'invite' },
 ];

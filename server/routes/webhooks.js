@@ -61,6 +61,17 @@ router.post('/paystack', express.raw({ type: 'application/json' }), async (req, 
           logger.info(`Gift card purchase completed via webhook: ${reference}`);
         }
 
+        const pendingSubscription = db.prepare(
+          'SELECT * FROM subscriptions WHERE paystack_reference = ? AND pending_plan IS NOT NULL'
+        ).get(reference);
+        if (pendingSubscription) {
+          activatePlan(pendingSubscription.user_id, pendingSubscription.pending_plan, {
+            subscriptionCode: data.subscription_code || data.plan?.subscription_code || null,
+            emailToken: data.customer?.email_token || null,
+          });
+          logger.info(`Subscription activated via webhook: ${reference}`);
+        }
+
         // Save the reusable authorization so the buyer can check out faster next time.
         const auth = data.authorization;
         if (auth?.authorization_code && auth.reusable && txns.length > 0) {

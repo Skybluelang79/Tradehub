@@ -188,7 +188,7 @@ describe('Cart', () => {
 });
 
 describe('Platform fee on processed trades', () => {
-  it('deducts the 4% fee automatically and tells the seller the breakdown', async () => {
+  it('deducts the Gold 2% fee automatically and tells the seller the breakdown', async () => {
     const item = await supertest(app)
       .post('/api/items')
       .set('Authorization', `Bearer ${sellerToken}`)
@@ -214,21 +214,21 @@ describe('Platform fee on processed trades', () => {
       .get(`/api/payments/transactions/${intent.body.transactionId}`)
       .set('Authorization', `Bearer ${buyer}`);
     expect(receipt.body.receipt.status).toBe('completed');
-    expect(receipt.body.receipt.fee_amount).toBe(2);
-    expect(receipt.body.receipt.net_amount).toBe(48);
+    expect(receipt.body.receipt.fee_amount).toBe(1);
+    expect(receipt.body.receipt.net_amount).toBe(49);
 
     const wallet = await supertest(app)
       .get('/api/payments/wallet')
       .set('Authorization', `Bearer ${sellerToken}`);
-    expect(wallet.body.wallet.available_cents).toBe(4800);
+    expect(wallet.body.wallet.available_cents).toBe(4900);
 
     const notifications = await supertest(app)
       .get('/api/notifications')
       .set('Authorization', `Bearer ${sellerToken}`);
     const sold = notifications.body.notifications.find((n) => n.title === 'Item Sold');
     expect(sold).toBeTruthy();
-    expect(sold.body).toContain('4% platform fee');
-    expect(sold.body).toContain('₦2');
-    expect(sold.body).toContain('₦48');
+    expect(sold.body).toContain('2% platform fee');
+    expect(sold.body).toContain('₦1');
+    expect(sold.body).toContain('₦49');
   });
 });
