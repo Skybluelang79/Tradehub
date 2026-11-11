@@ -27,6 +27,21 @@ export const updateProfileSchema = z.object({
   }).optional(),
 });
 
+export const createAddressSchema = z.object({
+  label: z.string().trim().max(40).optional().default('Home'),
+  full_name: z.string().trim().min(1, 'Full name is required').max(100),
+  phone: z.string().trim().max(24).optional().default(''),
+  line1: z.string().trim().min(1, 'Address line 1 is required').max(200),
+  line2: z.string().trim().max(200).optional().default(''),
+  city: z.string().trim().min(1, 'City is required').max(100),
+  region: z.string().trim().max(100).optional().default(''),
+  postal_code: z.string().trim().max(20).optional().default(''),
+  country: z.string().trim().min(2, 'Country is required').max(100).optional().default('NG'),
+  is_default: z.boolean().optional().default(false),
+});
+
+export const updateAddressSchema = createAddressSchema.partial();
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
   newPassword: z.string().min(6, 'New password must be at least 6 characters'),

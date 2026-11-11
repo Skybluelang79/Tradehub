@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from . import config, scheduler
 from .routers import (
+    addresses,
     admin,
     ai,
     auth,
@@ -95,6 +96,7 @@ app.add_middleware(
 
 app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth")
+app.include_router(addresses.router, prefix="/api/addresses")
 app.include_router(items.router, prefix="/api/items")
 app.include_router(reviews.router, prefix="/api/reviews")
 app.include_router(offers.router, prefix="/api/offers")

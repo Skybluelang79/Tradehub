@@ -71,6 +71,7 @@ def apply():
     ensure_column("users", "location_lng", "REAL")
     ensure_column("users", "location_address", "TEXT DEFAULT ''")
     ensure_column("users", "is_admin", "INTEGER DEFAULT 0")
+    ensure_column("transactions", "order_id", "TEXT")
     ensure_column("transactions", "method", "TEXT DEFAULT 'card'")
     ensure_column("transactions", "provider_ref", "TEXT DEFAULT ''")
     ensure_column("transactions", "fee_amount", "REAL DEFAULT 0")

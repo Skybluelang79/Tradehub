@@ -332,6 +332,90 @@ function applySchema() {
       completed_at TEXT
     );
 
+    CREATE TABLE IF NOT EXISTS addresses (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      label TEXT DEFAULT 'Home',
+      full_name TEXT NOT NULL,
+      phone TEXT DEFAULT '',
+      line1 TEXT NOT NULL,
+      line2 TEXT DEFAULT '',
+      city TEXT NOT NULL,
+      region TEXT DEFAULT '',
+      postal_code TEXT DEFAULT '',
+      country TEXT NOT NULL DEFAULT 'NG',
+      is_default INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      buyer_id TEXT NOT NULL,
+      currency TEXT DEFAULT 'NGN',
+      subtotal_cents INTEGER NOT NULL DEFAULT 0,
+      shipping_cents INTEGER NOT NULL DEFAULT 0,
+      tax_cents INTEGER NOT NULL DEFAULT 0,
+      discount_cents INTEGER NOT NULL DEFAULT 0,
+      total_cents INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending',
+      shipping_address_id TEXT,
+      billing_address_id TEXT,
+      payment_reference TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS order_items (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      seller_id TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      unit_price_cents INTEGER NOT NULL DEFAULT 0,
+      currency TEXT DEFAULT 'NGN',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS shipments (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      seller_id TEXT NOT NULL,
+      carrier TEXT NOT NULL,
+      service TEXT DEFAULT '',
+      tracking_number TEXT DEFAULT '',
+      tracking_url TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      shipped_at TEXT,
+      delivered_at TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS returns (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      order_item_id TEXT,
+      buyer_id TEXT NOT NULL,
+      seller_id TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      note TEXT DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'requested',
+      rma_number TEXT,
+      refund_txn_id TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      resolved_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS order_events (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      actor_id TEXT,
+      data TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS notifications (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -768,6 +852,22 @@ function applySchema() {
     CREATE INDEX IF NOT EXISTS idx_calls_conversation ON call_logs(conversation_id);
   `);
 
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_addresses_user ON addresses(user_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_buyer ON orders(buyer_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
+    CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+    CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+    CREATE INDEX IF NOT EXISTS idx_order_items_seller ON order_items(seller_id);
+    CREATE INDEX IF NOT EXISTS idx_shipments_order ON shipments(order_id);
+    CREATE INDEX IF NOT EXISTS idx_shipments_tracking ON shipments(tracking_number);
+    CREATE INDEX IF NOT EXISTS idx_returns_order ON returns(order_id);
+    CREATE INDEX IF NOT EXISTS idx_returns_buyer ON returns(buyer_id);
+    CREATE INDEX IF NOT EXISTS idx_returns_seller ON returns(seller_id);
+    CREATE INDEX IF NOT EXISTS idx_returns_status ON returns(status);
+    CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id);
+  `);
+
   // Lookup paths that previously had no index and scanned the whole table.
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
@@ -812,6 +912,7 @@ function migrate() {
   ensureColumn('users', 'location_lng', 'REAL');
   ensureColumn('users', 'location_address', "TEXT DEFAULT ''");
   ensureColumn('users', 'is_admin', 'INTEGER DEFAULT 0');
+  ensureColumn('transactions', 'order_id', 'TEXT');
   ensureColumn('transactions', 'method', "TEXT DEFAULT 'card'");
   ensureColumn('transactions', 'provider_ref', "TEXT DEFAULT ''");
   ensureColumn('transactions', 'fee_amount', 'REAL DEFAULT 0');

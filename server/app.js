@@ -12,6 +12,7 @@ import { allowedOrigins } from './src/env.js';
 import { integrationStatus } from './src/features.js';
 
 import authRoutes from './routes/auth.js';
+import addressRoutes from './routes/addresses.js';
 import itemRoutes from './routes/items.js';
 import chatRoutes from './routes/chat.js';
 import paymentRoutes from './routes/payments.js';
@@ -97,6 +98,7 @@ app.use('/api', apiLimiter);
 app.use(maintenanceMode);
 
 app.use('/api/auth', authRoutes);
+app.use('/api/addresses', addressRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/payments', paymentRoutes);
