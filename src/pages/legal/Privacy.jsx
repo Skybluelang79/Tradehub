@@ -9,12 +9,12 @@ function Privacy() {
       <LegalHeader title="Privacy Policy" />
       <div className="legal-doc">
         <h1 className="legal-doc-title">Privacy Policy</h1>
-        <p className="legal-doc-updated">Draft version. Last updated: 28 September 2026.</p>
+        <p className="legal-doc-updated">Draft version. Last updated: 11 November 2026.</p>
         <DraftNotice />
 
         <LegalSection title="1. Who we are and what this covers">
           <p>
-            This policy explains what personal information <strong>Tradehub</strong> collects when
+            This policy explains what personal information <strong>TradeHub</strong> collects when
             you use our site and apps, why we collect it, who we share it with, and what you can ask
             us to do. It covers visitors, registered users, and buyers and sellers.
           </p>
@@ -150,10 +150,6 @@ function Privacy() {
           <p>
             For any privacy question, or to exercise a right, use{' '}
             <a href="/contact">Contact Us</a>. You can also <a href="/report">report a problem</a>.
-            <br />
-            <strong>Before publishing:</strong> add the registered company name, the postal address
-            for privacy notices, the data protection officer or representative where one is required,
-            and the supervisory authority where one applies in your jurisdiction.
           </p>
         </LegalSection>
       </div>

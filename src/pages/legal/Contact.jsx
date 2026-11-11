@@ -72,11 +72,6 @@ function Contact() {
               better than emailing, because the report is attached to that account and reaches the
               right team. Use <a href="/report">Report a Problem</a>.
             </p>
-            <p>
-              <strong>Before publishing:</strong> replace the placeholder support address and hours
-              above with your real ones. A support address that does not receive mail will cost you
-              more trust than it earns.
-            </p>
           </div>
         </section>
       </div>

@@ -10,8 +10,6 @@ import { AUTH_GATED_TABS, GATE_COPY } from './config/authGate';
 
 
 import { Home, Chat, AddListing, Payments, Profile, ItemDetail, Login, Signup, ForgotPassword, ResetPassword, Favorites, Notifications, GiftMall, SellerProfile, Cart, Store } from './pages';
-import TermsOfService from './pages/legal/TermsOfService';
-import PrivacyPolicy from './pages/legal/PrivacyPolicy';
 import RefundPolicy from './pages/legal/RefundPolicy';
 import ProhibitedItems from './pages/legal/ProhibitedItems';
 import CookiePolicy from './pages/legal/CookiePolicy';

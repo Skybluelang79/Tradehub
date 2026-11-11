@@ -58,10 +58,10 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Is it safe to pay another user directly?',
-    a: 'We recommend paying through Tradehub so your payment and delivery are recorded. Payments made outside the platform are not covered if something goes wrong, and we may be unable to help you recover the money. Never send money to someone you have not verified, and be wary of anyone asking you to move to a different payment method.',
+    a: 'We recommend paying through TradeHub so your payment and delivery are recorded. Payments made outside the platform are not covered if something goes wrong, and we may be unable to help you recover the money. Never send money to someone you have not verified, and be wary of anyone asking you to move to a different payment method.',
   },
   {
-    q: 'A seller is asking me to pay outside Tradehub. What should I do?',
+    q: 'A seller is asking me to pay outside TradeHub. What should I do?',
     a: 'Treat it as a warning sign and decline. Report the seller from their profile so our team can review the account. We will not ask you to pay anyone outside the platform, and messages asking you to do so are a common scam.',
   },
   {
@@ -74,7 +74,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Can I get a refund?',
-    a: 'If an item is not as described, contact us through Report a Problem within 30 days of delivery and include photographs. Payments made through Tradehub are covered, subject to the seller being given a chance to respond. Refunds for payments made outside the platform cannot be handled by us.',
+    a: 'If an item is not as described, contact us through Report a Problem within 30 days of delivery and include photographs. Payments made through TradeHub are covered, subject to the seller being given a chance to respond. Refunds for payments made outside the platform cannot be handled by us.',
   },
   {
     q: 'Do you charge any fees?',

@@ -9,12 +9,12 @@ function Terms() {
       <LegalHeader title="Terms of Service" />
       <div className="legal-doc">
         <h1 className="legal-doc-title">Terms of Service</h1>
-        <p className="legal-doc-updated">Draft version. Last updated: 28 September 2026.</p>
+        <p className="legal-doc-updated">Draft version. Last updated: 11 November 2026.</p>
         <DraftNotice />
 
         <LegalSection title="1. Who these terms apply to">
           <p>
-            These terms are a contract between you and <strong>Tradehub</strong> (we, us, our). They
+            These terms are a contract between you and <strong>TradeHub</strong> (we, us, our). They
             apply whenever you browse, buy, sell, message another user, or otherwise use the site or
             our apps, whether you are a registered user or just visiting.
           </p>
@@ -27,7 +27,7 @@ function Terms() {
 
         <LegalSection title="2. What we provide">
           <p>
-            Tradehub is a marketplace. We help people who want to buy or sell items find each other.
+            TradeHub is a marketplace. We help people who want to buy or sell items find each other.
             We are not the seller or the buyer in any transaction: the person you deal with is the
             other party, and your contract for the item is with them, not with us.
           </p>
@@ -80,9 +80,9 @@ function Terms() {
           </p>
           <h3 className="legal-h3">4.4 Pay outside the platform</h3>
           <p>
-            We strongly recommend paying through Tradehub. Payments made outside the platform are
+            We strongly recommend paying through TradeHub. Payments made outside the platform are
             not covered, and we may be unable to help you recover the money. Anyone asking you to
-            pay outside Tradehub may be committing fraud, so report them.
+            pay outside TradeHub may be committing fraud, so report them.
           </p>
           <h3 className="legal-h3">4.5 Delivery, inspection and acceptance</h3>
           <p>
@@ -177,15 +177,10 @@ function Terms() {
 
         <LegalSection title="13. Governing law">
           <p>
-            These terms are governed by the laws of the place where the company running Tradehub is
+            These terms are governed by the laws of the place where the company running TradeHub is
             registered, and the courts there have exclusive jurisdiction, except that consumers keep
             any right to bring proceedings in their own country, and any mandatory local consumer
             protections still apply to you.
-          </p>
-          <p>
-            <strong>Before publishing:</strong> fill in the registered company name, its registered
-            address, the governing law, and the courts that have jurisdiction. Those are the details
-            a consumer will look for, and leaving them blank makes the terms incomplete.
           </p>
         </LegalSection>
 
