@@ -1,8 +1,45 @@
+import re
 import uuid
 
 from . import db, notifications
 
 REWARD_CENTS = 100000
+
+
+def _sanitize_code(code):
+    return re.sub(r"[^A-Z0-9]", "", str(code or "").strip().upper())
+
+
+def apply_referral(referred_id, raw_code):
+    """Attach a new signup to the referrer whose code they used."""
+    code = _sanitize_code(raw_code)
+    if not code or not referred_id:
+        return False
+
+    referrer = db.get("SELECT id FROM users WHERE referral_code = ?", (code,))
+    if not referrer or referrer["id"] == referred_id:
+        return False
+    if db.get("SELECT id FROM referrals WHERE referred_id = ?", (referred_id,)):
+        return False
+
+    db.run(
+        """
+        INSERT INTO referrals (id, referrer_id, referred_id, code, status, reward_cents)
+        VALUES (?, ?, ?, ?, 'pending', ?)
+        """,
+        (str(uuid.uuid4()), referrer["id"], referred_id, code, REWARD_CENTS),
+    )
+
+    try:
+        notifications.notify(
+            referrer["id"],
+            "referral",
+            "New Referral",
+            "Someone joined TradeHub using your link. You will earn store credit once they complete their first purchase.",
+        )
+    except Exception:
+        pass
+    return True
 
 
 def credit_first_purchase(user_id):

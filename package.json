@@ -9,9 +9,12 @@
   "homepage": "https://Skybluelang79.github.io/Tradehub",
   "scripts": {
     "dev": "vite",
+    "dev:py": "python -m uvicorn --app-dir server_py app.main:app --reload --port 3001",
+    "start:py": "python -m uvicorn --app-dir server_py app.main:app --host 0.0.0.0 --port 3001",
     "build": "vite build",
     "lint": "eslint .",
     "test": "vitest run",
+    "test:py": "cd server_py && python -m pytest -q",
     "test:watch": "vitest",
     "preview": "vite preview",
     "deploy": "gh-pages -d dist/Tradehub",

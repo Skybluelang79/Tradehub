@@ -7,10 +7,10 @@ TradeHub is a local peer-to-peer marketplace with built-in **escrow payments**, 
 | Layer | Tech |
 | --- | --- |
 | Frontend | React 19, Vite 8, Context API, i18n (EN/DE/ES/FR), PWA |
-| Backend | Express 4, Socket.IO, sql.js (SQLite in-browser engine) |
+| Backend | FastAPI (Python 3.12), SQLite (WAL), python-socketio |
 | Payments | Paystack (card + bank transfer), store credit, gift cards |
-| Auth | JWT + refresh tokens, bcrypt, optional email verification |
-| Ops | Winston logging, node-cron jobs, Docker, Netlify/Render/Railway/Vercel |
+| Auth | JWT + refresh tokens, bcrypt, email verification (SMTP) |
+| Ops | Python logging, in-process scheduler, Docker, Render/Railway/Fly |
 
 ## Features
 
@@ -28,14 +28,15 @@ TradeHub is a local peer-to-peer marketplace with built-in **escrow payments**, 
 
 ### Prerequisites
 
-- Node.js 20+
+- Python 3.12+
+- Node.js 20+ (frontend build)
 - npm
 
 ### 1. Install
 
 ```bash
 npm install
-cd server && npm install && cd ..
+pip install -r server_py/requirements.txt
 ```
 
 ### 2. Configure the server
@@ -49,8 +50,8 @@ Edit `server/.env` and set at minimum `JWT_SECRET`, `REFRESH_SECRET`, and `ADMIN
 ### 3. Run
 
 ```bash
-# Terminal 1 - backend API on http://localhost:3001
-cd server && npm run dev
+# Terminal 1 - Python API on http://localhost:3001
+npm run dev:py
 
 # Terminal 2 - frontend on http://localhost:5173
 npm run dev
@@ -62,7 +63,7 @@ The server seeds an admin account on first run:
 
 The Vite dev server proxies `/api`, `/uploads`, and `/socket.io` to
 `http://localhost:3001` by default. To point it at a backend on another host/port
-(e.g. the Python backend running with `uvicorn`), set `VITE_PROXY_TARGET`:
+(e.g. the legacy Express backend), set `VITE_PROXY_TARGET`:
 
 ```bash
 VITE_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
@@ -74,24 +75,27 @@ VITE_PROXY_TARGET=http://127.0.0.1:8000 npm run dev
 # Frontend unit tests (vitest)
 npm test
 
-# Backend integration tests (jest + supertest)
-cd server
-npm test
+# Python backend tests (pytest)
+npm run test:py
 ```
 
 ## Deployment
 
-TradeHub ships with configs for **Netlify** (`netlify.toml`), **Render** (`render.yaml`), **Railway** (`railway.json`), **Vercel** (`vercel.json`), and **Docker** (`Dockerfile`, `server/Dockerfile`). In every case you must provide the same env vars as `server/.env.example`.
+The **Python (FastAPI) backend** in `server_py/` is the primary deployment target. The root `Dockerfile` builds the React frontend and the API into one image that serves both from the same origin. `render.yaml`, `railway.json`, and `fly.toml` all deploy that image and keep SQLite + uploads on a persistent `/data` volume.
 
-The alternative **Python (FastAPI) backend** in `server_py/` is deployable on its own via `server_py/Dockerfile`; `render.yaml` includes a `tradehub-api-py` service that builds it. It speaks the same API and uses the same SQLite schema, so run **only one** backend against a given database.
+`server_py/Dockerfile` is the API-only image for split deployments (frontend on a CDN). In that case build the frontend with `VITE_API_URL` pointing at the API and make sure `/uploads/*` is proxied to the same host.
 
-Frontend (`VITE_*`) build-time variables are documented in `.env.example` at the repo root. On Netlify, set them (and every `server/.env.example` var) as **runtime** environment variables — values declared under `[build.environment]` in `netlify.toml` are build-time only and never reach the serverless functions.
+Backend secrets come from the environment; `server/.env.example` documents every variable. `NODE_ENV=production` makes missing secrets fatal. Run **only one** backend instance against a given SQLite file.
+
+### Legacy Node backend
+
+`server/` (Express + sql.js) and the Netlify Function in `netlify.toml` are deprecated. They remain for reference and are not part of the default Docker/Render/Railway/Fly deployment.
 
 ### Real-time chat in production
 
-Serverless hosts (Netlify/Vercel Functions) cannot hold WebSocket connections, so chat falls back to REST polling there. To enable real-time, host the API on a long-running process — the Dockerfile, `render.yaml` (Node or `tradehub-api-py`), or `railway.json` — then build the frontend with `VITE_API_URL` pointing at that host and **without** `VITE_DISABLE_SOCKET`. The socket client follows `VITE_API_URL`'s origin automatically.
+Chat uses `python-socketio` over WebSockets. Host the API on a long-running process (the root `Dockerfile`, Render, Railway, or Fly) so sockets stay connected. If you split the frontend onto a CDN, build it with `VITE_API_URL` pointing at the API and **without** `VITE_DISABLE_SOCKET`; the socket client follows that origin automatically.
 
-> **Note:** the sql.js database lives in memory and is flushed to disk. Run a **single API instance** (and add a disk volume on Render/Railway) to avoid lost writes.
+> **Note:** SQLite runs in WAL mode. Run a **single API instance** (with the `/data` volume mounted) to avoid lost writes; move to Postgres before scaling horizontally.
 
 ### Production checklist
 
@@ -103,9 +107,9 @@ Serverless hosts (Netlify/Vercel Functions) cannot hold WebSocket connections, s
 - [ ] Frontend `VITE_*` build vars (see `.env.example`), incl. `VITE_GOOGLE_CLIENT_ID` / `VITE_FACEBOOK_APP_ID` and `VITE_FIREBASE_*`
 - [ ] `FACEBOOK_APP_ID` + `FACEBOOK_APP_SECRET` if Facebook login is enabled
 - [ ] `OPENAI_API_KEY` if AI features should use an LLM (local fallbacks work without it)
-- [ ] On Netlify, set all of the above as **runtime** env vars (netlify.toml build env does not reach functions)
-- [ ] `NODE_ENV=production` (Node 22 on Netlify, CI, and Docker)
-- [ ] Confirm `GET /api/health` → `integrations` shows the services you expect as `true`
+- [ ] `NODE_ENV=production` (the Python backend refuses to start without required secrets)
+- [ ] Attach the `/data` volume on Render/Railway/Fly so SQLite and uploads survive deploys
+- [ ] Confirm `GET /api/health` returns `{"status":"ok"}`
 
 ## API
 
@@ -115,19 +119,20 @@ The API is JSON, served under `/api` (e.g. `POST /api/auth/login`, `GET /api/ite
 
 ```
 src/          # React frontend (pages, components, context providers, services)
-server/
-  routes/     # Express route modules (auth, items, payments, chat, admin, ...)
-  src/        # validation (Zod), rate limiting, logging, error handling, scheduler
-  tests/      # Jest + supertest integration tests
-  db.js       # sql.js database layer (schema, seeding, persistence)
-  index.js    # HTTP server, Socket.IO, graceful shutdown
-server_py/    # Alternative FastAPI backend (same API/DB contract) + Dockerfile
+server_py/
+  app/routers/    # FastAPI route modules (auth, items, payments, chat, admin, ...)
+  app/db.py       # SQLite (WAL) connection + migrations
+  app/scheduler.py # escrow auto-release, abandoned payments, search alerts
+  app/realtime.py  # python-socketio server
+  Dockerfile      # API-only image
+server/       # Legacy Express backend (deprecated)
+Dockerfile    # Combined frontend + Python API image
 ```
 
 ## Contributing
 
 1. Fork and create a feature branch
-2. Run lint (`npm run lint`) and tests (`cd server && npm test`)
+2. Run lint (`npm run lint`) and tests (`npm test`, `npm run test:py`)
 3. Open a pull request
 
 ## License

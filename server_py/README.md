@@ -4,16 +4,19 @@ FastAPI replacement for the Node/Express backend. Runs against the **same SQLite
 database** and speaks the same HTTP + auth contract, so the React frontend cannot
 tell the difference.
 
-## What is ported (Phase 1)
+## Status
 
-- `GET /api/health`
-- All core `POST /api/auth/*` flows: `signup`, `login`, `refresh`, `logout`,
-  `forgot-password`, `reset-password`, `verify-email`, `resend-verification`,
-  `change-password`, `DELETE /me`
-- `GET/PUT /api/auth/me`, `GET /api/auth/search`, `GET /api/auth/batch`,
-  `GET /api/auth/:userId/profile`
+This is the primary backend. The HTTP surface mirrors the legacy Node backend,
+including:
+
+- `GET /api/health`, all `POST /api/auth/*` flows, profile/search/batch.
+- `GET /api/store/:slug` storefront lookup.
+- SMTP email delivery for verification, password reset, and transaction
+  notifications (`app/email.py`).
+- Static `/uploads` serving plus optional SPA serving when a built frontend is
+  present (`FRONTEND_DIST`, default `../dist`).
 - Full schema + migration port (`users`, `items`, `transactions`, `wallets`,
-  `subscriptions`, `refresh_tokens`, ... all tables/indexes from `server/db.js`)
+  `subscriptions`, `refresh_tokens`, ... all tables/indexes from `server/db.js`).
 
 ## Compatibility guarantees
 
@@ -42,13 +45,15 @@ python -m venv .venv
 .venv\Scripts\python -m uvicorn app.main:app --reload --port 3001
 ```
 
-In production the Node app listens internally and serves the built frontend at
-`/Tradehub`; swap `server` for `server_py` behind the same port/process manager.
+In production, set `FRONTEND_DIST` to a directory containing `index.html` and
+FastAPI serves the built SPA (with history fallback) alongside the API. The root
+`Dockerfile` builds that directory automatically.
 
 ## Docker / deploy
 
-A `Dockerfile` is provided (build context is this directory). The image serves
-`app.main:app` via uvicorn on `$PORT` (default 3001) and keeps the SQLite
+`server_py/Dockerfile` builds the API-only image (build context is this
+directory). The root `Dockerfile` builds the combined frontend + API image. Both
+serve `app.main:app` via uvicorn on `$PORT` (default 3001) and keep the SQLite
 database on the volume path `/data/tradehub.db` (override with `DB_PATH`).
 
 ```powershell
@@ -61,8 +66,9 @@ docker run -p 3001:3001 -v tradehub-data:/data `
 ```
 
 `render.yaml` includes a `tradehub-api-py` service that builds this image with
-an attached disk. Because the Node and Python backends share the same schema and
-SQLite is single-writer, run only one of them against a given database.
+an attached `/data` disk. Because the Node and Python backends share the same
+schema and SQLite is single-writer, run only one of them against a given
+database.
 
 ## Tests
 
@@ -76,9 +82,9 @@ Tests use an isolated temp DB via `tests/conftest.py`; the real DB is untouched.
 ## Environment
 
 Reads `.env` in `server_py/` and `server/.env`. `NODE_ENV=production` makes
-missing env vars fatal (mirrors `requiredEnv`). `SMTP_HOST` toggles email
-"config"; until SMTP is ported, dev mode still returns `devVerifyToken` /
-`devResetToken` so flows are testable.
+missing env vars fatal (mirrors `requiredEnv`). Email is sent over SMTP when
+`SMTP_HOST`, `SMTP_USER`, and `SMTP_PASS` are set; without them, dev mode still
+returns `devVerifyToken` / `devResetToken` so flows are testable.
 
 ## Feature parity
 

@@ -1,10 +1,13 @@
 import logging
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import config, scheduler
 from .routers import (
@@ -33,6 +36,7 @@ from .routers import (
     reviews,
     searches,
     settings,
+    store,
     subscriptions,
     templates,
     upload,
@@ -102,6 +106,7 @@ app.include_router(reviews.router, prefix="/api/reviews")
 app.include_router(offers.router, prefix="/api/offers")
 app.include_router(searches.router, prefix="/api/searches")
 app.include_router(follows.router, prefix="/api/follows")
+app.include_router(store.router, prefix="/api/store")
 app.include_router(payments.router, prefix="/api/payments")
 app.include_router(verification.router, prefix="/api/verification")
 app.include_router(chat.router, prefix="/api/chat")
@@ -127,6 +132,31 @@ app.include_router(webauthn.router, prefix="/api/webauthn")
 app.include_router(admin.router, prefix="/api/admin")
 app.include_router(ai.router, prefix="/api/ai")
 app.include_router(vision.router, prefix="/api/vision")
+
+# Uploaded media is served from the same origin so the relative /uploads/...
+# URLs stored in the database keep working in every deployment.
+os.makedirs(config.UPLOADS_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=config.UPLOADS_DIR), name="uploads")
+
+# The Docker image builds the React app into ./dist and lets FastAPI serve it,
+# so the SPA and API share an origin (no CORS or /uploads proxy required).
+FRONTEND_DIST = Path(
+    os.environ.get("FRONTEND_DIST", str(config.BASE_DIR.parent / "dist"))
+)
+if (FRONTEND_DIST / "index.html").is_file():
+    assets_dir = FRONTEND_DIST / "assets"
+    if assets_dir.is_dir():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_spa(full_path: str):
+        if full_path.startswith(("api/", "socket.io")):
+            raise HTTPException(status_code=404, detail={"error": "Not found"})
+        root = FRONTEND_DIST.resolve()
+        candidate = (root / full_path).resolve()
+        if full_path and root in candidate.parents and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(root / "index.html")
 
 
 from . import realtime as _realtime  # noqa: E402

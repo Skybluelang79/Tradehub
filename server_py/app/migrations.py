@@ -41,6 +41,35 @@ def ensure_unique_phone_index():
     )
 
 
+def ensure_unique_store_slug_index():
+    for row in db.all(
+        """
+        SELECT store_slug FROM users
+        WHERE store_slug IS NOT NULL AND store_slug != ''
+        GROUP BY store_slug HAVING COUNT(*) > 1
+        """
+    ):
+        slug = row["store_slug"]
+        logger.warning(
+            "Duplicate store slug %s: keeping the oldest account, clearing the rest",
+            slug,
+        )
+        db.exec(
+            """
+            UPDATE users SET store_slug = NULL WHERE store_slug = ? AND id NOT IN (
+              SELECT id FROM users WHERE store_slug = ? ORDER BY created_at ASC, id ASC LIMIT 1
+            )
+            """,
+            (slug, slug),
+        )
+    db.exec(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_users_store_slug_unique
+        ON users(store_slug) WHERE store_slug IS NOT NULL AND store_slug != '';
+        """
+    )
+
+
 def seed_platform_settings():
     defaults = {
         "site_name": "TradeHub",
@@ -128,6 +157,9 @@ def apply():
     ensure_column("user_settings", "fcm_token", "TEXT DEFAULT ''")
     ensure_column("items", "sold_to", "TEXT")
     ensure_column("users", "identity_verified", "INTEGER DEFAULT 0")
+    ensure_column("users", "store_slug", "TEXT")
+    ensure_column("users", "store_banner", "TEXT DEFAULT ''")
+    ensure_column("users", "store_description", "TEXT DEFAULT ''")
     ensure_column("users", "referral_code", "TEXT DEFAULT ''")
     ensure_column("users", "public_key", "TEXT DEFAULT ''")
     ensure_column("messages", "type", "TEXT DEFAULT 'text'")
@@ -150,4 +182,5 @@ def apply():
     )
 
     ensure_unique_phone_index()
+    ensure_unique_store_slug_index()
     seed_platform_settings()

@@ -66,28 +66,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Node backend image
-        run: docker build -t tradehub-node:ci .
-      - name: Build Python backend image
-        run: docker build -t tradehub-api-py:ci server_py
-      - name: Smoke-test Node backend
+      - name: Build combined Python + frontend image
+        run: docker build -t tradehub-api-py:ci .
+      - name: Build standalone Python API image
+        run: docker build -t tradehub-api-py-standalone:ci server_py
+      - name: Smoke-test combined image
         run: |
-          docker run -d --name api-node -p 3001:3001 \
+          docker run -d --name api-py -p 3001:3001 \
             -e JWT_SECRET=ci-smoke-secret \
             -e REFRESH_SECRET=ci-smoke-secret \
             -e ADMIN_PASSWORD=ci-smoke-secret \
-            tradehub-node:ci
-          ok=""
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:3001/api/health; then ok=1; break; fi
-            sleep 2
-          done
-          docker logs api-node || true
-          docker rm -f api-node || true
-          test -n "$ok"
-      - name: Smoke-test Python backend
-        run: |
-          docker run -d --name api-py -p 3001:3001 tradehub-api-py:ci
+            tradehub-api-py:ci
           ok=""
           for i in $(seq 1 30); do
             if curl -fsS http://127.0.0.1:3001/api/health; then ok=1; break; fi
@@ -95,4 +84,19 @@ jobs:
           done
           docker logs api-py || true
           docker rm -f api-py || true
+          test -n "$ok"
+      - name: Smoke-test standalone image
+        run: |
+          docker run -d --name api-py-standalone -p 3002:3001 \
+            -e JWT_SECRET=ci-smoke-secret \
+            -e REFRESH_SECRET=ci-smoke-secret \
+            -e ADMIN_PASSWORD=ci-smoke-secret \
+            tradehub-api-py-standalone:ci
+          ok=""
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3002/api/health; then ok=1; break; fi
+            sleep 2
+          done
+          docker logs api-py-standalone || true
+          docker rm -f api-py-standalone || true
           test -n "$ok"

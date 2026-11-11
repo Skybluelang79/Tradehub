@@ -1,16 +1,15 @@
 services:
   - type: web
-    name: tradehub
-    env: node
+    name: tradehub-api-py
+    runtime: docker
     region: oregon
-    plan: free
-    buildCommand: npm install && npm run build && cd server && npm install
-    startCommand: cd server && node index.js
+    plan: starter
+    dockerContext: ./server_py
+    dockerfilePath: ./server_py/Dockerfile
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
       - key: JWT_SECRET
         generateValue: true
       - key: REFRESH_SECRET
@@ -19,14 +18,37 @@ services:
         generateValue: true
       - key: APP_URL
         sync: false
-      - key: FRONTEND_URL
-        sync: false
       - key: DB_PATH
-        value: /opt/render/project/src/tradehub.db
+        value: /data/tradehub.db
       - key: UPLOADS_DIR
-        value: /opt/render/project/src/uploads
+        value: /data/uploads
+      - key: RUN_SCHEDULER
+        value: "true"
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: PAYSTACK_PUBLIC_KEY
+        sync: false
+      - key: PAYSTACK_WEBHOOK_SECRET
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_SECURE
+        value: "false"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: TradeHub
       - key: OPENAI_API_KEY
-        value:
         sync: false
       - key: AI_MODEL
         value: gpt-4o-mini
+    disk:
+      name: tradehub-data
+      mountPath: /data
+      sizeGB: 1

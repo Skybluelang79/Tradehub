@@ -6,6 +6,8 @@
 node_modules
 **/node_modules
 backups
+dist
+coverage
 *.log
 
 *.db
@@ -21,4 +23,9 @@ server/.env
 server/.env.*
 !server/.env.example
 
-server_py
+server_py/.env
+server_py/.env.*
+!server_py/.env.example
+server_py/.venv
+**/__pycache__
+**/.pytest_cache

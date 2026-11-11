@@ -45,7 +45,9 @@ def _secret(name):
 JWT_SECRET = _secret("JWT_SECRET")
 REFRESH_SECRET = _secret("REFRESH_SECRET")
 DB_PATH = _env("DB_PATH", str(BASE_DIR.parent / "server" / "tradehub.db"))
-UPLOADS_DIR = os.environ.get("UPLOADS_DIR", str(BASE_DIR.parent / "uploads"))
+UPLOADS_DIR = os.environ.get(
+    "UPLOADS_DIR", str(BASE_DIR.parent / "server" / "uploads")
+)
 
 AZURE_DOC_INTELLIGENCE_ENDPOINT = os.environ.get("AZURE_DOC_INTELLIGENCE_ENDPOINT", "")
 AZURE_DOC_INTELLIGENCE_KEY = os.environ.get("AZURE_DOC_INTELLIGENCE_KEY", "")
@@ -97,6 +99,14 @@ AUTO_RELEASE_DAYS = int(os.environ.get("AUTO_RELEASE_DAYS", "7"))
 ABANDON_PAYMENT_HOURS = int(os.environ.get("ABANDON_PAYMENT_HOURS", "24"))
 RUN_SCHEDULER = os.environ.get("RUN_SCHEDULER", "true").lower() == "true"
 
+SMTP_HOST = os.environ.get("SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_SECURE = os.environ.get("SMTP_SECURE", "false").lower() == "true"
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASS = os.environ.get("SMTP_PASS", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "noreply@tradehub.app")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "TradeHub")
+
 
 def allowed_origins():
     if os.environ.get("APP_URL"):
@@ -106,4 +116,6 @@ def allowed_origins():
     return ["http://localhost:5173", "http://localhost:5174", "http://localhost:3001"]
 
 
-EMAIL_CONFIGURED = bool(os.environ.get("SMTP_HOST"))
+# Mirrors the Node implementation: host, user and password are all required
+# before the app attempts to send mail.
+EMAIL_CONFIGURED = bool(SMTP_HOST and SMTP_USER and SMTP_PASS)

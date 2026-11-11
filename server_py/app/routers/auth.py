@@ -1,11 +1,13 @@
 import logging
 import uuid
 from datetime import timedelta
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from .. import config, db, security
+from .. import config, db, email as mailer, security
 from ..deps import require_user
+from ..referrals import apply_referral
 from ..validation import EMAIL_RE, username_error, raise_validation
 
 logger = logging.getLogger("tradehub")
@@ -51,20 +53,24 @@ def signup(body: dict = Body(...)):
         raise HTTPException(status_code=409, detail={"error": "Email already registered"})
 
     user_id = str(uuid.uuid4())
-    avatar = f"https://api.dicebear.com/7.x/avataaars/svg?seed={name.replace(' ', '%20')}"
+    avatar = f"https://api.dicebear.com/7.x/avataaars/svg?seed={quote(name, safe='')}"
     db.run(
         "INSERT INTO users (id, name, username, email, password, avatar) VALUES (?, ?, ?, ?, ?, ?)",
         (user_id, name, username, email, security.hash_password(password), avatar),
     )
 
     if referral_code:
-        logger.warning("Referral apply skipped for code %s (not ported yet)", referral_code)
+        try:
+            apply_referral(user_id, referral_code)
+        except Exception as err:
+            logger.warning("Referral apply failed: %s", err)
 
     verify_token = str(uuid.uuid4())
     db.run(
         "INSERT INTO email_verifications (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)",
         (str(uuid.uuid4()), user_id, verify_token, _iso(timedelta(days=1))),
     )
+    mailer.send_verification_email(email, verify_token)
 
     db.run("INSERT OR IGNORE INTO user_settings (user_id) VALUES (?)", (user_id,))
     db.run(
@@ -246,7 +252,7 @@ def forgot_password(body: dict = Body(...)):
             "INSERT INTO password_resets (id, email, token, expires_at) VALUES (?, ?, ?, ?)",
             (str(uuid.uuid4()), email, token, _iso(timedelta(hours=1))),
         )
-        logger.warning("Password reset email skipped (SMTP not ported yet) for %s", email)
+        mailer.send_password_reset_email(email, token)
         if _dev_mode():
             dev_token = token
 
@@ -336,7 +342,7 @@ def resend_verification(user: dict = Depends(require_user)):
         "INSERT INTO email_verifications (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)",
         (str(uuid.uuid4()), row["id"], token, _iso(timedelta(days=1))),
     )
-    logger.warning("Verification email skipped (SMTP not ported yet) for %s", row["email"])
+    mailer.send_verification_email(row["email"], token)
     return {"message": "Verification email sent"}
 
 
