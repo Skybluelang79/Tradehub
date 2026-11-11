@@ -9,7 +9,8 @@ import {
   PinIcon, SettingsIcon, LogOutIcon, EditIcon, ShieldIcon, HelpIcon,
   BellIcon, MoonIcon, GlobeIcon, MapPinIcon, EyeIcon, HeartIcon,
   TrashIcon, ZapIcon, TrendingUpIcon, MessageIcon, ClockIcon,
-  CheckIcon, CameraIcon,
+  CheckIcon, CameraIcon, FileTextIcon, AlertTriangleIcon, BanIcon,
+  RefreshIcon, Cookie,
 } from '../components/ui/Icons';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
@@ -45,6 +46,27 @@ const CODE_TO_LANGUAGE = {
   es: 'Spanish',
   de: 'German',
 };
+
+const HELP_GROUPS = [
+  {
+    title: 'Get help',
+    items: [
+      { icon: HelpIcon, title: 'FAQ', subtitle: 'Answers to the questions we are asked most', path: '/faq' },
+      { icon: MessageIcon, title: 'Contact Us', subtitle: 'Reach the TradeHub support team', path: '/contact' },
+      { icon: AlertTriangleIcon, title: 'Report a Problem', subtitle: 'Report a listing, user, payment or fault', path: '/report' },
+    ],
+  },
+  {
+    title: 'Legal & policies',
+    items: [
+      { icon: FileTextIcon, title: 'Terms of Service', subtitle: 'The rules for using TradeHub', path: '/terms' },
+      { icon: ShieldIcon, title: 'Privacy Policy', subtitle: 'How we collect and use your data', path: '/privacy' },
+      { icon: RefreshIcon, title: 'Refund Policy', subtitle: 'Returns, disputes and refunds', path: '/refund-policy' },
+      { icon: Cookie, title: 'Cookie Policy', subtitle: 'How cookies and storage are used', path: '/cookies' },
+      { icon: BanIcon, title: 'Prohibited Items', subtitle: 'What cannot be listed on TradeHub', path: '/prohibited' },
+    ],
+  },
+];
 
 const PLACEHOLDER_IMG = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72"%3E%3Crect fill="%231f1f2e" width="72" height="72" rx="8"/%3E%3Ctext x="36" y="40" text-anchor="middle" fill="%236B6B7B" font-size="11"%3E📦%3C/text%3E%3C/svg%3E';
 
@@ -2151,12 +2173,34 @@ export default function Profile() {
       </Modal>
 
       <Modal isOpen={showHelpModal} onClose={() => setShowHelpModal(false)} title="Help & Support">
-        <div className="help-options">
-          <button type="button" className="help-item" onClick={() => openLegalPage('/faq')}>FAQ</button>
-          <button type="button" className="help-item" onClick={() => openLegalPage('/contact')}>Contact Us</button>
-          <button type="button" className="help-item" onClick={() => openLegalPage('/report')}>Report a Problem</button>
-          <button type="button" className="help-item" onClick={() => openLegalPage('/terms')}>Terms of Service</button>
-          <button type="button" className="help-item" onClick={() => openLegalPage('/privacy')}>Privacy Policy</button>
+        <div className="help-groups">
+          {HELP_GROUPS.map((group) => (
+            <section className="help-group" key={group.title}>
+              <h3 className="help-group-title">{group.title}</h3>
+              <div className="help-list">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      type="button"
+                      className="help-item"
+                      key={item.path}
+                      onClick={() => openLegalPage(item.path)}
+                    >
+                      <span className="help-item-icon"><Icon size={18} /></span>
+                      <span className="help-item-text">
+                        <span className="help-item-title">{item.title}</span>
+                        <span className="help-item-subtitle">{item.subtitle}</span>
+                      </span>
+                      <svg className="help-item-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="9 18 15 12 9 6" />
+                      </svg>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          ))}
         </div>
       </Modal>
 
