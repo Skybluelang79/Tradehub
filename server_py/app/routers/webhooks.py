@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, HTTPException, Request
 
-from .. import config, db
+from .. import config, db, orders_service
 from ..notifications import notify
 from ..paystack import verify_paystack_webhook
 from .payments import refund_txn, reserve_item
@@ -49,6 +49,7 @@ def _handle_paystack_event(event_type, data):
                 "Payment Received",
                 f'Payment for "{txn["item_title"]}" was received and is held in escrow.',
             )
+        orders_service.mark_order_paid(reference=reference)
 
         # Pending plan upgrade activated by reference. This covers callbacks
         # that omit metadata but persisted pending_plan + paystack_reference.

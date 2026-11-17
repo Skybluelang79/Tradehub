@@ -3,7 +3,7 @@ import { Header } from '../components/layout';
 import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
-import { BankTransferPanel } from '../components/features';
+import { BankTransferPanel, ShippingAddressSelect } from '../components/features';
 import { payWithCard } from '../services/paystack';
 import api from '../services/client';
 import { formatPrice } from '../utils/helpers';
@@ -25,6 +25,8 @@ export default function Cart({ onClose }) {
   const [bankIntent, setBankIntent] = useState(null);
   const [savedMethods, setSavedMethods] = useState([]);
   const [useSavedCard, setUseSavedCard] = useState(false);
+  const [shippingAddressId, setShippingAddressId] = useState('');
+  const [completedOrderId, setCompletedOrderId] = useState('');
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -87,12 +89,19 @@ export default function Cart({ onClose }) {
 
   const handleCheckout = async () => {
     if (!cart.length) return;
+    if (!shippingAddressId) {
+      setError('Add a shipping address before checking out.');
+      return;
+    }
     setBusy(true);
     setError('');
     setSuccess(false);
     setBankIntent(null);
     try {
-      const payload = { method: method === 'gift_card' ? 'card' : method };
+      const payload = {
+        method: method === 'gift_card' ? 'card' : method,
+        shippingAddressId,
+      };
       if (useSavedCard && defaultCard) payload.paymentMethodId = defaultCard.id;
       if (method === 'gift_card' && giftCode.trim()) payload.giftCardCode = giftCode.trim();
       if (promoCode.trim()) payload.promoCode = promoCode.trim();
@@ -100,6 +109,7 @@ export default function Cart({ onClose }) {
       const res = await api.payments.cart.checkout(payload);
 
       if (res.paid || res.demo) {
+        setCompletedOrderId(res.orderId || '');
         setSuccess(true);
         setBusy(false);
         await refreshCart();
@@ -110,7 +120,7 @@ export default function Cart({ onClose }) {
       // In-app bank transfer: no popup, we show the account number instead and
       // let the webhook confirm it.
       if (res.bankTransfer) {
-        setBankIntent({ reference: res.reference, bankTransfer: res.bankTransfer });
+        setBankIntent({ reference: res.reference, bankTransfer: res.bankTransfer, orderId: res.orderId });
         setBusy(false);
         return;
       }
@@ -126,6 +136,7 @@ export default function Cart({ onClose }) {
         authorizationUrl: res.authorizationUrl,
         onSuccess: async () => {
           await api.payments.verify(res.reference);
+          setCompletedOrderId(res.orderId || '');
           setSuccess(true);
           setBusy(false);
           await refreshCart();
@@ -190,6 +201,9 @@ export default function Cart({ onClose }) {
             <div className="cart-success-icon">✓</div>
             <h3>Order placed!</h3>
             <p>Your payment is being processed and will be held in escrow until you confirm receipt.</p>
+            {completedOrderId && (
+              <p className="cart-order-ref">Order #{completedOrderId.slice(0, 8).toUpperCase()}</p>
+            )}
             <div className="cart-success-actions">
               <button className="cart-btn-primary" onClick={() => { if (onClose) onClose(); setActiveTab('home'); }}>Continue Browsing</button>
               <button className="cart-btn-secondary" onClick={() => { if (onClose) onClose(); setActiveTab('payments'); }}>View Purchases</button>
@@ -265,6 +279,12 @@ export default function Cart({ onClose }) {
                 <span>Subtotal</span>
                 <span>{formatPrice(subtotalCents / 100)}</span>
               </div>
+
+              <ShippingAddressSelect
+                value={shippingAddressId}
+                onChange={setShippingAddressId}
+                disabled={busy}
+              />
 
               <div className="cart-codes">
                 <input

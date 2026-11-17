@@ -361,6 +361,14 @@
   max-width: 320px;
 }
 
+.cart-order-ref {
+  margin: -12px 0 20px !important;
+  color: var(--accent) !important;
+  font-weight: 700;
+  font-size: 12px !important;
+  letter-spacing: 0.04em;
+}
+
 .cart-success-actions {
   display: flex;
   gap: 10px;

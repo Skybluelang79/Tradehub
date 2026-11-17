@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Header } from '../components/layout';
 import { Badge, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
-import { GiftCardModal } from '../components/features';
+import { GiftCardModal, OrdersPanel } from '../components/features';
 import { MeetupPanel, ReturnRequests, SecurityActivity } from '../components/marketplace/MarketplaceExtras';
 import { useToast } from '../components/ui/Toast';
 import { ShieldIcon, PlusIcon, CheckIcon, ClockIcon, GiftIcon, TrendingUpIcon } from '../components/ui/Icons';
@@ -445,6 +445,8 @@ export default function Payments() {
           <span className="protection-learn">Tap to learn more →</span>
         </div>
       </div>
+
+      <OrdersPanel />
 
       {wallet && (
         <>

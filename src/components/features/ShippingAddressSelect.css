@@ -1,0 +1,190 @@
+.ship-address {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--background);
+  padding: 14px;
+  margin: 12px 0;
+}
+
+.ship-address-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ship-address-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.ship-address-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 3px 0 0;
+}
+
+.ship-address-add {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent);
+  border-radius: 9px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ship-address-add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ship-address-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ship-address-option {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px;
+  border-radius: 11px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.ship-address-option.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+.ship-address-option input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+}
+
+.ship-address-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ship-address-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.ship-address-default {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.ship-address-line {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.ship-address-muted {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.ship-address-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ship-address-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.ship-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.ship-field-wide {
+  grid-column: 1 / -1;
+}
+
+.ship-field input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text-primary);
+  padding: 9px 10px;
+  font-size: 13px;
+}
+
+.ship-field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ship-address-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.ship-address-save,
+.ship-address-cancel {
+  border-radius: 9px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.ship-address-save {
+  border: none;
+  background: var(--accent);
+  color: white;
+}
+
+.ship-address-cancel {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-primary);
+}
+
+.ship-address-save:disabled,
+.ship-address-cancel:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.ship-address-error {
+  color: var(--danger, #dc2626);
+  font-size: 12px;
+  margin: 0;
+}

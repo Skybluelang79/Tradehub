@@ -16,3 +16,5 @@ export { default as SocialAuthButtons } from './SocialAuthButtons';
 export { default as CommunityFeed } from './CommunityFeed';
 export { default as AuthGate } from './AuthGate';
 export { default as BankTransferPanel } from './BankTransferPanel';
+export { default as ShippingAddressSelect } from './ShippingAddressSelect';
+export { default as OrdersPanel } from './OrdersPanel';

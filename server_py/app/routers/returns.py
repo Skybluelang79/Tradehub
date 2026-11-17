@@ -53,21 +53,33 @@ def _ensure_order(txn):
                 round(float(txn.get("amount") or 0) * 100), txn.get("paystack_reference") or txn["id"],
             ),
         )
-    order_item_id = f"oi_{txn['id']}"
-    if not db.get("SELECT 1 FROM order_items WHERE id = ?", (order_item_id,)):
-        db.run(
-            """
-            INSERT INTO order_items (id, order_id, item_id, seller_id, quantity, unit_price_cents, currency, status)
-            VALUES (?, ?, ?, ?, 1, ?, ?, 'delivered')
-            """,
-            (
-                order_item_id, order_id, txn["item_id"], txn["seller_id"],
-                round(float(txn.get("amount") or 0) * 100), txn.get("currency") or "NGN",
-            ),
-        )
+    order_item = db.get(
+        "SELECT id FROM order_items WHERE order_id = ? AND item_id = ? AND seller_id = ? "
+        "ORDER BY created_at LIMIT 1",
+        (order_id, txn["item_id"], txn["seller_id"]),
+    )
+    if order_item:
+        order_item_id = order_item["id"]
+    else:
+        order_item_id = f"oi_{txn['id']}"
+        if not db.get("SELECT 1 FROM order_items WHERE id = ?", (order_item_id,)):
+            db.run(
+                """
+                INSERT INTO order_items (
+                  id, order_id, item_id, seller_id, quantity, unit_price_cents,
+                  currency, item_title, status
+                )
+                VALUES (?, ?, ?, ?, 1, ?, ?, ?, 'delivered')
+                """,
+                (
+                    order_item_id, order_id, txn["item_id"], txn["seller_id"],
+                    round(float(txn.get("amount") or 0) * 100), txn.get("currency") or "NGN",
+                    txn.get("item_title") or "",
+                ),
+            )
     if not txn.get("order_id"):
         db.run("UPDATE transactions SET order_id = ? WHERE id = ?", (order_id, txn["id"]))
-    return order_id
+    return order_id, order_item_id
 
 
 @router.post("", status_code=201)
@@ -104,7 +116,7 @@ def create_return(body: dict = Body(...), user: dict = Depends(require_user)):
         raise HTTPException(status_code=409, detail={"error": "A return is already open for this order"})
 
     return_id = str(uuid.uuid4())
-    order_id = _ensure_order(txn)
+    order_id, order_item_id = _ensure_order(txn)
     db.run(
         """
         INSERT INTO returns (id, order_id, order_item_id, buyer_id, seller_id, reason, note,
@@ -112,7 +124,7 @@ def create_return(body: dict = Body(...), user: dict = Depends(require_user)):
         VALUES (?, ?, ?, ?, ?, ?, ?, 'requested', ?, ?)
         """,
         (
-            return_id, order_id, f"oi_{txn['id']}", txn["buyer_id"], txn["seller_id"], reason, note,
+            return_id, order_id, order_item_id, txn["buyer_id"], txn["seller_id"], reason, note,
             f"RMA-{uuid.uuid4().hex[:8].upper()}", txn_id,
         ),
     )

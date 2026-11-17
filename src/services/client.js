@@ -251,6 +251,22 @@ export const api = {
     refund: (txnId) => request(`/payments/refund/${txnId}`, { method: 'POST' }),
   },
 
+  addresses: {
+    list: () => request('/addresses'),
+    create: (data) => request('/addresses', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id, data) => request(`/addresses/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    setDefault: (id) => request(`/addresses/${id}/default`, { method: 'POST' }),
+    remove: (id) => request(`/addresses/${id}`, { method: 'DELETE' }),
+  },
+
+  orders: {
+    list: (role = 'all') => request(`/orders?role=${role}`),
+    get: (id) => request(`/orders/${id}`),
+    ship: (id, data) => request(`/orders/${id}/shipments`, { method: 'POST', body: JSON.stringify(data) }),
+    updateShipment: (id, shipmentId, data) => request(`/orders/${id}/shipments/${shipmentId}`, { method: 'PUT', body: JSON.stringify(data) }),
+    confirmDelivery: (id) => request(`/orders/${id}/confirm-delivery`, { method: 'POST' }),
+  },
+
   meetups: {
     list: () => request('/meetups'),
     forTransaction: (txnId) => request(`/meetups/transaction/${txnId}`),

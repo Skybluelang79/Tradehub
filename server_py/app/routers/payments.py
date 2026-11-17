@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from .. import config, db
+from .. import config, db, orders_service
 from ..currencies import convert, DEFAULT_CURRENCY, is_paystack_currency, is_valid_currency
 from ..datetime_util import parse_iso, utc_now
 from ..deps import require_admin, require_user
@@ -311,6 +311,33 @@ def insert_cart_line(line, index, txn_ids, method, status, paystack_ref, payment
         credit_cents=line["line_credit_cents"],
         provider_ref=None,
     )
+
+
+def attach_checkout_order(*, buyer_id, lines, txn_ids, method, status,
+                          currency, total_cents, payment_reference,
+                          shipping_address_id=None):
+    order_id = orders_service.create_order(
+        buyer_id=buyer_id,
+        currency=currency,
+        lines=lines,
+        status=status,
+        payment_reference=payment_reference,
+        payment_method=method,
+        shipping_address_id=shipping_address_id,
+    )
+    for txn_id in txn_ids:
+        db.run("UPDATE transactions SET order_id = ? WHERE id = ?", (order_id, txn_id))
+    return order_id
+
+
+def direct_order_line(checkout):
+    return {
+        "item": checkout["item"],
+        "quantity": 1,
+        "line_subtotal_cents": round(checkout["base_amount"] * 100),
+        "line_discount_cents": round((checkout.get("promo_discount") or 0) * 100),
+        "line_net_cents": checkout["amount_cents"],
+    }
 
 
 def build_checkout(body, user_id):
@@ -628,8 +655,14 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 discount_amount=b["promo_discount"], original_amount=b["base_amount"],
                 credit_cents=b["credit_cents"], provider_ref=None,
             )
+            order_id = attach_checkout_order(
+                buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
+                method="credit", status="processing", currency=b["currency"],
+                total_cents=b["amount_cents"], payment_reference=txn_id,
+                shipping_address_id=body.get("shippingAddressId"),
+            )
             return {
-                "transactionId": txn_id, "status": "pending", "method": "credit", "paid": True,
+                "transactionId": txn_id, "orderId": order_id, "status": "pending", "method": "credit", "paid": True,
                 "amountCents": b["amount_cents"], "creditCents": b["credit_cents"],
                 "promo": b["promo_info"], "currency": b["currency"],
             }
@@ -668,10 +701,16 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 discount_amount=b["promo_discount"], original_amount=b["base_amount"],
                 credit_cents=b["credit_cents"], provider_ref=None,
             )
+            order_id = attach_checkout_order(
+                buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
+                method="saved_card", status="processing", currency=b["currency"],
+                total_cents=b["amount_cents"], payment_reference=txn_id,
+                shipping_address_id=body.get("shippingAddressId"),
+            )
             notify(user["id"], "payment", "Payment Received",
                    f"Payment of {b['amount']} {b['currency']} for \"{b['item']['title']}\" was received and is held in escrow.")
             return {
-                "paid": True, "transactionId": txn_id, "status": "pending", "method": "saved_card",
+                "paid": True, "transactionId": txn_id, "orderId": order_id, "status": "pending", "method": "saved_card",
                 "amountCents": b["amount_cents"], "chargeCents": b["charge_cents"],
                 "creditCents": b["credit_cents"], "promo": b["promo_info"], "currency": b["currency"],
             }
@@ -690,8 +729,14 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 discount_amount=b["promo_discount"], original_amount=b["base_amount"],
                 credit_cents=b["credit_cents"], provider_ref=None,
             )
+            order_id = attach_checkout_order(
+                buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
+                method=method, status="processing", currency=b["currency"],
+                total_cents=b["amount_cents"], payment_reference=txn_id,
+                shipping_address_id=body.get("shippingAddressId"),
+            )
             return {
-                "demo": True, "transactionId": txn_id, "status": "pending", "paid": True,
+                "demo": True, "transactionId": txn_id, "orderId": order_id, "status": "pending", "paid": True,
                 "amountCents": b["amount_cents"], "creditCents": b["credit_cents"],
                 "promo": b["promo_info"], "currency": b["currency"],
             }
@@ -720,9 +765,16 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 credit_cents=b["credit_cents"], provider_ref=None,
             )
             attach_bank_details(txn_id, charge)
+            order_id = attach_checkout_order(
+                buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
+                method=method, status="awaiting_payment", currency=b["currency"],
+                total_cents=b["amount_cents"], payment_reference=txn_id,
+                shipping_address_id=body.get("shippingAddressId"),
+            )
             txn = db.get("SELECT * FROM transactions WHERE id = ?", (txn_id,))
             return {
-                "transactionId": txn_id, "reference": txn_id, "status": "awaiting_payment", "method": method,
+                "transactionId": txn_id, "orderId": order_id, "reference": txn_id,
+                "status": "awaiting_payment", "method": method,
                 "amountCents": b["amount_cents"], "chargeCents": b["charge_cents"],
                 "creditCents": b["credit_cents"], "currency": b["currency"],
                 "promo": b["promo_info"], "bankTransfer": public_bank_transfer(txn),
@@ -752,8 +804,14 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
             discount_amount=b["promo_discount"], original_amount=b["base_amount"],
             credit_cents=b["credit_cents"], provider_ref=None,
         )
+        order_id = attach_checkout_order(
+            buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
+            method=method, status="awaiting_payment", currency=b["currency"],
+            total_cents=b["amount_cents"], payment_reference=txn_id,
+            shipping_address_id=body.get("shippingAddressId"),
+        )
         return {
-            "transactionId": txn_id, "reference": txn_id,
+            "transactionId": txn_id, "orderId": order_id, "reference": txn_id,
             "accessCode": initialized.get("access_code"), "authorizationUrl": initialized.get("authorization_url"),
             "publicKey": PAYSTACK_PUBLIC_KEY, "status": "awaiting_payment", "method": method, "channels": channels,
             "amountCents": b["amount_cents"], "chargeCents": b["charge_cents"],
@@ -836,6 +894,7 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
         method = normalize_payment_method(raw_method)
         gift_card_code = body.get("giftCardCode")
         promo_code = body.get("promoCode")
+        shipping_address_id = body.get("shippingAddressId")
         cart_items = get_cart(user["id"])
         if not cart_items:
             raise HTTPException(status_code=400, detail={"error": "Your cart is empty"})
@@ -920,10 +979,16 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
             apply_credit(user["id"], gift_card, credit_cents)
             for i, l in enumerate(allocated):
                 insert_cart_line(l, i, txn_ids, "credit", "pending", None, None, promo_code_used, currency, user["id"])
+            order_id = attach_checkout_order(
+                buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
+                method="credit", status="processing", currency=currency,
+                total_cents=total_cents, payment_reference=txn_ids[0],
+                shipping_address_id=shipping_address_id,
+            )
             db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
             return {"paid": True, "status": "pending", "method": "credit", "transactionIds": txn_ids,
-                    "totalCents": total_cents, "creditCents": credit_cents, "count": len(allocated),
-                    "promo": promo_info, "currency": currency}
+                    "orderId": order_id, "totalCents": total_cents, "creditCents": credit_cents,
+                    "count": len(allocated), "promo": promo_info, "currency": currency}
 
         if body.get("paymentMethodId"):
             saved_method = db.get(
@@ -953,13 +1018,20 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
             for i, l in enumerate(allocated):
                 insert_cart_line(l, i, txn_ids, "saved_card", "pending", paystack_ref, saved_method["id"],
                                  promo_code_used, currency, user["id"])
+            order_id = attach_checkout_order(
+                buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
+                method="saved_card", status="processing", currency=currency,
+                total_cents=total_cents, payment_reference=paystack_ref or txn_ids[0],
+                shipping_address_id=shipping_address_id,
+            )
             for l in allocated:
                 notify(user["id"], "payment", "Payment Received",
                        f"Payment for \"{l['item']['title']}\" was received and is held in escrow.")
             db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
             return {"paid": True, "status": "pending", "method": "saved_card", "transactionIds": txn_ids,
-                    "totalCents": total_cents, "chargeCents": charge_cents, "creditCents": credit_cents,
-                    "count": len(allocated), "promo": promo_info, "currency": currency}
+                    "orderId": order_id, "totalCents": total_cents, "chargeCents": charge_cents,
+                    "creditCents": credit_cents, "count": len(allocated), "promo": promo_info,
+                    "currency": currency}
 
         if not is_paystack_configured():
             if not ALLOW_DEMO_PAYMENTS:
@@ -971,10 +1043,16 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
             for i, l in enumerate(allocated):
                 insert_cart_line(l, i, txn_ids, method, "pending", f"demo_{txn_ids[i]}", None,
                                  promo_code_used, currency, user["id"])
+            order_id = attach_checkout_order(
+                buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
+                method=method, status="processing", currency=currency,
+                total_cents=total_cents, payment_reference=txn_ids[0],
+                shipping_address_id=shipping_address_id,
+            )
             db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
             return {"demo": True, "paid": True, "status": "pending", "transactionIds": txn_ids,
-                    "totalCents": total_cents, "creditCents": credit_cents, "count": len(allocated),
-                    "promo": promo_info, "currency": currency}
+                    "orderId": order_id, "totalCents": total_cents, "creditCents": credit_cents,
+                    "count": len(allocated), "promo": promo_info, "currency": currency}
 
         if method == "bank_transfer":
             try:
@@ -995,10 +1073,17 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
                                  promo_code_used, currency, user["id"])
             for each_id in txn_ids:
                 attach_bank_details(each_id, charge)
+            order_id = attach_checkout_order(
+                buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
+                method=method, status="awaiting_payment", currency=currency,
+                total_cents=total_cents, payment_reference=paystack_ref,
+                shipping_address_id=shipping_address_id,
+            )
             db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
             txn = db.get("SELECT * FROM transactions WHERE id = ?", (txn_ids[0],))
-            return {"transactionIds": txn_ids, "reference": paystack_ref, "status": "awaiting_payment",
-                    "method": method, "totalCents": total_cents, "chargeCents": charge_cents,
+            return {"transactionIds": txn_ids, "orderId": order_id, "reference": paystack_ref,
+                    "status": "awaiting_payment", "method": method,
+                    "totalCents": total_cents, "chargeCents": charge_cents,
                     "creditCents": credit_cents, "count": len(allocated), "promo": promo_info,
                     "currency": currency, "bankTransfer": public_bank_transfer(txn)}
 
@@ -1020,9 +1105,15 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
         for i, l in enumerate(allocated):
             insert_cart_line(l, i, txn_ids, method, "awaiting_payment", paystack_ref, None,
                              promo_code_used, currency, user["id"])
+        order_id = attach_checkout_order(
+            buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
+            method=method, status="awaiting_payment", currency=currency,
+            total_cents=total_cents, payment_reference=paystack_ref,
+            shipping_address_id=shipping_address_id,
+        )
         db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
         return {
-            "transactionIds": txn_ids, "reference": paystack_ref,
+            "transactionIds": txn_ids, "orderId": order_id, "reference": paystack_ref,
             "accessCode": initialized.get("access_code"), "authorizationUrl": initialized.get("authorization_url"),
             "publicKey": PAYSTACK_PUBLIC_KEY, "status": "awaiting_payment", "method": method, "channels": channels,
             "totalCents": total_cents, "chargeCents": charge_cents, "creditCents": credit_cents,
@@ -1067,6 +1158,7 @@ def verify_payment(reference: str, user: dict = Depends(require_user)):
                 reserve_item(txn["item_id"])
                 notify(txn["buyer_id"], "payment", "Payment Received",
                        f"Demo payment for \"{txn['item_title']}\" is held in escrow.")
+            orders_service.mark_order_paid(reference=reference)
             return {
                 "status": "pending", "success": True, "demo": True,
                 "transactionId": active[0]["id"], "transactionIds": [t["id"] for t in active],
@@ -1085,6 +1177,7 @@ def verify_payment(reference: str, user: dict = Depends(require_user)):
             reserve_item(txn["item_id"])
             notify(txn["buyer_id"], "payment", "Payment Received",
                    f"Payment of {txn['amount']} {txn['currency']} for \"{txn['item_title']}\" is held in escrow.")
+        orders_service.mark_order_paid(reference=reference)
 
         auth = verified.get("authorization") or {}
         if auth.get("authorization_code") and auth.get("reusable"):
@@ -1169,6 +1262,8 @@ def finalize_completed(txn):
                                     f"Congratulations! \"{txn['item_title']}\" was sold for {txn['amount']} {txn['currency']}. The funds are now in your wallet.")
     except Exception:
         pass
+    if txn.get("order_id"):
+        orders_service.sync_order_payment_state(txn["order_id"])
     return True
 
 
@@ -1216,6 +1311,8 @@ def refund_txn(txn, opts=None):
         txn["id"], txn["buyer_id"], "refund_completed", "Transaction refunded", "info",
         {"reason": opts.get("reason") or opts.get("resolution") or ""},
     )
+    if txn.get("order_id"):
+        orders_service.sync_order_payment_state(txn["order_id"])
     return True
 
 
@@ -1301,6 +1398,9 @@ def admin_fund_confirmed(txn_id: str, user: dict = Depends(require_admin)):
         raise HTTPException(status_code=400, detail={"error": "Transaction is not awaiting payment"})
     db.run("UPDATE transactions SET status = 'pending' WHERE id = ?", (txn["id"],))
     reserve_item(txn["item_id"])
+    orders_service.mark_order_paid(
+        order_id=txn.get("order_id"), reference=txn.get("paystack_reference")
+    )
     notify(txn["buyer_id"], "payment", "Payment Received",
            f"We received your {txn['method']} payment for \"{txn['item_title']}\". It is now held in escrow.")
     return {"success": True}

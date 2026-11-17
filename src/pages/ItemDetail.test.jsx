@@ -66,6 +66,7 @@ vi.mock('../components/features', () => ({
   PriceChart: () => null,
   BankTransferPanel: () => null,
   AdBanner: () => null,
+  ShippingAddressSelect: () => null,
 }));
 
 async function openOfferModal() {

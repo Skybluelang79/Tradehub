@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Avatar, Rating, Button, Input, Textarea, Select } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import Modal from '../components/ui/Modal';
-import { ImageLightbox, PriceChart, BankTransferPanel } from '../components/features';
+import { ImageLightbox, PriceChart, BankTransferPanel, ShippingAddressSelect } from '../components/features';
 import { api } from '../services/client';
 import { payWithCard } from '../services/paystack';
 import { useAuth } from '../context/AuthContext';
@@ -110,6 +110,8 @@ export default function ItemDetail() {
   const [checkoutError, setCheckoutError] = useState('');
   const [savedMethods, setSavedMethods] = useState([]);
   const [useSavedCard, setUseSavedCard] = useState(false);
+  const [shippingAddressId, setShippingAddressId] = useState('');
+  const [checkoutOrderId, setCheckoutOrderId] = useState('');
   const [showShareModal, setShowShareModal] = useState(false);
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [offerAmount, setOfferAmount] = useState('');
@@ -220,6 +222,8 @@ export default function ItemDetail() {
     setCheckoutError('');
     setSavedMethods([]);
     setUseSavedCard(false);
+    setShippingAddressId('');
+    setCheckoutOrderId('');
   };
 
   const handleAddToCart = async () => {
@@ -268,6 +272,7 @@ export default function ItemDetail() {
     }
     setCheckoutResult(null);
     setCheckoutError('');
+    setCheckoutOrderId('');
     setCheckoutMethod('card');
     api.payments.methods().then((r) => setSavedMethods(r.methods || [])).catch(() => {});
     api.payments.options().then((r) => {
@@ -289,10 +294,18 @@ export default function ItemDetail() {
 
   const handleCheckout = async () => {
     if (!selectedItem) return;
+    if (!shippingAddressId) {
+      setCheckoutError('Add a shipping address before checking out.');
+      return;
+    }
     setCheckoutBusy(true);
     setCheckoutError('');
     try {
-      const payload = { itemId: selectedItem.id, method: checkoutMethod };
+      const payload = {
+        itemId: selectedItem.id,
+        method: checkoutMethod,
+        shippingAddressId,
+      };
       if (checkoutMethod === 'gift_card') {
         payload.giftCardCode = giftCode.trim();
       }
@@ -305,19 +318,26 @@ export default function ItemDetail() {
       // delivery, which is also what unlocks leaving a review for the seller.
       if (res.paid || res.demo) {
         markAsSold(selectedItem.id);
-        addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
-        resetCheckout();
+        setCheckoutOrderId(res.orderId || '');
+        setCheckoutResult(res);
+        setCheckoutBusy(false);
+            addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
         return;
       }
 
       if (checkoutMethod === 'gift_card') {
+        setCheckoutOrderId(res.orderId || '');
         setCheckoutResult(res);
         return;
       }
 
       // In-app bank transfer: show the minted account number instead of a popup.
       if (res.bankTransfer) {
-        setCheckoutBank({ reference: res.reference || res.transactionId, bankTransfer: res.bankTransfer });
+        setCheckoutBank({
+          reference: res.reference || res.transactionId,
+          bankTransfer: res.bankTransfer,
+          orderId: res.orderId,
+        });
         setCheckoutBusy(false);
         return;
       }
@@ -336,8 +356,10 @@ export default function ItemDetail() {
           const verified = await api.payments.verify(res.reference || res.transactionId);
           if (verified?.status === 'pending') {
             markAsSold(selectedItem.id);
-            addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
-            resetCheckout();
+            setCheckoutOrderId(res.orderId || '');
+            setCheckoutResult({ ...verified, orderId: res.orderId });
+            setCheckoutBusy(false);
+        addToast('Payment held in escrow — confirm delivery in Payments to release it.', 'success');
           }
         },
         onClose: () => {
@@ -1398,16 +1420,22 @@ export default function ItemDetail() {
         }
       >
         {checkoutResult ? (
-          <div className="checkout-confirm-note" style={{ fontWeight: 600 }}>
-            <CheckIcon size={16} />
-            <span>Payment received and held in escrow. The seller is notified and your order is on its way.</span>
-          </div>
+          <>
+            <div className="checkout-confirm-note" style={{ fontWeight: 600 }}>
+              <CheckIcon size={16} />
+              <span>Payment received and held in escrow. The seller is notified and your order is on its way.</span>
+            </div>
+            {checkoutOrderId && (
+              <p className="checkout-order-ref">Order #{checkoutOrderId.slice(0, 8).toUpperCase()}</p>
+            )}
+          </>
         ) : checkoutBank ? (
           <BankTransferPanel
             reference={checkoutBank.reference}
             details={checkoutBank.bankTransfer}
             onPaid={() => {
               markAsSold(selectedItem.id);
+              setCheckoutOrderId(checkoutBank.orderId || '');
               setCheckoutBank(null);
               setCheckoutResult(true);
             }}
@@ -1416,6 +1444,12 @@ export default function ItemDetail() {
           <div>
             <p className="checkout-price-line">Total <strong>{formatPrice(displayPrice, selectedItem?.currency)}</strong></p>
             <p className="checkout-sub">Payments are held in escrow until you confirm receipt.</p>
+
+            <ShippingAddressSelect
+              value={shippingAddressId}
+              onChange={setShippingAddressId}
+              disabled={checkoutBusy}
+            />
 
             <div className="checkout-methods">
               {displayMethods.map((m) => {

@@ -29,6 +29,7 @@ from .routers import (
     meetups,
     notifications,
     offers,
+    orders,
     payment_events,
     payouts,
     payments,
@@ -115,6 +116,7 @@ app.include_router(follows.router, prefix="/api/follows")
 app.include_router(store.router, prefix="/api/store")
 app.include_router(payments.router, prefix="/api/payments")
 app.include_router(payment_events.router, prefix="/api/payments")
+app.include_router(orders.router, prefix="/api/orders")
 app.include_router(meetups.router, prefix="/api/meetups")
 app.include_router(returns.router, prefix="/api/returns")
 app.include_router(trust.router, prefix="/api/trust")

@@ -154,7 +154,10 @@ CREATE TABLE IF NOT EXISTS orders (
   status TEXT NOT NULL DEFAULT 'pending',
   shipping_address_id TEXT,
   billing_address_id TEXT,
+  shipping_address_json TEXT DEFAULT '{}',
+  billing_address_json TEXT DEFAULT '{}',
   payment_reference TEXT,
+  payment_method TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -167,6 +170,8 @@ CREATE TABLE IF NOT EXISTS order_items (
   quantity INTEGER NOT NULL DEFAULT 1,
   unit_price_cents INTEGER NOT NULL DEFAULT 0,
   currency TEXT DEFAULT 'NGN',
+  item_title TEXT DEFAULT '',
+  item_image TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending',
   created_at TEXT DEFAULT (datetime('now'))
 );
@@ -182,7 +187,8 @@ CREATE TABLE IF NOT EXISTS shipments (
   status TEXT NOT NULL DEFAULT 'pending',
   shipped_at TEXT,
   delivered_at TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS returns (

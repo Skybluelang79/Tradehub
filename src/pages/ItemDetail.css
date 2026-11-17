@@ -990,6 +990,14 @@
   margin-top: 1px;
 }
 
+.checkout-order-ref {
+  margin: 12px 0 0;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
 .pay-info-list {
   display: flex;
   flex-direction: column;
