@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS items (
   boost_expires_at TEXT,
   quantity INTEGER DEFAULT 1,
   currency TEXT DEFAULT 'NGN',
+  shipping_fee_cents INTEGER DEFAULT 0,
+  free_shipping_threshold_cents INTEGER DEFAULT 0,
+  pickup_available INTEGER DEFAULT 1,
+  processing_days INTEGER DEFAULT 2,
+  shipping_notes TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -121,6 +126,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   payment_method_id TEXT,
   status TEXT DEFAULT 'pending',
   paystack_reference TEXT,
+  variant_option_id TEXT DEFAULT '',
+  variant_label TEXT DEFAULT '',
+  quantity INTEGER NOT NULL DEFAULT 1,
+  refunded_cents INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now')),
   completed_at TEXT
 );
@@ -158,6 +167,15 @@ CREATE TABLE IF NOT EXISTS orders (
   billing_address_json TEXT DEFAULT '{}',
   payment_reference TEXT,
   payment_method TEXT DEFAULT '',
+  fulfillment_method TEXT DEFAULT 'shipping',
+  shipping_breakdown_json TEXT DEFAULT '[]',
+  tax_breakdown_json TEXT DEFAULT '[]',
+  tax_label TEXT DEFAULT '',
+  tax_rate REAL DEFAULT 0,
+  refunded_cents INTEGER NOT NULL DEFAULT 0,
+  cancelled_at TEXT,
+  invoice_number TEXT DEFAULT '',
+  invoice_issued_at TEXT,
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -173,6 +191,9 @@ CREATE TABLE IF NOT EXISTS order_items (
   item_title TEXT DEFAULT '',
   item_image TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending',
+  variant_option_id TEXT DEFAULT '',
+  variant_label TEXT DEFAULT '',
+  refunded_cents INTEGER NOT NULL DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -184,6 +205,8 @@ CREATE TABLE IF NOT EXISTS shipments (
   service TEXT DEFAULT '',
   tracking_number TEXT DEFAULT '',
   tracking_url TEXT DEFAULT '',
+  label_url TEXT DEFAULT '',
+  label_reference TEXT DEFAULT '',
   status TEXT NOT NULL DEFAULT 'pending',
   shipped_at TEXT,
   delivered_at TEXT,
@@ -268,6 +291,18 @@ CREATE TABLE IF NOT EXISTS item_variants (
   item_id TEXT NOT NULL,
   name TEXT NOT NULL,
   variant_values TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS item_variant_options (
+  id TEXT PRIMARY KEY,
+  item_id TEXT NOT NULL,
+  variant_name TEXT NOT NULL,
+  value TEXT NOT NULL,
+  sku TEXT DEFAULT '',
+  price_cents INTEGER,
+  stock INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE (item_id, variant_name, value)
 );
 
 CREATE TABLE IF NOT EXISTS email_verifications (
@@ -451,12 +486,14 @@ CREATE TABLE IF NOT EXISTS carts (
   user_id TEXT NOT NULL,
   item_id TEXT NOT NULL,
   quantity INTEGER NOT NULL DEFAULT 1,
+  variant_option_id TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, item_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_carts_user ON carts(user_id);
+CREATE INDEX IF NOT EXISTS idx_variant_options_item ON item_variant_options(item_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_created ON transactions(created_at);
 CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
 

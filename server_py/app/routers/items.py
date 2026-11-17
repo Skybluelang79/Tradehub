@@ -180,15 +180,113 @@ def _clean_variants(value, details):
         name = variant.get("name")
         if name is None or not isinstance(name, str) or len(name) < 1:
             details.append(f"variants.{idx}.name: String must contain at least 1 character(s)")
+        options = variant.get("options")
         values = variant.get("values")
-        if not isinstance(values, list) or not values:
+        entries = values if isinstance(values, list) and values else options
+        if not isinstance(entries, list) or not entries:
             details.append(f"variants.{idx}.values: Array must contain at least 1 element(s)")
-        else:
-            for v in values:
-                if not isinstance(v, str) or len(v) < 1:
-                    details.append(f"variants.{idx}.values: String must contain at least 1 character(s)")
-        cleaned.append({"name": name, "values": values if isinstance(values, list) else []})
+            entries = []
+        normalized_values = []
+        normalized_options = []
+        seen = set()
+        for option_idx, entry in enumerate(entries):
+            stock = 1
+            price_cents = None
+            sku = ""
+            if isinstance(entry, str):
+                option_value = entry
+            elif isinstance(entry, dict):
+                option_value = entry.get("value") or entry.get("name")
+                raw_stock = entry.get("stock")
+                if raw_stock is not None:
+                    if not _is_number(raw_stock) or float(raw_stock) != int(raw_stock) or raw_stock < 0:
+                        details.append(
+                            f"variants.{idx}.options.{option_idx}.stock: Stock must be zero or greater"
+                        )
+                    else:
+                        stock = int(raw_stock)
+                raw_price = entry.get("priceCents")
+                if raw_price is None and entry.get("price") is not None:
+                    try:
+                        raw_price = round(float(entry.get("price")) * 100)
+                    except (TypeError, ValueError):
+                        raw_price = None
+                if raw_price is not None:
+                    if not _is_number(raw_price) or raw_price < 0:
+                        details.append(
+                            f"variants.{idx}.options.{option_idx}.price: Price must be zero or greater"
+                        )
+                    else:
+                        price_cents = int(round(raw_price))
+                sku = str(entry.get("sku") or "").strip()[:64]
+            else:
+                details.append(f"variants.{idx}.values.{option_idx}: Expected string or object")
+                continue
+            if not isinstance(option_value, str) or len(option_value.strip()) < 1:
+                details.append(
+                    f"variants.{idx}.values.{option_idx}: String must contain at least 1 character(s)"
+                )
+                continue
+            option_value = option_value.strip()[:80]
+            if option_value.lower() in seen:
+                details.append(f"variants.{idx}.values: Duplicate value \"{option_value}\"")
+                continue
+            seen.add(option_value.lower())
+            normalized_values.append(option_value)
+            normalized_options.append({
+                "value": option_value,
+                "sku": sku,
+                "price_cents": price_cents,
+                "stock": stock,
+            })
+        cleaned.append({
+            "name": str(name or "").strip()[:80],
+            "values": normalized_values,
+            "options": normalized_options,
+        })
     return cleaned
+
+
+def _clean_cents(field, value, details, default=0):
+    if value is None or value == "":
+        return default
+    if not _is_number(value) or float(value) != int(value) or value < 0:
+        details.append(f"{field}: Amount must be zero or greater")
+        return default
+    return int(value)
+
+
+def _save_variants(item_id, variants):
+    db.run("DELETE FROM item_variant_options WHERE item_id = ?", (item_id,))
+    db.run("DELETE FROM item_variants WHERE item_id = ?", (item_id,))
+    for variant in variants or []:
+        db.run(
+            "INSERT INTO item_variants (id, item_id, name, variant_values) VALUES (?, ?, ?, ?)",
+            (
+                str(uuid.uuid4()), item_id, variant.get("name"),
+                json.dumps(variant.get("values") or []),
+            ),
+        )
+        for option in variant.get("options") or []:
+            db.run(
+                """
+                INSERT INTO item_variant_options (
+                  id, item_id, variant_name, value, sku, price_cents, stock
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(uuid.uuid4()), item_id, variant.get("name"), option.get("value"),
+                    option.get("sku") or "", option.get("price_cents"), int(option.get("stock") or 0),
+                ),
+            )
+
+
+def _variant_options_for(item_id):
+    return db.all(
+        "SELECT id, variant_name, value, sku, price_cents, stock "
+        "FROM item_variant_options WHERE item_id = ? ORDER BY variant_name, rowid",
+        (item_id,),
+    )
 
 
 def _clean_images(value, details):
@@ -295,6 +393,54 @@ def _check_item_fields(payload, update=False):
     if currency is not None and not is_valid_currency(currency):
         details.append("currency: Unsupported currency")
     out["currency"] = currency
+
+    fee_present = "shipping_fee_cents" in payload or "shippingFeeCents" in payload
+    fee_value = payload.get("shipping_fee_cents", payload.get("shippingFeeCents"))
+    out["shipping_fee_cents"] = (
+        _clean_cents("shipping_fee_cents", fee_value, details)
+        if fee_present else ("SKIP" if update else 0)
+    )
+
+    threshold_present = (
+        "free_shipping_threshold_cents" in payload
+        or "freeShippingThresholdCents" in payload
+    )
+    threshold_value = payload.get(
+        "free_shipping_threshold_cents", payload.get("freeShippingThresholdCents")
+    )
+    out["free_shipping_threshold_cents"] = (
+        _clean_cents("free_shipping_threshold_cents", threshold_value, details)
+        if threshold_present else ("SKIP" if update else 0)
+    )
+
+    pickup_present = "pickup_available" in payload or "pickupAvailable" in payload
+    pickup = payload.get("pickup_available", payload.get("pickupAvailable"))
+    if pickup is not None and not isinstance(pickup, bool):
+        details.append("pickup_available: Expected boolean")
+        pickup = None
+    out["pickup_available"] = (
+        (True if pickup is None else pickup) if pickup_present else ("SKIP" if update else True)
+    )
+
+    processing_present = "processing_days" in payload or "processingDays" in payload
+    processing = payload.get("processing_days", payload.get("processingDays"))
+    if processing is not None:
+        if not _is_number(processing) or float(processing) != int(processing) or not (1 <= processing <= 60):
+            details.append("processing_days: Expected a whole number between 1 and 60")
+        else:
+            processing = int(processing)
+    out["processing_days"] = (
+        (processing or 2) if processing_present else ("SKIP" if update else 2)
+    )
+
+    notes_present = "shipping_notes" in payload or "shippingNotes" in payload
+    notes = payload.get("shipping_notes", payload.get("shippingNotes"))
+    if notes is not None and (not isinstance(notes, str) or len(notes) > 500):
+        details.append("shipping_notes: String must contain at most 500 characters")
+        notes = ""
+    out["shipping_notes"] = (
+        str(notes or "").strip() if notes_present else ("SKIP" if update else "")
+    )
 
     out["variants"] = _clean_variants(payload.get("variants"), details)
 
@@ -638,6 +784,7 @@ def get_item(item_id: str, user: dict | None = Depends(optional_user)):
 
     variants = db.all("SELECT name, variant_values FROM item_variants WHERE item_id = ?", (item["id"],))
     item["variants"] = [{"name": v["name"], "values": json.loads(v["variant_values"])} for v in variants]
+    item["variant_options"] = _variant_options_for(item["id"])
 
     db.run("UPDATE items SET views = views + 1 WHERE id = ?", (item["id"],))
 
@@ -710,8 +857,9 @@ def create_item(
         "INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, "
         "seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, "
         "boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, "
-        "current_bid, current_bidder_id, status, expires_at, video_url, is_distress) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        "current_bid, current_bidder_id, status, expires_at, video_url, is_distress, "
+        "shipping_fee_cents, free_shipping_threshold_cents, pickup_available, processing_days, shipping_notes) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (
             item_id,
             out["title"],
@@ -740,6 +888,11 @@ def create_item(
             expires_at,
             out["video_url"] or None,
             distress,
+            out["shipping_fee_cents"] or 0,
+            out["free_shipping_threshold_cents"] or 0,
+            1 if out["pickup_available"] is not False else 0,
+            out["processing_days"] or 2,
+            out["shipping_notes"] or "",
         ),
     )
 
@@ -750,12 +903,7 @@ def create_item(
             (str(uuid.uuid4()), item_id, url, i),
         )
 
-    variants = out["variants"] or []
-    for v in variants:
-        db.run(
-            "INSERT INTO item_variants (id, item_id, name, variant_values) VALUES (?, ?, ?, ?)",
-            (str(uuid.uuid4()), item_id, v.get("name"), json.dumps(v.get("values") or [])),
-        )
+    _save_variants(item_id, out["variants"] or [])
 
     item = db.get("SELECT * FROM items WHERE id = ?", (item_id,))
     item = _item_with_images(item)
@@ -868,13 +1016,37 @@ def update_item(
     auction_ends = item["auction_ends_at"] if out["auction_ends_at"] == "SKIP" else out["auction_ends_at"]
     auction_status = "active" if enabling_auction else item["auction_status"]
     video_url = item["video_url"] if out["video_url"] == "SKIP" else out["video_url"]
+    shipping_fee = (
+        item.get("shipping_fee_cents") or 0
+        if out["shipping_fee_cents"] == "SKIP" else out["shipping_fee_cents"]
+    )
+    free_threshold = (
+        item.get("free_shipping_threshold_cents") or 0
+        if out["free_shipping_threshold_cents"] == "SKIP"
+        else out["free_shipping_threshold_cents"]
+    )
+    pickup_available = (
+        item.get("pickup_available", 1)
+        if out["pickup_available"] == "SKIP"
+        else (1 if out["pickup_available"] is not False else 0)
+    )
+    processing_days = (
+        item.get("processing_days") or 2
+        if out["processing_days"] == "SKIP" else out["processing_days"]
+    )
+    shipping_notes = (
+        item.get("shipping_notes") or ""
+        if out["shipping_notes"] == "SKIP" else out["shipping_notes"]
+    )
 
     db.run(
         "UPDATE items SET title = ?, description = ?, price = ?, sale_price = ?, sale_ends_at = ?, "
         "category = ?, condition = ?, location_lat = ?, location_lng = ?, location_address = ?, "
         "quantity = ?, status = ?, boosted = ?, boost_expires_at = ?, updated_at = datetime('now'), "
         "is_auction = ?, starting_bid = ?, min_increment = ?, auction_ends_at = ?, auction_status = ?, "
-        "currency = ?, video_url = ?, expires_at = ?, is_distress = ? WHERE id = ?",
+        "currency = ?, video_url = ?, expires_at = ?, is_distress = ?, shipping_fee_cents = ?, "
+        "free_shipping_threshold_cents = ?, pickup_available = ?, processing_days = ?, "
+        "shipping_notes = ? WHERE id = ?",
         (
             out["title"] if out["title"] is not None else item["title"],
             out["description"] if out["description"] is not None else item["description"],
@@ -899,6 +1071,11 @@ def update_item(
             video_url,
             expires_at,
             next_distress,
+            shipping_fee or 0,
+            free_threshold or 0,
+            pickup_available,
+            processing_days or 2,
+            shipping_notes or "",
             item_id,
         ),
     )

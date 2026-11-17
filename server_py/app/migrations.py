@@ -76,6 +76,9 @@ def seed_platform_settings():
         "support_email": "support@tradehub.app",
         "maintenance_mode": "0",
         "platform_fee_percent": "4",
+        "tax_percent": "0",
+        "tax_label": "VAT",
+        "tax_inclusive": "0",
         "currency": "NGN",
         "terms_url": "",
         "privacy_url": "",
@@ -156,6 +159,30 @@ def apply():
     ensure_column("items", "is_distress", "INTEGER DEFAULT 0")
     ensure_column("items", "locked_at", "TEXT")
     ensure_column("items", "lock_reason", "TEXT")
+    ensure_column("items", "shipping_fee_cents", "INTEGER DEFAULT 0")
+    ensure_column("items", "free_shipping_threshold_cents", "INTEGER DEFAULT 0")
+    ensure_column("items", "pickup_available", "INTEGER DEFAULT 1")
+    ensure_column("items", "processing_days", "INTEGER DEFAULT 2")
+    ensure_column("items", "shipping_notes", "TEXT DEFAULT ''")
+    ensure_column("orders", "fulfillment_method", "TEXT DEFAULT 'shipping'")
+    ensure_column("orders", "shipping_breakdown_json", "TEXT DEFAULT '[]'")
+    ensure_column("orders", "tax_breakdown_json", "TEXT DEFAULT '[]'")
+    ensure_column("orders", "tax_label", "TEXT DEFAULT ''")
+    ensure_column("orders", "tax_rate", "REAL DEFAULT 0")
+    ensure_column("orders", "refunded_cents", "INTEGER DEFAULT 0")
+    ensure_column("orders", "cancelled_at", "TEXT")
+    ensure_column("orders", "invoice_number", "TEXT DEFAULT ''")
+    ensure_column("orders", "invoice_issued_at", "TEXT")
+    ensure_column("order_items", "variant_option_id", "TEXT DEFAULT ''")
+    ensure_column("order_items", "variant_label", "TEXT DEFAULT ''")
+    ensure_column("order_items", "refunded_cents", "INTEGER DEFAULT 0")
+    ensure_column("shipments", "label_url", "TEXT DEFAULT ''")
+    ensure_column("shipments", "label_reference", "TEXT DEFAULT ''")
+    ensure_column("transactions", "variant_option_id", "TEXT DEFAULT ''")
+    ensure_column("transactions", "variant_label", "TEXT DEFAULT ''")
+    ensure_column("transactions", "quantity", "INTEGER DEFAULT 1")
+    ensure_column("transactions", "refunded_cents", "INTEGER DEFAULT 0")
+    ensure_column("carts", "variant_option_id", "TEXT DEFAULT ''")
 
     ensure_column("users", "firebase_uid", "TEXT DEFAULT ''")
     ensure_column("users", "auth_provider", "TEXT DEFAULT 'local'")
