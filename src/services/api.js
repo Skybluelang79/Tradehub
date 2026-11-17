@@ -250,6 +250,36 @@ export const conditionOptions = [
   { value: 'fair', label: 'Fair' },
 ];
 
+export const attributeDefinitions = {
+  electronics: [
+    { name: 'Brand', label: 'Brand', placeholder: 'e.g. Apple' },
+    { name: 'Model', label: 'Model', placeholder: 'e.g. iPhone 15' },
+    { name: 'Storage', label: 'Storage', placeholder: 'e.g. 256GB' },
+  ],
+  fashion: [
+    { name: 'Brand', label: 'Brand', placeholder: 'e.g. Nike' },
+    { name: 'Size', label: 'Size', placeholder: 'e.g. M' },
+    { name: 'Material', label: 'Material', placeholder: 'e.g. Leather' },
+  ],
+  gaming: [
+    { name: 'Platform', label: 'Platform', placeholder: 'e.g. PlayStation 5' },
+    { name: 'Region', label: 'Region', placeholder: 'e.g. PAL' },
+  ],
+  furniture: [
+    { name: 'Material', label: 'Material', placeholder: 'e.g. Oak' },
+    { name: 'Dimensions', label: 'Dimensions', placeholder: 'e.g. 120x60cm' },
+  ],
+  vehicles: [
+    { name: 'Make', label: 'Make', placeholder: 'e.g. Toyota' },
+    { name: 'Year', label: 'Year', placeholder: 'e.g. 2020' },
+    { name: 'Mileage', label: 'Mileage', placeholder: 'e.g. 45,000 km' },
+  ],
+  other: [
+    { name: 'Brand', label: 'Brand', placeholder: 'Optional' },
+    { name: 'Model', label: 'Model', placeholder: 'Optional' },
+  ],
+};
+
 export const mockConversations = [
   {
     id: 'conv-1',

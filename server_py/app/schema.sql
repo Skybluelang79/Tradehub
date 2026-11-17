@@ -585,6 +585,90 @@ CREATE TABLE IF NOT EXISTS webauthn_challenges (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS meetups (
+  id TEXT PRIMARY KEY,
+  txn_id TEXT,
+  item_id TEXT NOT NULL,
+  buyer_id TEXT NOT NULL,
+  seller_id TEXT NOT NULL,
+  proposed_by TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'proposed',
+  location_name TEXT DEFAULT '',
+  address TEXT DEFAULT '',
+  latitude REAL,
+  longitude REAL,
+  scheduled_at TEXT NOT NULL,
+  note TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now')),
+  completed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS listing_attributes (
+  id TEXT PRIMARY KEY,
+  item_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  value TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  UNIQUE (item_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS strikes (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  severity TEXT NOT NULL DEFAULT 'low',
+  points INTEGER NOT NULL DEFAULT 10,
+  description TEXT DEFAULT '',
+  issued_by TEXT,
+  source_type TEXT DEFAULT '',
+  source_id TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT DEFAULT (datetime('now')),
+  expires_at TEXT,
+  resolved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS appeals (
+  id TEXT PRIMARY KEY,
+  strike_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  reviewed_by TEXT,
+  review_note TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  resolved_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS payment_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT,
+  txn_id TEXT,
+  event_type TEXT NOT NULL,
+  level TEXT NOT NULL DEFAULT 'info',
+  message TEXT DEFAULT '',
+  details TEXT DEFAULT '{}',
+  ip_address TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_meetups_txn ON meetups(txn_id);
+CREATE INDEX IF NOT EXISTS idx_meetups_item ON meetups(item_id);
+CREATE INDEX IF NOT EXISTS idx_meetups_buyer ON meetups(buyer_id);
+CREATE INDEX IF NOT EXISTS idx_meetups_seller ON meetups(seller_id);
+CREATE INDEX IF NOT EXISTS idx_meetups_status ON meetups(status);
+CREATE INDEX IF NOT EXISTS idx_listing_attributes_item ON listing_attributes(item_id);
+CREATE INDEX IF NOT EXISTS idx_listing_attributes_name ON listing_attributes(name);
+CREATE INDEX IF NOT EXISTS idx_strikes_user ON strikes(user_id);
+CREATE INDEX IF NOT EXISTS idx_strikes_status ON strikes(status);
+CREATE INDEX IF NOT EXISTS idx_appeals_strike ON appeals(strike_id);
+CREATE INDEX IF NOT EXISTS idx_appeals_user ON appeals(user_id);
+CREATE INDEX IF NOT EXISTS idx_appeals_status ON appeals(status);
+CREATE INDEX IF NOT EXISTS idx_payment_events_user ON payment_events(user_id);
+CREATE INDEX IF NOT EXISTS idx_payment_events_txn ON payment_events(txn_id);
+CREATE INDEX IF NOT EXISTS idx_payment_events_type ON payment_events(event_type);
+
 CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id);
 CREATE INDEX IF NOT EXISTS idx_phone_otp_phone ON phone_otp_codes(phone);
 CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user ON webauthn_credentials(user_id);

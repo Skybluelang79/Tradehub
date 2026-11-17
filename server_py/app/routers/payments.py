@@ -10,6 +10,7 @@ from ..datetime_util import parse_iso, utc_now
 from ..deps import require_admin, require_user
 from ..email import send_notification_email
 from ..notifications import notify
+from .payment_events import log_payment_event
 from ..paystack import (
     PAYSTACK_PUBLIC_KEY,
     PaystackError,
@@ -130,6 +131,11 @@ def insert_transaction(*, txn_id, item, amount, currency, buyer_id, seller_id, m
     )
     if status == "pending":
         reserve_item(item["id"])
+    log_payment_event(
+        txn_id, buyer_id, "transaction_created",
+        f"Transaction created with {method} ({status})", "info",
+        {"itemId": item["id"], "amount": amount, "currency": currency, "status": status},
+    )
 
 
 def attach_bank_details(txn_id, charge):
@@ -1129,6 +1135,7 @@ def finalize_completed(txn):
         return False
     db.run("UPDATE transactions SET status = 'completed', completed_at = datetime('now') WHERE id = ?", (txn["id"],))
     db.run("UPDATE items SET status = 'sold' WHERE id = ?", (txn["item_id"],))
+    log_payment_event(txn["id"], txn["buyer_id"], "escrow_released", "Payment released to seller", "info")
 
     amount_cents = round(convert(txn["amount"], txn.get("currency") or DEFAULT_CURRENCY, DEFAULT_CURRENCY) * 100)
     fee_cents = round(amount_cents * get_fee_rate_for_seller(txn["seller_id"]))
@@ -1201,9 +1208,14 @@ def refund_txn(txn, opts=None):
                 paystack.refund(transaction=txn["paystack_reference"], amount_minor=amount_minor, currency=txn.get("currency") or DEFAULT_CURRENCY)
         except Exception as err:
             logger.error("Paystack refund failed for %s: %s", txn["id"], err)
+            log_payment_event(txn["id"], txn["buyer_id"], "refund_gateway_error", str(err), "error")
 
     db.run("UPDATE transactions SET status = 'refunded', completed_at = NULL WHERE id = ?", (txn["id"],))
     db.run("UPDATE items SET status = 'active' WHERE id = ?", (txn["item_id"],))
+    log_payment_event(
+        txn["id"], txn["buyer_id"], "refund_completed", "Transaction refunded", "info",
+        {"reason": opts.get("reason") or opts.get("resolution") or ""},
+    )
     return True
 
 

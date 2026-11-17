@@ -4,6 +4,7 @@ import { Input, Textarea, Select } from '../components/ui';
 import { useToast } from '../components/ui/Toast';
 import { useApp } from '../context';
 import { LivePreview } from '../components/features';
+import { AttributeEditor } from '../components/marketplace/MarketplaceExtras';
 import { categories } from '../services/api';
 import { api } from '../services/client';
 import { compressToDataUrl } from '../utils/imageCompression';
@@ -125,6 +126,7 @@ export default function AddListing({ editItemId, onEditComplete }) {
 
   const [quantity, setQuantity] = useState(initialQuantity);
   const [variants, setVariants] = useState([]);
+  const [attributes, setAttributes] = useState({});
   const [variantName, setVariantName] = useState('');
   const [variantValues, setVariantValues] = useState('');
 
@@ -373,6 +375,14 @@ category,
     addToast(`Template "${tmpl.name}" loaded`, 'success');
   };
 
+  const saveAttributes = async (itemId) => {
+    const list = Object.entries(attributes)
+      .map(([name, value]) => ({ name, value: String(value || '').trim() }))
+      .filter((field) => field.value);
+    if (!itemId || !list.length || typeof api.listings?.saveAttributes !== 'function') return;
+    await api.listings.saveAttributes(itemId, list);
+  };
+
   const handleSaveDraft = async () => {
     if (!title) {
       addToast('Please add a title to save draft', 'error');
@@ -384,7 +394,8 @@ category,
         addToast('Draft updated!', 'success');
         if (onEditComplete) onEditComplete();
       } else {
-        await addItem(buildItemData(), 'draft');
+        const newItem = await addItem(buildItemData(), 'draft');
+        await saveAttributes(newItem?.id);
         addToast('Draft saved!', 'success');
       }
       resetForm();
@@ -404,10 +415,12 @@ category,
     try {
       if (editingItem) {
         await updateItem(editingItem.id, buildItemData());
+        await saveAttributes(editingItem.id);
         addToast('Listing updated successfully!', 'success');
         if (onEditComplete) onEditComplete();
       } else {
-        await addItem(buildItemData(), 'active');
+        const newItem = await addItem(buildItemData(), 'active');
+        await saveAttributes(newItem?.id);
         addToast('Listing published successfully!', 'success');
       }
       resetForm();
@@ -426,6 +439,7 @@ category,
     }
     try {
       const newItem = await addItem(buildItemData(), 'active');
+      await saveAttributes(newItem?.id);
       setBulkItems((prev) => [...prev, newItem]);
       resetForm();
       addToast(`Item added (${bulkItems.length + 1}) — add another or finish`, 'success');
@@ -448,6 +462,7 @@ category,
       setBoostListing(false);
       setQuantity(1);
       setVariants([]);
+      setAttributes({});
       setSalePrice('');
       setSaleEnabled(false);
       setSaleEndsAt('');
@@ -573,6 +588,8 @@ category,
           </div>
           <Select label="Category *" options={categories.filter((c) => c.id !== 'all')} placeholder="Select..." value={category} onChange={(e) => setCategory(e.target.value)} />
         </div>
+
+        <AttributeEditor category={category} value={attributes} onChange={setAttributes} />
 
         <div className="input-group">
           <label className="input-label">Currency</label>

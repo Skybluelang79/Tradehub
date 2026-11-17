@@ -3,6 +3,7 @@ import { Header } from '../components/layout';
 import { Badge, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
 import { GiftCardModal } from '../components/features';
+import { MeetupPanel, ReturnRequests, SecurityActivity } from '../components/marketplace/MarketplaceExtras';
 import { useToast } from '../components/ui/Toast';
 import { ShieldIcon, PlusIcon, CheckIcon, ClockIcon, GiftIcon, TrendingUpIcon } from '../components/ui/Icons';
 import { useApp } from '../context';
@@ -730,6 +731,17 @@ export default function Payments() {
         )}
       </div>
       </div>
+
+      {activeTransactions
+        .filter((txn) => ['pending', 'completed'].includes(txn.status || txn.state))
+        .slice(0, 3)
+        .map((txn) => (
+          <MeetupPanel key={txn.id} txnId={txn.id} itemId={txn.item_id || txn.itemId} />
+        ))}
+
+      <ReturnRequests transactions={activeTransactions} />
+
+      <SecurityActivity />
 
       <Modal isOpen={showEscrowInfo} onClose={() => setShowEscrowInfo(false)} title="How Escrow Works">
         <div className="escrow-info-list">

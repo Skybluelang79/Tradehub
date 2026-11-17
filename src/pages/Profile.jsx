@@ -24,6 +24,7 @@ import Offers from './Offers';
 import { navigateToLegalPath } from './legal/legalRoutes';
 import SellerVerification from '../components/verification/SellerVerification';
 import Referrals from '../components/profile/Referrals';
+import { TrustDashboard, SecurityActivity } from '../components/marketplace/MarketplaceExtras';
 import '../styles/globals.css';
 import './Profile.css';
 
@@ -985,6 +986,10 @@ export default function Profile() {
         )}
 
         <SellerVerification />
+
+        <TrustDashboard />
+
+        <SecurityActivity />
 
         <div className="profile-tabs">
           <button className={`profile-tab ${activeTab === 'listings' ? 'active' : ''}`} onClick={() => setActiveTabState('listings')}>

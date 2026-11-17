@@ -25,20 +25,25 @@ from .routers import (
     giftcards,
     health,
     items,
+    listing_attributes,
+    meetups,
     notifications,
     offers,
+    payment_events,
     payouts,
     payments,
     phone_auth,
     promotions,
     referrals,
     reports,
+    returns,
     reviews,
     searches,
     settings,
     store,
     subscriptions,
     templates,
+    trust,
     upload,
     verification,
     vision,
@@ -102,12 +107,17 @@ app.include_router(health.router, prefix="/api")
 app.include_router(auth.router, prefix="/api/auth")
 app.include_router(addresses.router, prefix="/api/addresses")
 app.include_router(items.router, prefix="/api/items")
+app.include_router(listing_attributes.router, prefix="/api/items")
 app.include_router(reviews.router, prefix="/api/reviews")
 app.include_router(offers.router, prefix="/api/offers")
 app.include_router(searches.router, prefix="/api/searches")
 app.include_router(follows.router, prefix="/api/follows")
 app.include_router(store.router, prefix="/api/store")
 app.include_router(payments.router, prefix="/api/payments")
+app.include_router(payment_events.router, prefix="/api/payments")
+app.include_router(meetups.router, prefix="/api/meetups")
+app.include_router(returns.router, prefix="/api/returns")
+app.include_router(trust.router, prefix="/api/trust")
 app.include_router(verification.router, prefix="/api/verification")
 app.include_router(chat.router, prefix="/api/chat")
 app.include_router(notifications.router, prefix="/api/notifications")

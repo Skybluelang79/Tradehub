@@ -26,6 +26,7 @@ const navItems = [
   { path: '/admin/payouts', label: 'Payouts', icon: ChartIcon },
   { path: '/admin/gift-cards', label: 'Gift Cards', icon: ChartIcon },
   { path: '/admin/disputes', label: 'Disputes', icon: ShieldIcon },
+  { path: '/admin/trust', label: 'Trust & Safety', icon: ShieldIcon },
   { path: '/admin/reports', label: 'Reports', icon: ChartIcon },
   { path: '/admin/promotions', label: 'Promotions', icon: TagIcon },
   { path: '/admin/audit-logs', label: 'Audit Logs', icon: EyeIcon },

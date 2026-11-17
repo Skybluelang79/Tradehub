@@ -32,6 +32,7 @@ import {
   AdminGiftCards,
   AdminDisputes,
   AdminReports,
+  AdminTrust,
   AdminAuditLogs,
   AdminPromotions,
   AdminSystem,
@@ -231,6 +232,8 @@ function AppContent() {
         return <AdminDisputes />;
       case '/admin/reports':
         return <AdminReports />;
+      case '/admin/trust':
+        return <AdminTrust />;
       case '/admin/promotions':
         return <AdminPromotions />;
       case '/admin/audit-logs':

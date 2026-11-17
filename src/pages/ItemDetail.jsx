@@ -27,6 +27,7 @@ import {
   TrendingUpIcon,
 } from '../components/ui/Icons';
 import { AdBanner } from '../components/features';
+import { TrustBadge, ListingAttributes, CompsPanel, MeetupPanel } from '../components/marketplace/MarketplaceExtras';
 import { useApp } from '../context';
 import { categories, conditionOptions } from '../services/api';
 import { formatPrice, formatDistance, formatDate, normalizeReview } from '../utils/helpers';
@@ -966,6 +967,10 @@ export default function ItemDetail() {
           <PriceChart priceHistory={selectedItem.priceHistory} currentPrice={displayPrice} />
         )}
 
+        <ListingAttributes itemId={selectedItem.id} attributes={selectedItem.attributes} />
+
+        <CompsPanel itemId={selectedItem.id} />
+
         <div className="seller-card-detail">
           <Avatar src={seller.avatar} alt={seller.name} size="lg" verified={seller.verified} />
           <div className="seller-info">
@@ -984,6 +989,7 @@ export default function ItemDetail() {
                 {sellerRating || 'New'} ({sellerReviews.length} reviews)
               </span>
             </div>
+            <TrustBadge userId={seller.id} />
           </div>
           <button className="seller-view-btn" onClick={() => window.dispatchEvent(new CustomEvent('openSellerProfile', { detail: seller.id }))}>View</button>
         </div>
@@ -1011,6 +1017,8 @@ export default function ItemDetail() {
             ))}
           </div>
         )}
+
+        {!isOwnItem && <MeetupPanel itemId={selectedItem.id} />}
       </div>
 
       <AdBanner />

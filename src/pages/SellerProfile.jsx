@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context';
 import { api } from '../services/client';
 import { ItemsGrid } from '../components/features';
+import { TrustBadge } from '../components/marketplace/MarketplaceExtras';
 import { formatDate } from '../utils/helpers';
 import './SellerProfile.css';
 
@@ -186,6 +187,7 @@ export default function SellerProfile({ userId, onClose, onItemOpen }) {
                       ({user.review_count || reviews.length} reviews)
                     </span>
                   </div>
+                  <TrustBadge userId={userId} />
                   {user.bio && <p className="seller-profile-bio">{user.bio}</p>}
                 </div>
               </div>

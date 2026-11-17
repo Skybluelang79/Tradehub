@@ -251,6 +251,51 @@ export const api = {
     refund: (txnId) => request(`/payments/refund/${txnId}`, { method: 'POST' }),
   },
 
+  meetups: {
+    list: () => request('/meetups'),
+    forTransaction: (txnId) => request(`/meetups/transaction/${txnId}`),
+    create: (data) => request('/meetups', { method: 'POST', body: JSON.stringify(data) }),
+    accept: (id) => request(`/meetups/${id}/accept`, { method: 'POST' }),
+    decline: (id) => request(`/meetups/${id}/decline`, { method: 'POST' }),
+    complete: (id) => request(`/meetups/${id}/complete`, { method: 'POST' }),
+    cancel: (id) => request(`/meetups/${id}/cancel`, { method: 'POST' }),
+  },
+
+  returns: {
+    list: (filter = 'all') => request(`/returns?filter=${filter}`),
+    create: (data) => request('/returns', { method: 'POST', body: JSON.stringify(data) }),
+    get: (id) => request(`/returns/${id}`),
+    approve: (id, note = '') => request(`/returns/${id}/approve`, { method: 'POST', body: JSON.stringify({ note }) }),
+    decline: (id, note = '') => request(`/returns/${id}/decline`, { method: 'POST', body: JSON.stringify({ note }) }),
+    complete: (id) => request(`/returns/${id}/complete`, { method: 'POST' }),
+    cancel: (id) => request(`/returns/${id}/cancel`, { method: 'POST' }),
+  },
+
+  trust: {
+    public: (userId) => request(`/trust/users/${userId}`),
+    me: () => request('/trust/me'),
+    strikes: () => request('/trust/strikes'),
+    createStrike: (data) => request('/trust/strikes', { method: 'POST', body: JSON.stringify(data) }),
+    appeal: (strikeId, data) => request(`/trust/strikes/${strikeId}/appeal`, { method: 'POST', body: JSON.stringify(data) }),
+    appeals: () => request('/trust/appeals'),
+    resolveAppeal: (id, data) => request(`/trust/appeals/${id}/resolve`, { method: 'POST', body: JSON.stringify(data) }),
+  },
+
+  listings: {
+    attributes: (itemId) => request(`/items/${itemId}/attributes`),
+    saveAttributes: (itemId, attributes) => request(`/items/${itemId}/attributes`, {
+      method: 'POST',
+      body: JSON.stringify({ attributes }),
+    }),
+    deleteAttribute: (itemId, name) => request(`/items/${itemId}/attributes/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+    comps: (itemId) => request(`/items/${itemId}/comps`),
+  },
+
+  paymentEvents: {
+    list: (params = {}) => request(`/payments/events?${new URLSearchParams(params).toString()}`),
+    forTransaction: (txnId) => request(`/payments/events/transaction/${txnId}`),
+  },
+
   disputes: {
     open: (data) => request('/disputes', { method: 'POST', body: JSON.stringify(data) }),
     list: () => request('/disputes'),
@@ -359,6 +404,12 @@ export const api = {
     reports: (params = {}) => adminRequest(`/admin/reports?${new URLSearchParams(params).toString()}`),
     resolveReport: (id, action) => adminRequest(`/admin/reports/${id}/resolve`, { method: 'PUT', body: JSON.stringify({ action }) }),
     auditLogs: (params = {}) => adminRequest(`/admin/audit-logs?${new URLSearchParams(params).toString()}`),
+    returns: () => adminRequest('/returns'),
+    strikes: () => adminRequest('/trust/strikes'),
+    appeals: () => adminRequest('/trust/appeals'),
+    createStrike: (data) => adminRequest('/trust/strikes', { method: 'POST', body: JSON.stringify(data) }),
+    resolveAppeal: (id, data) => adminRequest(`/trust/appeals/${id}/resolve`, { method: 'POST', body: JSON.stringify(data) }),
+    paymentEvents: (limit = 200) => adminRequest(`/payments/events?limit=${limit}`),
     exportCsv: (kind) => adminDownload(`/admin/export/${kind}`, `${kind}-${Date.now()}.csv`),
     refundTransaction: (id) => adminRequest(`/admin/transactions/${id}/refund`, { method: 'POST' }),
     promotions: () => adminRequest('/admin/promotions'),

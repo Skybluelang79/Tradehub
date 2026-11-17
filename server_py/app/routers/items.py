@@ -354,6 +354,7 @@ def list_items(
     min_price: float | None = None,
     max_price: float | None = None,
     condition: str | None = None,
+    attributes: str | None = None,
     page: int = 1,
     limit: int = 20,
     seller_id: str | None = None,
@@ -388,6 +389,21 @@ def list_items(
     if condition:
         where.append("LOWER(i.condition) = LOWER(?)")
         where_params.append(condition)
+
+    if attributes:
+        try:
+            parsed_attributes = json.loads(attributes)
+        except Exception:
+            parsed_attributes = None
+        if isinstance(parsed_attributes, dict):
+            for name, value in list(parsed_attributes.items())[:20]:
+                if not str(name).strip() or not str(value).strip():
+                    continue
+                where.append(
+                    "EXISTS (SELECT 1 FROM listing_attributes la WHERE la.item_id = i.id "
+                    "AND LOWER(la.name) = LOWER(?) AND LOWER(la.value) = LOWER(?))"
+                )
+                where_params.extend([str(name).strip(), str(value).strip()])
 
     where_clause = f" WHERE {' AND '.join(where)}" if where else ""
 
