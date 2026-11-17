@@ -13,6 +13,7 @@ from ..datetime_util import parse_iso, utc_now
 from ..deps import optional_user, require_user
 from ..notifications import notify
 from ..plans import get_effective_plan, get_plan
+from ..search import match as search_match
 from ..validation import raise_validation
 
 logger = logging.getLogger("tradehub")
@@ -32,6 +33,15 @@ DISTANCE_EXPR = (
 
 def _future_sql_date(days):
     return (utc_now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _float_or_none(value):
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _seller_plan(user_id):
@@ -350,25 +360,42 @@ def list_items(
     category: str | None = None,
     sort: str = "newest",
     search: str | None = None,
+    q: str | None = None,
     max_distance: float | None = None,
     min_price: float | None = None,
     max_price: float | None = None,
     condition: str | None = None,
+    conditions: str | None = None,
+    brand: str | None = None,
+    size: str | None = None,
+    min_rating: float | None = None,
     attributes: str | None = None,
+    lat: float | None = None,
+    lng: float | None = None,
     page: int = 1,
     limit: int = 20,
     seller_id: str | None = None,
     user: dict | None = Depends(optional_user),
 ):
-    where = []
+    page = max(1, int(page))
+    limit = max(1, min(int(limit), 100))
+    search_term = str(search or q or "").strip()
+
+    where = ["i.status = 'active'"]
     where_params = []
+    fts_join = ""
+    search_rank = None
 
-    where.append("i.status = 'active'")
-
-    if search:
-        where.append("(i.title LIKE ? OR i.description LIKE ?)")
-        where_params.append(f"%{search}%")
-        where_params.append(f"%{search}%")
+    if search_term:
+        fts = search_match(search_term)
+        if fts:
+            fts_join = fts["join"]
+            where.append(fts["where"])
+            where_params.extend(fts["params"])
+            search_rank = fts["rank"]
+        else:
+            where.append("(i.title LIKE ? OR i.description LIKE ?)")
+            where_params.extend([f"%{search_term}%", f"%{search_term}%"])
 
     if category and category != "all":
         where.append("LOWER(i.category) = LOWER(?)")
@@ -378,17 +405,44 @@ def list_items(
         where.append("i.seller_id = ?")
         where_params.append(seller_id)
 
-    if min_price is not None:
+    min_price_value = _float_or_none(min_price)
+    if min_price_value is not None:
         where.append("i.price >= ?")
-        where_params.append(float(min_price))
+        where_params.append(min_price_value)
 
-    if max_price is not None:
+    max_price_value = _float_or_none(max_price)
+    if max_price_value is not None:
         where.append("i.price <= ?")
-        where_params.append(float(max_price))
+        where_params.append(max_price_value)
 
-    if condition:
-        where.append("LOWER(i.condition) = LOWER(?)")
-        where_params.append(condition)
+    condition_values = []
+    if conditions:
+        condition_values = [
+            value.strip().lower()
+            for value in str(conditions).split(",")
+            if value.strip()
+        ]
+    elif condition and condition != "all":
+        condition_values = [str(condition).strip().lower()]
+    condition_values = list(dict.fromkeys(condition_values))
+    if condition_values:
+        placeholders = ", ".join("?" for _ in condition_values)
+        where.append(f"LOWER(i.condition) IN ({placeholders})")
+        where_params.extend(condition_values)
+
+    def add_attribute_filter(name, value):
+        clean_name = str(name or "").strip()
+        clean_value = str(value or "").strip()
+        if not clean_name or not clean_value:
+            return
+        where.append(
+            "EXISTS (SELECT 1 FROM listing_attributes la WHERE la.item_id = i.id "
+            "AND LOWER(la.name) = LOWER(?) AND LOWER(la.value) = LOWER(?))"
+        )
+        where_params.extend([clean_name, clean_value])
+
+    add_attribute_filter("brand", brand)
+    add_attribute_filter("size", size)
 
     if attributes:
         try:
@@ -397,68 +451,94 @@ def list_items(
             parsed_attributes = None
         if isinstance(parsed_attributes, dict):
             for name, value in list(parsed_attributes.items())[:20]:
-                if not str(name).strip() or not str(value).strip():
-                    continue
-                where.append(
-                    "EXISTS (SELECT 1 FROM listing_attributes la WHERE la.item_id = i.id "
-                    "AND LOWER(la.name) = LOWER(?) AND LOWER(la.value) = LOWER(?))"
-                )
-                where_params.extend([str(name).strip(), str(value).strip()])
+                add_attribute_filter(name, value)
 
-    where_clause = f" WHERE {' AND '.join(where)}" if where else ""
+    min_rating_value = _float_or_none(min_rating)
+    if min_rating_value is not None:
+        where.append("COALESCE(u.rating, 0) >= ?")
+        where_params.append(min_rating_value)
 
-    select_part = (
-        "SELECT i.*, u.name as seller_name, u.avatar as seller_avatar, "
-        "u.rating as seller_rating, u.verified as seller_verified, "
-        "u.identity_verified as seller_identity_verified, "
-        "COALESCE(s.plan, 'free') as seller_plan "
-        "FROM items i JOIN users u ON i.seller_id = u.id "
+    origin_lat = _float_or_none(lat)
+    origin_lng = _float_or_none(lng)
+    if origin_lat is None and user:
+        origin_lat = _float_or_none(user.get("location_lat"))
+    if origin_lng is None and user:
+        origin_lng = _float_or_none(user.get("location_lng"))
+    has_location = origin_lat is not None and origin_lng is not None
+
+    max_distance_value = _float_or_none(max_distance)
+    if max_distance_value is not None and max_distance_value < 0:
+        max_distance_value = None
+
+    where_clause = f" WHERE {' AND '.join(where)}"
+    from_clause = (
+        " FROM items i JOIN users u ON i.seller_id = u.id "
         "LEFT JOIN subscriptions s ON s.user_id = u.id"
+        + fts_join
     )
 
-    has_location = bool(user and user.get("location_lat") and user.get("location_lng"))
+    select_columns = [
+        "i.*",
+        "u.name as seller_name",
+        "u.avatar as seller_avatar",
+        "u.rating as seller_rating",
+        "u.verified as seller_verified",
+        "u.identity_verified as seller_identity_verified",
+        "COALESCE(s.plan, 'free') as seller_plan",
+    ]
+    select_params = []
+    if has_location:
+        select_columns.append(f"({DISTANCE_EXPR}) as distance")
+        select_params.extend([origin_lat, origin_lat, origin_lng])
+    if search_rank:
+        select_columns.append(f"{search_rank} as search_rank")
 
-    if sort == "newest":
-        order = " ORDER BY i.is_distress DESC, i.created_at DESC"
+    outer_where = ""
+    outer_params = []
+    if has_location and max_distance_value is not None:
+        outer_where = " WHERE distance IS NOT NULL AND distance <= ?"
+        outer_params.append(max_distance_value)
+
+    if sort == "relevance" and search_rank:
+        order = " ORDER BY is_distress DESC, search_rank ASC, boosted DESC, created_at DESC"
+    elif sort == "nearest" and has_location:
+        order = " ORDER BY is_distress DESC, distance ASC, created_at DESC"
     elif sort == "oldest":
-        order = " ORDER BY i.is_distress DESC, i.created_at ASC"
+        order = " ORDER BY is_distress DESC, created_at ASC"
     elif sort == "price_low":
-        order = " ORDER BY i.is_distress DESC, i.price ASC"
+        order = " ORDER BY is_distress DESC, price ASC"
     elif sort == "price_high":
-        order = " ORDER BY i.is_distress DESC, i.price DESC"
+        order = " ORDER BY is_distress DESC, price DESC"
     elif sort == "popular":
-        order = " ORDER BY i.is_distress DESC, i.views DESC, i.favorites DESC"
-    elif sort == "nearest":
-        if has_location:
-            select_part = select_part.replace("SELECT i.*", f"SELECT i.*, ({DISTANCE_EXPR}) as distance")
-            order = " ORDER BY i.is_distress DESC, distance ASC"
-            nearest_params = [
-                float(user["location_lat"]),
-                float(user["location_lat"]),
-                float(user["location_lng"]),
-            ]
-        else:
-            order = " ORDER BY i.is_distress DESC, i.created_at DESC"
+        order = " ORDER BY is_distress DESC, views DESC, favorites DESC"
+    elif sort == "rating":
+        order = " ORDER BY is_distress DESC, COALESCE(seller_rating, 0) DESC, created_at DESC"
     else:
-        order = " ORDER BY i.is_distress DESC, i.boosted DESC, i.created_at DESC"
+        order = " ORDER BY is_distress DESC, boosted DESC, created_at DESC"
 
-    query = select_part + where_clause + order + " LIMIT ? OFFSET ?"
-
-    if sort == "nearest" and has_location:
-        params = [*nearest_params, *where_params, limit, (page - 1) * limit]
-    else:
-        params = [*where_params, limit, (page - 1) * limit]
-
+    candidates = (
+        f"WITH candidates AS (SELECT {', '.join(select_columns)}{from_clause}{where_clause})"
+    )
+    query = (
+        f"{candidates} SELECT * FROM candidates{outer_where}{order} LIMIT ? OFFSET ?"
+    )
+    params = [*select_params, *where_params, *outer_params, limit, (page - 1) * limit]
     items = db.all(query, tuple(params))
 
     enriched = []
     for item in items:
         item = dict(item)
         item["images"] = _images_for(item["id"])
-        if user and item.get("location_lat") and item.get("location_lng"):
+        if (
+            has_location
+            and item.get("location_lat") is not None
+            and item.get("location_lng") is not None
+        ):
             item["distance"] = _distance(
-                float(user["location_lat"]), float(user["location_lng"]),
-                float(item["location_lat"]), float(item["location_lng"]),
+                origin_lat,
+                origin_lng,
+                float(item["location_lat"]),
+                float(item["location_lng"]),
             )
         is_fav = bool(user) and db.get(
             "SELECT 1 FROM favorites WHERE user_id = ? AND item_id = ?",
@@ -468,17 +548,18 @@ def list_items(
         item["sale_active"] = _sale_active(item)
         enriched.append(item)
 
-    if max_distance is not None and user:
-        filtered = [i for i in enriched if i.get("distance") and i["distance"] <= max_distance]
-        return {
-            "items": filtered[(page - 1) * limit : (page - 1) * limit + limit],
-            "total": len(filtered),
-            "page": page,
-            "limit": limit,
-            "totalPages": math.ceil(len(filtered) / limit) if filtered else 0,
-        }
+    count_columns = ["i.id"]
+    count_params = []
+    if has_location:
+        count_columns.append(f"({DISTANCE_EXPR}) as distance")
+        count_params.extend([origin_lat, origin_lat, origin_lng])
+    count_candidates = (
+        f"WITH candidates AS (SELECT {', '.join(count_columns)}{from_clause}{where_clause})"
+    )
+    count_query = f"{count_candidates} SELECT COUNT(*) as count FROM candidates{outer_where}"
+    count_params.extend([*where_params, *outer_params])
+    total = db.get(count_query, tuple(count_params))["count"]
 
-    total = db.get("SELECT COUNT(*) as count FROM items i" + where_clause, tuple(where_params))["count"]
     return {
         "items": enriched,
         "total": total,

@@ -49,12 +49,19 @@ export default function Notifications({ onClose }) {
   };
 
   const runSavedSearch = (s) => {
+    const savedFilters = s.filters || {};
     setFilters((prev) => ({
       ...prev,
       search: s.query || '',
       category: s.category || 'all',
       minPrice: s.min_price ?? '',
       maxPrice: s.max_price ?? '',
+      condition: savedFilters.condition || 'all',
+      brand: savedFilters.brand || '',
+      size: savedFilters.size || '',
+      minRating: savedFilters.min_rating ?? '',
+      attributes: savedFilters.attributes || {},
+      sort: s.query ? 'relevance' : prev.sort,
     }));
     setActiveTab('home');
     if (onClose) onClose();

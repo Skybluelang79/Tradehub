@@ -6,7 +6,8 @@ import { useApp } from '../context';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../components/ui/Toast';
 import { api } from '../services/client';
-import { categories, distanceOptions, sortOptions, conditionOptions } from '../services/api';
+import { cleanAttributeFilters } from '../services/itemSearch';
+import { categories, distanceOptions, sortOptions, conditionOptions, attributeDefinitions } from '../services/api';
 import { useDebounce } from '../hooks';
 import { formatPrice } from '../utils/helpers';
 import '../styles/globals.css';
@@ -81,11 +82,25 @@ export default function Home() {
 
   const handleSearchSuggestion = useCallback((text) => {
     setSearchInput(text);
-    setFilters({ ...filters, search: text });
-  }, [filters, setFilters]);
+    setFilters((prev) => ({
+      ...prev,
+      search: text,
+      sort: prev.sort === 'newest' ? 'relevance' : prev.sort,
+    }));
+  }, [setFilters]);
 
   useEffect(() => {
-    setFilters((prev) => prev.search === debouncedSearch ? prev : { ...prev, search: debouncedSearch });
+    setFilters((prev) => {
+      const search = debouncedSearch.trim();
+      if (prev.search === search) return prev;
+      const useRelevance = search && (prev.sort === 'newest' || prev.sort === 'relevance');
+      const resetRelevance = !search && prev.sort === 'relevance';
+      return {
+        ...prev,
+        search,
+        sort: useRelevance ? 'relevance' : resetRelevance ? 'newest' : prev.sort,
+      };
+    });
   }, [debouncedSearch, setFilters]);
 
   useEffect(() => {
@@ -107,13 +122,15 @@ export default function Home() {
     try {
       const res = await api.ai.parse(query);
       setSearchInput(res.query || query);
-      setFilters({
-        ...filters,
+      setFilters((prev) => ({
+        ...prev,
         search: res.query || query,
         category: res.category || 'all',
         minPrice: res.minPrice || '',
         maxPrice: res.maxPrice || '',
-      });
+        attributes: {},
+        sort: prev.sort === 'newest' ? 'relevance' : prev.sort,
+      }));
       addToast(res.category || res.minPrice || res.maxPrice ? 'AI searched smart 🎯' : 'Search updated', 'success');
     } catch {
       addToast('AI search unavailable — using normal search', 'error');
@@ -128,12 +145,51 @@ export default function Home() {
 
   const handleFilterClick = (filterType, value) => {
     setLoading(true);
-    setFilters({ ...filters, [filterType]: value });
+    setFilters((prev) => ({ ...prev, [filterType]: value }));
     clearTimeout(loadingTimerRef.current);
     loadingTimerRef.current = setTimeout(() => setLoading(false), 300);
   };
 
   const currentSort = sortOptions.find((s) => s.value === filters.sort);
+
+  const categoryAttributes = useMemo(() => {
+    return (attributeDefinitions[filters.category] || []).filter(
+      (definition) => !['brand', 'size'].includes(String(definition.name).toLowerCase())
+    );
+  }, [filters.category]);
+
+  const handleAttributeFilter = useCallback((name, value) => {
+    setLoading(true);
+    setFilters((prev) => ({
+      ...prev,
+      attributes: { ...(prev.attributes || {}), [name]: value },
+    }));
+    clearTimeout(loadingTimerRef.current);
+    loadingTimerRef.current = setTimeout(() => setLoading(false), 300);
+  }, [setFilters]);
+
+  const handleCategoryFilter = useCallback((value) => {
+    setLoading(true);
+    setFilters((prev) => ({ ...prev, category: value, attributes: {} }));
+    clearTimeout(loadingTimerRef.current);
+    loadingTimerRef.current = setTimeout(() => setLoading(false), 300);
+  }, [setFilters]);
+
+  const clearAdvancedFilters = useCallback(() => {
+    setLoading(true);
+    setFilters((prev) => ({
+      ...prev,
+      minPrice: '',
+      maxPrice: '',
+      condition: 'all',
+      brand: '',
+      size: '',
+      minRating: '',
+      attributes: {},
+    }));
+    clearTimeout(loadingTimerRef.current);
+    loadingTimerRef.current = setTimeout(() => setLoading(false), 300);
+  }, [setFilters]);
 
   const handleSaveSearch = async () => {
     if (!isAuthenticated) {
@@ -153,10 +209,17 @@ export default function Home() {
     try {
       await api.searches.create({
         name: saveName,
-        query: searchInput,
+        query: searchInput.trim(),
         category: filters.category || '',
         min_price: filters.minPrice || null,
         max_price: filters.maxPrice || null,
+        filters: {
+          condition: filters.condition !== 'all' ? filters.condition : '',
+          brand: filters.brand.trim(),
+          size: filters.size.trim(),
+          min_rating: filters.minRating || null,
+          attributes: cleanAttributeFilters(filters.attributes),
+        },
       });
       addToast('Search saved — we\'ll alert you on new matches', 'success');
       setShowSaveSearch(false);
@@ -168,8 +231,16 @@ export default function Home() {
   };
 
 
+  const activeAttributeCount = Object.values(filters.attributes || {})
+    .filter((value) => String(value || '').trim()).length;
   const activeExtraFilterCount =
-    (filters.minPrice ? 1 : 0) + (filters.maxPrice ? 1 : 0) + (filters.condition && filters.condition !== 'all' ? 1 : 0);
+    (filters.minPrice ? 1 : 0) +
+    (filters.maxPrice ? 1 : 0) +
+    (filters.condition && filters.condition !== 'all' ? 1 : 0) +
+    (filters.brand ? 1 : 0) +
+    (filters.size ? 1 : 0) +
+    (filters.minRating ? 1 : 0) +
+    activeAttributeCount;
 
   return (
       <div className="page">
@@ -197,7 +268,7 @@ export default function Home() {
               autoFocus
             />
             <button
-              className={`save-search-btn ${(searchInput || filters.category || filters.minPrice || filters.maxPrice) ? 'enabled' : ''}`}
+              className={`save-search-btn ${(searchInput.trim() || filters.category !== 'all' || activeExtraFilterCount > 0) ? 'enabled' : ''}`}
               onClick={handleSaveSearch}
               title="Save this search to get alerts on new matches"
             >
@@ -249,7 +320,7 @@ export default function Home() {
           <button
             key={cat.id}
             className={`filter-chip ${filters.category === cat.id ? 'active' : ''}`}
-            onClick={() => handleFilterClick('category', cat.id)}
+            onClick={() => handleCategoryFilter(cat.id)}
           >
             {cat.name}
           </button>
@@ -258,7 +329,7 @@ export default function Home() {
 
       <div className="extra-filters">
         <button className={`filter-chip ${showFilters ? 'active' : ''}`} onClick={() => setShowFilters(!showFilters)}>
-          <FilterIcon size={15} /> Price & Condition
+          <FilterIcon size={15} /> Filters
           {activeExtraFilterCount > 0 && <span className="filter-count">{activeExtraFilterCount}</span>}
         </button>
 
@@ -300,15 +371,64 @@ export default function Home() {
                 ))}
               </div>
             </div>
+            <div className="filter-panel-group">
+              <span className="filter-panel-label">Brand & Size</span>
+              <div className="filter-price-row">
+                <input
+                  type="text"
+                  className="filter-price-input"
+                  placeholder="Brand"
+                  value={filters.brand}
+                  onChange={(e) => handleFilterClick('brand', e.target.value)}
+                />
+                <input
+                  type="text"
+                  className="filter-price-input"
+                  placeholder="Size"
+                  value={filters.size}
+                  onChange={(e) => handleFilterClick('size', e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="filter-panel-group">
+              <span className="filter-panel-label">Seller rating</span>
+              <div className="filter-condition-row">
+                {[
+                  { value: '', label: 'Any' },
+                  { value: 4, label: '4★ & up' },
+                  { value: 4.5, label: '4.5★ & up' },
+                ].map((rating) => (
+                  <button
+                    key={rating.label}
+                    className={`filter-chip ${String(filters.minRating) === String(rating.value) ? 'active' : ''}`}
+                    onClick={() => handleFilterClick('minRating', rating.value)}
+                  >
+                    {rating.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {categoryAttributes.length > 0 && (
+              <div className="filter-panel-group">
+                <span className="filter-panel-label">
+                  {categories.find((cat) => cat.id === filters.category)?.name || 'Category'} details
+                </span>
+                <div className="filter-condition-row">
+                  {categoryAttributes.map((definition) => (
+                    <input
+                      key={definition.name}
+                      type="text"
+                      className="filter-price-input"
+                      placeholder={definition.placeholder || definition.label}
+                      value={filters.attributes?.[definition.name] || ''}
+                      onChange={(e) => handleAttributeFilter(definition.name, e.target.value)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
             {activeExtraFilterCount > 0 && (
-              <button
-                className="filter-clear"
-                onClick={() => {
-                  handleFilterClick('minPrice', '');
-                  handleFilterClick('maxPrice', '');
-                  handleFilterClick('condition', 'all');
-                }}
-              >
+              <button className="filter-clear" onClick={clearAdvancedFilters}>
                 Clear filters
               </button>
             )}

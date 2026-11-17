@@ -30,7 +30,21 @@ vi.mock('../components/ui/Toast', () => ({ useToast: () => ({ addToast: h.addToa
 vi.mock('../services/client', () => ({ api: h.api, default: h.api }));
 
 const searches = [
-  { id: 's1', name: 'Cheap phones', query: 'phone', category: 'electronics', min_price: 100, max_price: 500 },
+  {
+    id: 's1',
+    name: 'Cheap phones',
+    query: 'phone',
+    category: 'electronics',
+    min_price: 100,
+    max_price: 500,
+    filters: {
+      condition: 'new',
+      brand: 'Apple',
+      size: '',
+      min_rating: 4.5,
+      attributes: { Storage: '256GB' },
+    },
+  },
   { id: 's2', name: 'Any bike', query: '', category: '', min_price: null, max_price: null },
 ];
 
@@ -66,6 +80,12 @@ describe('Notifications', () => {
       category: 'electronics',
       minPrice: 100,
       maxPrice: 500,
+      condition: 'new',
+      brand: 'Apple',
+      size: '',
+      minRating: 4.5,
+      attributes: { Storage: '256GB' },
+      sort: 'relevance',
       page: 2,
     });
     expect(h.app.setActiveTab).toHaveBeenCalledWith('home');

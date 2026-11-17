@@ -143,9 +143,10 @@ def run_saved_search_alerts():
     try:
         recent_items = db.all(
             """
-            SELECT id, title, price, sale_price, category, seller_id
-            FROM items
-            WHERE status = 'active' AND created_at >= datetime('now', '-2 hours')
+            SELECT i.id, i.title, i.description, i.price, i.sale_price, i.category,
+                   i.condition, i.seller_id, u.rating as seller_rating
+            FROM items i JOIN users u ON u.id = i.seller_id
+            WHERE i.status = 'active' AND i.created_at >= datetime('now', '-2 hours')
             """
         )
         if not recent_items:
@@ -153,13 +154,32 @@ def run_saved_search_alerts():
 
         searches = db.all("SELECT * FROM saved_searches")
         notified = 0
+        attributes_by_item = {}
+
+        def item_attributes(item_id):
+            if item_id not in attributes_by_item:
+                rows = db.all(
+                    "SELECT name, value FROM listing_attributes WHERE item_id = ?",
+                    (item_id,),
+                )
+                attributes_by_item[item_id] = {
+                    (str(row["name"]).lower(), str(row["value"]).lower()) for row in rows
+                }
+            return attributes_by_item[item_id]
+
         for s in searches:
+            try:
+                filters = json.loads(s.get("filters") or "{}")
+            except Exception:
+                filters = {}
+            if not isinstance(filters, dict):
+                filters = {}
             terms = [t for t in str(s.get("query") or "").lower().split() if t]
             for item in recent_items:
                 if item.get("seller_id") == s.get("user_id"):
                     continue
-                title = str(item.get("title") or "").lower()
-                if terms and not all(t in title for t in terms):
+                haystack = f'{item.get("title") or ""} {item.get("description") or ""}'.lower()
+                if terms and not all(t in haystack for t in terms):
                     continue
                 if s.get("category") and item.get("category") and str(s["category"]).lower() != str(item["category"]).lower():
                     continue
@@ -168,6 +188,33 @@ def run_saved_search_alerts():
                     continue
                 if s.get("max_price") is not None and price > s["max_price"]:
                     continue
+
+                wanted_condition = str(filters.get("condition") or "").lower()
+                if wanted_condition and str(item.get("condition") or "").lower() != wanted_condition:
+                    continue
+
+                min_rating = filters.get("min_rating")
+                if min_rating is not None:
+                    try:
+                        if float(item.get("seller_rating") or 0) < float(min_rating):
+                            continue
+                    except (TypeError, ValueError):
+                        continue
+
+                checks = []
+                if filters.get("brand"):
+                    checks.append(("brand", filters["brand"]))
+                if filters.get("size"):
+                    checks.append(("size", filters["size"]))
+                if isinstance(filters.get("attributes"), dict):
+                    checks.extend(filters["attributes"].items())
+                if checks:
+                    available = item_attributes(item["id"])
+                    if any(
+                        (str(name).strip().lower(), str(value).strip().lower()) not in available
+                        for name, value in checks
+                    ):
+                        continue
 
                 notify(
                     s["user_id"],

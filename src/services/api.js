@@ -235,11 +235,13 @@ export const distanceOptions = [
 ];
 
 export const sortOptions = [
+  { value: 'relevance', label: 'Best Match' },
   { value: 'newest', label: 'Newest First' },
   { value: 'oldest', label: 'Oldest First' },
   { value: 'price_low', label: 'Price: Low to High' },
   { value: 'price_high', label: 'Price: High to Low' },
   { value: 'popular', label: 'Most Popular' },
+  { value: 'rating', label: 'Seller Rating' },
   { value: 'nearest', label: 'Nearest' },
 ];
 

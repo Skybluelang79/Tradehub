@@ -176,6 +176,7 @@ def apply():
     ensure_column("verification_requests", "ai_verdict", "TEXT DEFAULT ''")
     ensure_column("verification_requests", "ai_extracted", "TEXT DEFAULT ''")
     ensure_column("verification_requests", "ai_checks", "TEXT DEFAULT ''")
+    ensure_column("saved_searches", "filters", "TEXT")
 
     db.exec(
         """
@@ -188,3 +189,7 @@ def apply():
     ensure_unique_phone_index()
     ensure_unique_store_slug_index()
     seed_platform_settings()
+
+    from . import search
+
+    search.ensure_index()

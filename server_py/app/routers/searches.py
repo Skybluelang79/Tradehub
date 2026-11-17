@@ -1,3 +1,4 @@
+import json
 import logging
 import uuid
 
@@ -20,13 +21,63 @@ def _clean_price(value):
         return None
 
 
+def _clean_filters(value):
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except Exception:
+            value = None
+    if not isinstance(value, dict):
+        return {}
+
+    out = {}
+    condition = str(value.get("condition") or "").strip().lower()
+    if condition:
+        out["condition"] = condition[:30]
+    brand = str(value.get("brand") or "").strip()
+    if brand:
+        out["brand"] = brand[:60]
+    size = str(value.get("size") or "").strip()
+    if size:
+        out["size"] = size[:60]
+
+    min_rating = _clean_price(value.get("min_rating"))
+    if min_rating is not None and 0 <= min_rating <= 5:
+        out["min_rating"] = min_rating
+
+    attributes = value.get("attributes")
+    if isinstance(attributes, dict):
+        cleaned = {}
+        for name, attr_value in list(attributes.items())[:20]:
+            clean_name = str(name or "").strip()
+            clean_value = str(attr_value or "").strip()
+            if clean_name and clean_value:
+                cleaned[clean_name[:60]] = clean_value[:200]
+        if cleaned:
+            out["attributes"] = cleaned
+    return out
+
+
+def _search_row(row):
+    row = dict(row)
+    raw = row.get("filters")
+    if raw:
+        try:
+            row["filters"] = json.loads(raw)
+        except Exception:
+            row["filters"] = {}
+    else:
+        row["filters"] = {}
+    return row
+
+
 @router.get("")
 def list_searches(user: dict = Depends(require_user)):
     searches = db.all(
         "SELECT * FROM saved_searches WHERE user_id = ? ORDER BY created_at DESC",
         (user["id"],),
     )
-    return {"searches": searches}
+    return {"searches": [_search_row(search) for search in searches]}
 
 
 @router.post("")
@@ -36,6 +87,7 @@ def create_search(body: dict = Body(...), user: dict = Depends(require_user)):
     category = body.get("category", "")
     min_price = body.get("min_price")
     max_price = body.get("max_price")
+    filters = _clean_filters(body.get("filters"))
 
     clean_name = str(name or query or "Untitled search").strip()
     if not clean_name:
@@ -47,8 +99,8 @@ def create_search(body: dict = Body(...), user: dict = Depends(require_user)):
 
     search_id = str(uuid.uuid4())
     db.run(
-        "INSERT INTO saved_searches (id, user_id, name, query, category, min_price, max_price) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        "INSERT INTO saved_searches (id, user_id, name, query, category, min_price, max_price, filters) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             search_id,
             user["id"],
@@ -57,9 +109,11 @@ def create_search(body: dict = Body(...), user: dict = Depends(require_user)):
             str(category)[:50],
             _clean_price(min_price),
             _clean_price(max_price),
+            json.dumps(filters) if filters else None,
         ),
     )
-    return {"search": db.get("SELECT * FROM saved_searches WHERE id = ?", (search_id,))}
+    row = db.get("SELECT * FROM saved_searches WHERE id = ?", (search_id,))
+    return {"search": _search_row(row)}
 
 
 @router.put("/{search_id}")
@@ -75,19 +129,22 @@ def update_search(search_id: str, body: dict = Body(...), user: dict = Depends(r
     category = body.get("category", "")
     min_price = body.get("min_price")
     max_price = body.get("max_price")
+    filters = _clean_filters(body.get("filters"))
 
     db.run(
-        "UPDATE saved_searches SET name = ?, query = ?, category = ?, min_price = ?, max_price = ? WHERE id = ?",
+        "UPDATE saved_searches SET name = ?, query = ?, category = ?, min_price = ?, max_price = ?, filters = ? WHERE id = ?",
         (
             str(name or query or "Untitled search").strip()[:120],
             str(query)[:120],
             str(category)[:50],
             _clean_price(min_price),
             _clean_price(max_price),
+            json.dumps(filters) if filters else None,
             existing["id"],
         ),
     )
-    return {"search": db.get("SELECT * FROM saved_searches WHERE id = ?", (existing["id"],))}
+    row = db.get("SELECT * FROM saved_searches WHERE id = ?", (existing["id"],))
+    return {"search": _search_row(row)}
 
 
 @router.delete("/{search_id}")

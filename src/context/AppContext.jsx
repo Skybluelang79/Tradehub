@@ -3,6 +3,7 @@ import { mockTransactions, mockReviews, mockPaymentMethods, currentUser } from '
 import { storage, geolocation } from '../services/storage';
 import { generateId } from '../utils/helpers';
 import { api } from '../services/client';
+import { buildItemSearchParams } from '../services/itemSearch';
 import { useAuth } from './AuthContext';
 
 const AppContext = createContext();
@@ -35,6 +36,7 @@ function normalizeItem(item) {
   return {
     ...item,
     sellerId: item.seller_id,
+    sellerRating: item.seller_rating || 0,
     location: {
       lat: item.location_lat || 40.7128,
       lng: item.location_lng || -74.006,
@@ -190,6 +192,7 @@ export function AppProvider({ children }) {
 // Seeding from a cached fixture made deleted listings reappear forever: an
 // empty API response looked like "no update" instead of "nothing for sale".
 const [items, setItems] = useState([]);
+  const [searchResults, setSearchResults] = useState(null);
   // Conversations, messages and users are seeded empty rather than from the
   // mock fixtures. The fixtures describe a single demo account, so seeding them
   // made every real conversation render under the same placeholder name.
@@ -219,6 +222,10 @@ const [items, setItems] = useState([]);
     minPrice: '',
     maxPrice: '',
     condition: 'all',
+    brand: '',
+    size: '',
+    minRating: '',
+    attributes: {},
   });
 
   // Listings are no longer cached: the API is the only source, so nothing reads
@@ -357,6 +364,24 @@ const [items, setItems] = useState([]);
     fetchItems();
   }, []);
 
+  useEffect(() => {
+    const params = buildItemSearchParams(filters, userLocation);
+    if (!params) {
+      queueMicrotask(() => setSearchResults(null));
+      return undefined;
+    }
+
+    let cancelled = false;
+    api.items.list(params)
+      .then((data) => {
+        if (!cancelled) setSearchResults((data.items || []).map(normalizeItem));
+      })
+      .catch(() => {
+        if (!cancelled) setSearchResults(null);
+      });
+    return () => { cancelled = true; };
+  }, [filters, userLocation, items]);
+
   // The conversation list is per-account server state, so it has to come from
   // the API rather than a fixture. Names for the other party arrive alongside
   // each row, so the same response also seeds the user directory that
@@ -457,7 +482,7 @@ const [items, setItems] = useState([]);
     return geolocation.calculateDistance(userLocation.lat, userLocation.lng, lat, lng);
   }, [userLocation]);
 
-  const filteredItems = items.filter((item) => {
+  const filteredItems = (searchResults ?? items).filter((item) => {
     if (item.status !== 'active') return false;
     
     const itemLat = item.location?.lat;
@@ -473,11 +498,12 @@ const [items, setItems] = useState([]);
 
     if (filters.maxPrice && Number(item.price) > Number(filters.maxPrice)) return false;
 
+    if (filters.minRating && Number(item.sellerRating || 0) < Number(filters.minRating)) return false;
+
     if (filters.search) {
-      const search = filters.search.toLowerCase();
-      if (!item.title.toLowerCase().includes(search) && !item.description.toLowerCase().includes(search)) {
-        return false;
-      }
+      const terms = filters.search.toLowerCase().split(/\s+/).filter(Boolean);
+      const haystack = `${item.title} ${item.description || ''}`.toLowerCase();
+      if (!terms.every((term) => haystack.includes(term))) return false;
     }
 
     return true;
@@ -493,6 +519,8 @@ const [items, setItems] = useState([]);
         return b.price - a.price;
       case 'popular':
         return (b.views || 0) - (a.views || 0) || (b.favorites || 0) - (a.favorites || 0);
+      case 'rating':
+        return Number(b.sellerRating || 0) - Number(a.sellerRating || 0);
       case 'nearest': {
         const aLat = a.location?.lat;
         const aLng = a.location?.lng;

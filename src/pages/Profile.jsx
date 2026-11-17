@@ -2047,10 +2047,16 @@ export default function Profile() {
               </div>
             ) : (
               savedSearches.map((s) => {
+                const savedFilters = s.filters || {};
                 const summary = [
                   s.query && `"${s.query}"`,
                   s.category || null,
                   s.min_price && s.max_price ? `$${s.min_price}–$${s.max_price}` : s.min_price ? `From $${s.min_price}` : s.max_price ? `Up to $${s.max_price}` : null,
+                  savedFilters.condition || null,
+                  savedFilters.brand && `Brand: ${savedFilters.brand}`,
+                  savedFilters.size && `Size: ${savedFilters.size}`,
+                  savedFilters.min_rating && `${savedFilters.min_rating}★+`,
+                  ...Object.entries(savedFilters.attributes || {}).map(([name, value]) => `${name}: ${value}`),
                 ].filter(Boolean).join(' · ');
                 return (
                   <div key={s.id} className="setting-item">
