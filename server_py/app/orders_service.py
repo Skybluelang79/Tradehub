@@ -88,6 +88,11 @@ def create_order(
     tax_cents=0,
     shipping_address_id=None,
     billing_address_id=None,
+    fulfillment_method="shipping",
+    shipping_breakdown=None,
+    tax_breakdown=None,
+    tax_label="",
+    tax_rate=0,
 ):
     """Create an order and its line items from settled or pending checkout lines."""
     if not lines:
@@ -117,15 +122,18 @@ def create_order(
           id, buyer_id, currency, subtotal_cents, shipping_cents, tax_cents,
           discount_cents, total_cents, status, shipping_address_id,
           billing_address_id, shipping_address_json, billing_address_json,
-          payment_reference, payment_method
+          payment_reference, payment_method, fulfillment_method,
+          shipping_breakdown_json, tax_breakdown_json, tax_label, tax_rate
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             order_id, buyer_id, currency, subtotal_cents, int(shipping_cents or 0),
             int(tax_cents or 0), discount_cents, total_cents, status, address_id,
             billing_id, json.dumps(shipping_snapshot), json.dumps(billing_snapshot),
-            payment_reference, payment_method or "",
+            payment_reference, payment_method or "", fulfillment_method or "shipping",
+            json.dumps(shipping_breakdown or []), json.dumps(tax_breakdown or []),
+            tax_label or "", float(tax_rate or 0),
         ),
     )
 
@@ -139,9 +147,9 @@ def create_order(
             """
             INSERT INTO order_items (
               id, order_id, item_id, seller_id, quantity, unit_price_cents,
-              currency, item_title, item_image, status
+              currency, item_title, item_image, variant_option_id, variant_label, status
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(uuid.uuid4()), order_id, item["id"], item["seller_id"], quantity,
@@ -149,6 +157,8 @@ def create_order(
                 line.get("currency") or currency,
                 item.get("title") or "",
                 _item_image(item["id"]),
+                line.get("variant_option_id") or "",
+                line.get("variant_label") or "",
                 item_status,
             ),
         )

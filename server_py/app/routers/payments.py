@@ -4,7 +4,7 @@ import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from .. import config, db, orders_service
+from .. import commerce, config, db, orders_service
 from ..currencies import convert, DEFAULT_CURRENCY, is_paystack_currency, is_valid_currency
 from ..datetime_util import parse_iso, utc_now
 from ..deps import require_admin, require_user
@@ -89,10 +89,56 @@ def get_fee_rate_for_seller(seller_id):
     return platform_rate
 
 
-def reserve_item(item_id):
+def reserve_item(item_id, variant_option_id=None, quantity=1):
     if not item_id:
         return
     db.run("UPDATE items SET status = 'sold' WHERE id = ? AND status = 'active'", (item_id,))
+    if variant_option_id:
+        db.run(
+            "UPDATE item_variant_options SET stock = MAX(0, stock - ?) WHERE id = ? AND item_id = ?",
+            (max(1, int(quantity or 1)), variant_option_id, item_id),
+        )
+
+
+def restore_variant_stock(item_id, variant_option_id=None, quantity=1):
+    if not item_id or not variant_option_id:
+        return
+    db.run(
+        "UPDATE item_variant_options SET stock = stock + ? WHERE id = ? AND item_id = ?",
+        (max(1, int(quantity or 1)), variant_option_id, item_id),
+    )
+
+
+def get_variant_option(item_id, option_id):
+    if not option_id:
+        return None
+    option = db.get(
+        "SELECT * FROM item_variant_options WHERE id = ? AND item_id = ?",
+        (option_id, item_id),
+    )
+    if not option:
+        raise HTTPException(status_code=400, detail={"error": "Selected variant is not available"})
+    return option
+
+
+def variant_label(option):
+    if not option:
+        return ""
+    return f"{option['variant_name']}: {option['value']}"
+
+
+def unit_price_cents(item, option=None):
+    if option and option.get("price_cents") is not None:
+        return int(option["price_cents"])
+    return round((item.get("sale_price") or item["price"]) * 100)
+
+
+def check_variant_stock(option, quantity):
+    if option and option.get("stock") is not None and int(option["stock"]) < quantity:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": f"Only {int(option['stock'])} left for {variant_label(option)}"},
+        )
 
 
 def get_wallet(user_id):
@@ -105,7 +151,8 @@ def get_wallet(user_id):
 
 def insert_transaction(*, txn_id, item, amount, currency, buyer_id, seller_id, method, status,
                        paystack_ref, payment_method_id, promo_code, discount_amount, original_amount,
-                       credit_cents=0, provider_ref, bank=None):
+                       credit_cents=0, provider_ref, bank=None, variant_option_id="",
+                       variant_label_value="", quantity=1):
     image = db.get(
         "SELECT url FROM item_images WHERE item_id = ? ORDER BY sort_order LIMIT 1", (item["id"],)
     )
@@ -116,8 +163,9 @@ def insert_transaction(*, txn_id, item, amount, currency, buyer_id, seller_id, m
         INSERT INTO transactions (id, item_id, item_title, item_image, amount, currency, buyer_id,
             seller_id, payment_method_id, paystack_reference, method, provider_ref, status,
             promo_code, discount_amount, original_amount, credit_cents,
-            bank_account_number, bank_account_name, bank_name, bank_expires_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            bank_account_number, bank_account_name, bank_name, bank_expires_at,
+            variant_option_id, variant_label, quantity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             txn_id, item["id"], item["title"], image, amount, currency, buyer_id, seller_id,
@@ -127,10 +175,11 @@ def insert_transaction(*, txn_id, item, amount, currency, buyer_id, seller_id, m
             credit_cents or 0,
             bank.get("accountNumber") or None, bank.get("accountName") or None,
             bank.get("bankName") or None, bank.get("expiresAt") or None,
+            variant_option_id or "", variant_label_value or "", max(1, int(quantity or 1)),
         ),
     )
     if status == "pending":
-        reserve_item(item["id"])
+        reserve_item(item["id"], variant_option_id, quantity)
     log_payment_event(
         txn_id, buyer_id, "transaction_created",
         f"Transaction created with {method} ({status})", "info",
@@ -271,13 +320,21 @@ def save_authorization(user_id, auth):
 def get_cart(user_id):
     return db.all(
         """
-        SELECT c.item_id, c.quantity, c.created_at,
+        SELECT c.item_id, c.quantity, c.created_at, c.variant_option_id,
           i.title, i.price, i.sale_price, i.currency, i.category, i.condition, i.status,
-          i.seller_id, i.quantity AS stock,
+          i.seller_id, i.quantity AS stock, i.shipping_fee_cents,
+          i.free_shipping_threshold_cents, i.pickup_available, i.processing_days,
+          o.variant_name, o.value AS variant_value, o.sku AS variant_sku,
+          o.stock AS variant_stock, o.price_cents AS variant_price_cents,
+          CASE WHEN o.price_cents IS NOT NULL THEN o.price_cents / 100.0
+            ELSE COALESCE(i.sale_price, i.price) END AS unit_price,
+          CASE WHEN o.id IS NOT NULL THEN o.price_cents
+            ELSE ROUND(COALESCE(i.sale_price, i.price) * 100) END AS unit_price_cents,
           (SELECT url FROM item_images WHERE item_id = i.id ORDER BY sort_order LIMIT 1) AS image,
           u.name AS seller_name, u.avatar AS seller_avatar
         FROM carts c
         JOIN items i ON i.id = c.item_id
+        LEFT JOIN item_variant_options o ON o.id = c.variant_option_id AND o.item_id = i.id
         LEFT JOIN users u ON u.id = i.seller_id
         WHERE c.user_id = ?
         ORDER BY c.created_at DESC
@@ -288,7 +345,9 @@ def get_cart(user_id):
 
 def cart_subtotal(items):
     return sum(
-        round((it["sale_price"] or it["price"]) * it["quantity"] * 100) for it in items
+        int(it.get("unit_price_cents") or round((it["sale_price"] or it["price"]) * 100))
+        * it["quantity"]
+        for it in items
     )
 
 
@@ -310,12 +369,17 @@ def insert_cart_line(line, index, txn_ids, method, status, paystack_ref, payment
         original_amount=line["base_amount"],
         credit_cents=line["line_credit_cents"],
         provider_ref=None,
+        variant_option_id=line.get("variant_option_id") or "",
+        variant_label_value=line.get("variant_label") or "",
+        quantity=line.get("quantity") or 1,
     )
 
 
 def attach_checkout_order(*, buyer_id, lines, txn_ids, method, status,
                           currency, total_cents, payment_reference,
-                          shipping_address_id=None):
+                          shipping_address_id=None, shipping_cents=0, tax_cents=0,
+                          fulfillment_method="shipping", shipping_breakdown=None,
+                          tax_breakdown=None, tax_label="", tax_rate=0):
     order_id = orders_service.create_order(
         buyer_id=buyer_id,
         currency=currency,
@@ -323,6 +387,13 @@ def attach_checkout_order(*, buyer_id, lines, txn_ids, method, status,
         status=status,
         payment_reference=payment_reference,
         payment_method=method,
+        shipping_cents=shipping_cents,
+        tax_cents=tax_cents,
+        fulfillment_method=fulfillment_method,
+        shipping_breakdown=shipping_breakdown,
+        tax_breakdown=tax_breakdown,
+        tax_label=tax_label,
+        tax_rate=tax_rate,
         shipping_address_id=shipping_address_id,
     )
     for txn_id in txn_ids:
@@ -333,10 +404,12 @@ def attach_checkout_order(*, buyer_id, lines, txn_ids, method, status,
 def direct_order_line(checkout):
     return {
         "item": checkout["item"],
-        "quantity": 1,
+        "quantity": checkout.get("quantity") or 1,
+        "variant_option_id": checkout.get("variant_option_id") or "",
+        "variant_label": checkout.get("variant_label") or "",
         "line_subtotal_cents": round(checkout["base_amount"] * 100),
         "line_discount_cents": round((checkout.get("promo_discount") or 0) * 100),
-        "line_net_cents": checkout["amount_cents"],
+        "line_net_cents": checkout["merchandise_cents"],
     }
 
 
@@ -379,7 +452,19 @@ def build_checkout(body, user_id):
         else DEFAULT_CURRENCY
     )
 
-    base_amount_item = (offer["amount_cents"] / 100) if offer else (item.get("sale_price") or item["price"])
+    variant = get_variant_option(item["id"], body.get("variantOptionId"))
+    quantity = max(1, int(body.get("quantity") or 1))
+    check_variant_stock(variant, quantity)
+    fulfillment_method, fulfillment_error = commerce.validate_fulfillment(
+        [item], body.get("fulfillmentMethod")
+    )
+    if fulfillment_error:
+        raise HTTPException(status_code=400, detail={"error": fulfillment_error})
+
+    base_amount_item = (
+        offer["amount_cents"] / 100
+        if offer else unit_price_cents(item, variant) / 100 * quantity
+    )
     base_amount = convert(base_amount_item, item_currency, settlement_currency)
 
     promo_discount = 0.0
@@ -388,29 +473,50 @@ def build_checkout(body, user_id):
         applied = validate_and_apply_promo(promo_code, base_amount)
         promo_discount = applied["discount"]
         promo_code_used = str(promo_code).strip().upper()
-    amount = round((base_amount - promo_discount) * 100) / 100
-    amount_cents = round(amount * 100)
+    merchandise_cents = round((base_amount - promo_discount) * 100)
+    amount = merchandise_cents / 100
     promo_info = {"code": promo_code_used, "discount": promo_discount} if promo_code_used else None
+
+    line = {
+        "item": item,
+        "quantity": quantity,
+        "line_subtotal_cents": round(base_amount * 100),
+        "line_discount_cents": round(promo_discount * 100),
+        "line_net_cents": merchandise_cents,
+    }
+    shipping_cents, shipping_breakdown = commerce.calculate_shipping([line], fulfillment_method)
+    tax_cents, tax_breakdown, tax_config = commerce.calculate_tax(merchandise_cents)
+    total_cents = merchandise_cents + shipping_cents + tax_cents
 
     credit_cents = 0
     gift_card = None
     if wants_credit:
-        calc = calculate_credit(user_id, gift_card_code, amount_cents)
+        calc = calculate_credit(user_id, gift_card_code, merchandise_cents)
         credit_cents = calc["credit_cents"]
         gift_card = calc["gift_card"]
 
-    if raw_method in ("credit", "gift_card") and credit_cents < amount_cents:
+    if raw_method in ("credit", "gift_card") and credit_cents < total_cents:
         raise HTTPException(
             status_code=402,
-            detail={"error": "Insufficient store credit", "creditCents": credit_cents, "amountCents": amount_cents},
+            detail={"error": "Insufficient store credit", "creditCents": credit_cents, "amountCents": total_cents},
         )
 
-    charge_cents = amount_cents - credit_cents
+    charge_cents = total_cents - credit_cents
     return {
-        "item": item, "amount": amount, "amount_cents": amount_cents, "currency": settlement_currency,
+        "item": item, "amount": amount, "amount_cents": total_cents,
+        "merchandise_cents": merchandise_cents, "shipping_cents": shipping_cents,
+        "tax_cents": tax_cents, "total_cents": total_cents, "currency": settlement_currency,
         "base_amount": base_amount, "item_currency": item_currency, "promo_discount": promo_discount,
         "promo_code_used": promo_code_used, "promo_info": promo_info, "credit_cents": credit_cents,
         "gift_card": gift_card, "charge_cents": charge_cents, "offer_id": offer["id"] if offer else None,
+        "variant_option_id": variant["id"] if variant else None,
+        "variant_label": variant_label(variant),
+        "quantity": quantity,
+        "fulfillment_method": fulfillment_method,
+        "shipping_breakdown": shipping_breakdown,
+        "tax_breakdown": tax_breakdown,
+        "tax_label": tax_config["label"],
+        "tax_rate": tax_config["percent"],
     }
 
 
@@ -654,12 +760,18 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 paystack_ref=None, payment_method_id=None, promo_code=b["promo_code_used"],
                 discount_amount=b["promo_discount"], original_amount=b["base_amount"],
                 credit_cents=b["credit_cents"], provider_ref=None,
+                variant_option_id=b["variant_option_id"] or "", variant_label_value=b["variant_label"],
+                quantity=b["quantity"],
             )
             order_id = attach_checkout_order(
                 buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
                 method="credit", status="processing", currency=b["currency"],
                 total_cents=b["amount_cents"], payment_reference=txn_id,
                 shipping_address_id=body.get("shippingAddressId"),
+                shipping_cents=b["shipping_cents"], tax_cents=b["tax_cents"],
+                fulfillment_method=b["fulfillment_method"],
+                shipping_breakdown=b["shipping_breakdown"], tax_breakdown=b["tax_breakdown"],
+                tax_label=b["tax_label"], tax_rate=b["tax_rate"],
             )
             return {
                 "transactionId": txn_id, "orderId": order_id, "status": "pending", "method": "credit", "paid": True,
@@ -700,12 +812,18 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 paystack_ref=txn_id, payment_method_id=saved_method["id"], promo_code=b["promo_code_used"],
                 discount_amount=b["promo_discount"], original_amount=b["base_amount"],
                 credit_cents=b["credit_cents"], provider_ref=None,
+                variant_option_id=b["variant_option_id"] or "", variant_label_value=b["variant_label"],
+                quantity=b["quantity"],
             )
             order_id = attach_checkout_order(
                 buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
                 method="saved_card", status="processing", currency=b["currency"],
                 total_cents=b["amount_cents"], payment_reference=txn_id,
                 shipping_address_id=body.get("shippingAddressId"),
+                shipping_cents=b["shipping_cents"], tax_cents=b["tax_cents"],
+                fulfillment_method=b["fulfillment_method"],
+                shipping_breakdown=b["shipping_breakdown"], tax_breakdown=b["tax_breakdown"],
+                tax_label=b["tax_label"], tax_rate=b["tax_rate"],
             )
             notify(user["id"], "payment", "Payment Received",
                    f"Payment of {b['amount']} {b['currency']} for \"{b['item']['title']}\" was received and is held in escrow.")
@@ -728,12 +846,18 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 paystack_ref=f"demo_{txn_id}", payment_method_id=None, promo_code=b["promo_code_used"],
                 discount_amount=b["promo_discount"], original_amount=b["base_amount"],
                 credit_cents=b["credit_cents"], provider_ref=None,
+                variant_option_id=b["variant_option_id"] or "", variant_label_value=b["variant_label"],
+                quantity=b["quantity"],
             )
             order_id = attach_checkout_order(
                 buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
                 method=method, status="processing", currency=b["currency"],
                 total_cents=b["amount_cents"], payment_reference=txn_id,
                 shipping_address_id=body.get("shippingAddressId"),
+                shipping_cents=b["shipping_cents"], tax_cents=b["tax_cents"],
+                fulfillment_method=b["fulfillment_method"],
+                shipping_breakdown=b["shipping_breakdown"], tax_breakdown=b["tax_breakdown"],
+                tax_label=b["tax_label"], tax_rate=b["tax_rate"],
             )
             return {
                 "demo": True, "transactionId": txn_id, "orderId": order_id, "status": "pending", "paid": True,
@@ -763,6 +887,8 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 paystack_ref=txn_id, payment_method_id=None, promo_code=b["promo_code_used"],
                 discount_amount=b["promo_discount"], original_amount=b["base_amount"],
                 credit_cents=b["credit_cents"], provider_ref=None,
+                variant_option_id=b["variant_option_id"] or "", variant_label_value=b["variant_label"],
+                quantity=b["quantity"],
             )
             attach_bank_details(txn_id, charge)
             order_id = attach_checkout_order(
@@ -770,6 +896,10 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
                 method=method, status="awaiting_payment", currency=b["currency"],
                 total_cents=b["amount_cents"], payment_reference=txn_id,
                 shipping_address_id=body.get("shippingAddressId"),
+                shipping_cents=b["shipping_cents"], tax_cents=b["tax_cents"],
+                fulfillment_method=b["fulfillment_method"],
+                shipping_breakdown=b["shipping_breakdown"], tax_breakdown=b["tax_breakdown"],
+                tax_label=b["tax_label"], tax_rate=b["tax_rate"],
             )
             txn = db.get("SELECT * FROM transactions WHERE id = ?", (txn_id,))
             return {
@@ -803,12 +933,18 @@ def create_intent(user: dict = Depends(require_user), body: dict = Body(...)):
             paystack_ref=txn_id, payment_method_id=None, promo_code=b["promo_code_used"],
             discount_amount=b["promo_discount"], original_amount=b["base_amount"],
             credit_cents=b["credit_cents"], provider_ref=None,
+            variant_option_id=b["variant_option_id"] or "", variant_label_value=b["variant_label"],
+            quantity=b["quantity"],
         )
         order_id = attach_checkout_order(
             buyer_id=user["id"], lines=[direct_order_line(b)], txn_ids=[txn_id],
             method=method, status="awaiting_payment", currency=b["currency"],
             total_cents=b["amount_cents"], payment_reference=txn_id,
             shipping_address_id=body.get("shippingAddressId"),
+            shipping_cents=b["shipping_cents"], tax_cents=b["tax_cents"],
+            fulfillment_method=b["fulfillment_method"],
+            shipping_breakdown=b["shipping_breakdown"], tax_breakdown=b["tax_breakdown"],
+            tax_label=b["tax_label"], tax_rate=b["tax_rate"],
         )
         return {
             "transactionId": txn_id, "orderId": order_id, "reference": txn_id,
@@ -898,6 +1034,11 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
         cart_items = get_cart(user["id"])
         if not cart_items:
             raise HTTPException(status_code=400, detail={"error": "Your cart is empty"})
+        fulfillment_method, fulfillment_error = commerce.validate_fulfillment(
+            cart_items, body.get("fulfillmentMethod")
+        )
+        if fulfillment_error:
+            raise HTTPException(status_code=400, detail={"error": fulfillment_error})
 
         raw_lines = []
         for line in cart_items:
@@ -908,7 +1049,10 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
                 raise HTTPException(status_code=400, detail={"error": "Cannot buy your own item"})
             if item["status"] == "sold":
                 raise HTTPException(status_code=400, detail={"error": f"\"{item['title']}\" is already sold"})
-            if item["quantity"] is not None and item["quantity"] > 0 and line["quantity"] > item["quantity"]:
+            option = get_variant_option(item["id"], line.get("variant_option_id"))
+            check_variant_stock(option, line["quantity"])
+            if option is None and item["quantity"] is not None and item["quantity"] > 0 \
+                    and line["quantity"] > item["quantity"]:
                 raise HTTPException(
                     status_code=400,
                     detail={"error": f"Only {item['quantity']} of \"{item['title']}\" available"},
@@ -916,8 +1060,10 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
             raw_lines.append({
                 "item": item,
                 "quantity": line["quantity"],
+                "variant_option_id": option["id"] if option else "",
+                "variant_label": variant_label(option),
                 "item_currency": item["currency"] if is_valid_currency(item.get("currency")) else DEFAULT_CURRENCY,
-                "base_amount_item": (item.get("sale_price") or item["price"]) * line["quantity"],
+                "base_amount_item": unit_price_cents(item, option) / 100 * line["quantity"],
             })
 
         wants_credit = method in ("credit", "gift_card") or bool(gift_card_code)
@@ -928,6 +1074,7 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
 
         lines = [
             {"item": l["item"], "quantity": l["quantity"],
+             "variant_option_id": l["variant_option_id"], "variant_label": l["variant_label"],
              "base_amount": convert(l["base_amount_item"], l["item_currency"], currency)}
             for l in raw_lines
         ]
@@ -953,16 +1100,22 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
             allocated.append({**l, "line_subtotal_cents": line_subtotal_cents,
                               "line_discount_cents": line_discount_cents, "line_net_cents": line_net_cents})
 
-        total_cents = sum(l["line_net_cents"] for l in allocated)
+        merchandise_cents = sum(l["line_net_cents"] for l in allocated)
         if promo_discount > 0:
             expected = round((subtotal - promo_discount) * 100)
-            drift = expected - total_cents
+            drift = expected - merchandise_cents
             if drift != 0:
                 allocated[-1]["line_net_cents"] += drift
                 allocated[-1]["line_discount_cents"] -= drift
-                total_cents = expected
+                merchandise_cents = expected
 
-        calc = calculate_credit(user["id"], gift_card_code, total_cents)
+        shipping_cents, shipping_breakdown = commerce.calculate_shipping(
+            allocated, fulfillment_method
+        )
+        tax_cents, tax_breakdown, tax_config = commerce.calculate_tax(merchandise_cents)
+        total_cents = merchandise_cents + shipping_cents + tax_cents
+
+        calc = calculate_credit(user["id"], gift_card_code, merchandise_cents)
         credit_cents = calc["credit_cents"]
         gift_card = calc["gift_card"]
         remaining_credit = credit_cents
@@ -970,10 +1123,25 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
             use = min(remaining_credit, l["line_net_cents"])
             l["line_credit_cents"] = use
             remaining_credit -= use
+        if method in ("credit", "gift_card") and credit_cents < total_cents:
+            raise HTTPException(
+                status_code=402,
+                detail={"error": "Insufficient store credit",
+                        "creditCents": credit_cents, "amountCents": total_cents},
+            )
         charge_cents = total_cents - credit_cents
 
         txn_ids = [str(uuid.uuid4()) for _ in allocated]
         paystack_ref = str(uuid.uuid4()) if charge_cents > 0 else None
+        order_args = {
+            "shipping_cents": shipping_cents,
+            "tax_cents": tax_cents,
+            "fulfillment_method": fulfillment_method,
+            "shipping_breakdown": shipping_breakdown,
+            "tax_breakdown": tax_breakdown,
+            "tax_label": tax_config["label"],
+            "tax_rate": tax_config["percent"],
+        }
 
         if charge_cents == 0:
             apply_credit(user["id"], gift_card, credit_cents)
@@ -983,7 +1151,7 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
                 buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
                 method="credit", status="processing", currency=currency,
                 total_cents=total_cents, payment_reference=txn_ids[0],
-                shipping_address_id=shipping_address_id,
+                shipping_address_id=shipping_address_id, **order_args,
             )
             db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
             return {"paid": True, "status": "pending", "method": "credit", "transactionIds": txn_ids,
@@ -1022,7 +1190,7 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
                 buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
                 method="saved_card", status="processing", currency=currency,
                 total_cents=total_cents, payment_reference=paystack_ref or txn_ids[0],
-                shipping_address_id=shipping_address_id,
+                shipping_address_id=shipping_address_id, **order_args,
             )
             for l in allocated:
                 notify(user["id"], "payment", "Payment Received",
@@ -1047,7 +1215,7 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
                 buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
                 method=method, status="processing", currency=currency,
                 total_cents=total_cents, payment_reference=txn_ids[0],
-                shipping_address_id=shipping_address_id,
+                shipping_address_id=shipping_address_id, **order_args,
             )
             db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
             return {"demo": True, "paid": True, "status": "pending", "transactionIds": txn_ids,
@@ -1077,7 +1245,7 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
                 buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
                 method=method, status="awaiting_payment", currency=currency,
                 total_cents=total_cents, payment_reference=paystack_ref,
-                shipping_address_id=shipping_address_id,
+                shipping_address_id=shipping_address_id, **order_args,
             )
             db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
             txn = db.get("SELECT * FROM transactions WHERE id = ?", (txn_ids[0],))
@@ -1109,7 +1277,7 @@ def cart_checkout(user: dict = Depends(require_user), body: dict = Body(...)):
             buyer_id=user["id"], lines=allocated, txn_ids=txn_ids,
             method=method, status="awaiting_payment", currency=currency,
             total_cents=total_cents, payment_reference=paystack_ref,
-            shipping_address_id=shipping_address_id,
+            shipping_address_id=shipping_address_id, **order_args,
         )
         db.run("DELETE FROM carts WHERE user_id = ?", (user["id"],))
         return {

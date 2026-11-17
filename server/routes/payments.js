@@ -18,6 +18,8 @@ import {
   isPaystackCurrency,
 } from '../src/paystack.js';
 import { getPlan, getEffectivePlan } from '../../shared/plans.js';
+import * as commerce from '../commerce.js';
+import * as ordersService from '../ordersService.js';
 
 // How each checkout option is presented by Paystack. The dedicated
 // `bank_transfer` option is handled separately because it uses the Charge API
@@ -121,25 +123,118 @@ function getWallet(userId) {
 // the item leaves the marketplace, so a second buyer can't check out the same
 // listing while the first payment is still held. `refundTxn` re-activates it
 // and `finalizeCompleted` marks it sold for good.
-export function reserveItem(itemId) {
+export function reserveItem(itemId, variantOptionId = null, quantity = 1) {
   if (!itemId) return;
   db.prepare("UPDATE items SET status = 'sold' WHERE id = ? AND status = 'active'").run(itemId);
+  if (variantOptionId) {
+    db.prepare(`
+      UPDATE item_variant_options SET stock = MAX(0, stock - ?) WHERE id = ? AND item_id = ?
+    `).run(Math.max(1, Number(quantity) || 1), variantOptionId, itemId);
+  }
 }
 
-function insertTransaction({ txnId, item, amount, currency, buyerId, sellerId, method, status, paystackRef, paymentMethodId, promoCode, discountAmount, originalAmount, creditCents = 0, providerRef, bank }) {
+export function restoreVariantStock(itemId, variantOptionId, quantity = 1) {
+  if (!itemId || !variantOptionId) return;
+  db.prepare(`
+    UPDATE item_variant_options SET stock = stock + ? WHERE id = ? AND item_id = ?
+  `).run(Math.max(1, Number(quantity) || 1), variantOptionId, itemId);
+}
+
+export function getVariantOption(itemId, optionId) {
+  if (!optionId) return null;
+  const option = db.prepare(
+    'SELECT * FROM item_variant_options WHERE id = ? AND item_id = ?'
+  ).get(optionId, itemId);
+  if (!option) {
+    const err = new Error('Selected variant is not available');
+    err.status = 400;
+    throw err;
+  }
+  return option;
+}
+
+export function variantLabel(option) {
+  return option ? `${option.variant_name}: ${option.value}` : '';
+}
+
+function unitPriceCents(item, option = null) {
+  if (option?.price_cents != null) return Number(option.price_cents);
+  return Math.round(Number(item.sale_price || item.price) * 100);
+}
+
+function checkVariantStock(option, quantity) {
+  if (option && option.stock != null && Number(option.stock) < quantity) {
+    const err = new Error(`Only ${Number(option.stock)} left for ${variantLabel(option)}`);
+    err.status = 400;
+    throw err;
+  }
+}
+
+function insertTransaction({
+  txnId, item, amount, currency, buyerId, sellerId, method, status,
+  paystackRef, paymentMethodId, promoCode, discountAmount, originalAmount,
+  creditCents = 0, providerRef, bank, orderId = null,
+  variantOptionId = '', variantLabelValue = '', quantity = 1,
+}) {
   const image = db.prepare('SELECT url FROM item_images WHERE item_id = ? ORDER BY sort_order LIMIT 1').get(item.id)?.url || '';
   db.prepare(`
-    INSERT INTO transactions (id, item_id, item_title, item_image, amount, currency, buyer_id, seller_id, payment_method_id, paystack_reference, method, provider_ref, status, promo_code, discount_amount, original_amount, credit_cents, bank_account_number, bank_account_name, bank_name, bank_expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO transactions (id, order_id, item_id, item_title, item_image, amount, currency, buyer_id, seller_id, payment_method_id, paystack_reference, method, provider_ref, status, promo_code, discount_amount, original_amount, credit_cents, bank_account_number, bank_account_name, bank_name, bank_expires_at, variant_option_id, variant_label, quantity)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    txnId, item.id, item.title, image, amount, currency, buyerId, sellerId,
+    txnId, orderId, item.id, item.title, image, amount, currency, buyerId, sellerId,
     paymentMethodId || null, paystackRef || null,
     method, providerRef || paystackRef || '', status,
     promoCode || '', discountAmount || 0, originalAmount || amount,
     creditCents || 0,
-    bank?.accountNumber || null, bank?.accountName || null, bank?.bankName || null, bank?.expiresAt || null
+    bank?.accountNumber || null, bank?.accountName || null, bank?.bankName || null, bank?.expiresAt || null,
+    variantOptionId || null, variantLabelValue || '', Math.max(1, Number(quantity) || 1)
   );
-  if (status === 'pending') reserveItem(item.id);
+  if (status === 'pending') reserveItem(item.id, variantOptionId, quantity);
+}
+
+function attachOrderToTransactions(orderId, txnIds) {
+  if (!orderId) return;
+  const update = db.prepare('UPDATE transactions SET order_id = ? WHERE id = ?');
+  for (const txnId of txnIds) update.run(orderId, txnId);
+}
+
+function orderLines(lines, currency) {
+  return lines.map((line) => ({
+    item: line.item,
+    quantity: line.quantity || 1,
+    variant_option_id: line.variant_option_id || line.variantOptionId || '',
+    variant_label: line.variant_label || line.variantLabel || '',
+    line_subtotal_cents: line.lineSubtotalCents ?? line.line_subtotal_cents ?? 0,
+    line_discount_cents: line.lineDiscountCents ?? line.line_discount_cents ?? 0,
+    line_net_cents: line.lineNetCents ?? line.line_net_cents ?? 0,
+    currency,
+  }));
+}
+
+function attachCheckoutOrder({
+  buyerId, lines, txnIds, method, status, currency, paymentReference,
+  shippingAddressId = null, shippingCents = 0, taxCents = 0,
+  fulfillmentMethod = 'shipping', shippingBreakdown = [], taxBreakdown = [],
+  taxLabel = '', taxRate = 0,
+}) {
+  const orderId = ordersService.createOrder({
+    buyerId,
+    lines: orderLines(lines, currency),
+    currency,
+    status,
+    paymentReference,
+    paymentMethod: method,
+    shippingAddressId,
+    shippingCents,
+    taxCents,
+    fulfillmentMethod,
+    shippingBreakdown,
+    taxBreakdown,
+    taxLabel,
+    taxRate,
+  });
+  attachOrderToTransactions(orderId, txnIds);
+  return orderId;
 }
 
 // Persist the temporary account Paystack minted for a Pay-with-Transfer charge
@@ -455,7 +550,7 @@ router.get('/options', authenticateToken, (req, res) => {
 // Builds the common parts of a checkout: item validation, promo discount and
 // store-credit allocation. Returns the items passed validation plus totals.
 function buildCheckout(req) {
-  const { itemId, offerId, giftCardCode, promoCode, useCredit } = req.body;
+  const { itemId, offerId, giftCardCode, promoCode, useCredit, variantOptionId } = req.body;
   const offer = offerId ? db.prepare('SELECT * FROM offers WHERE id = ?').get(offerId) : null;
   const actualItemId = offer ? offer.item_id : itemId;
   const item = db.prepare('SELECT * FROM items WHERE id = ?').get(actualItemId);
@@ -486,7 +581,19 @@ function buildCheckout(req) {
     ? itemCurrency
     : DEFAULT_CURRENCY;
 
-  const baseAmountItem = offer ? (offer.amount_cents / 100) : (item.sale_price || item.price);
+  const variant = getVariantOption(item.id, variantOptionId);
+  const quantity = offer ? 1 : Math.max(1, parseInt(req.body.quantity, 10) || 1);
+  checkVariantStock(variant, quantity);
+  const fulfillment = commerce.validateFulfillment([item], req.body.fulfillmentMethod);
+  if (fulfillment.error) {
+    const err = new Error(fulfillment.error);
+    err.status = 400;
+    throw err;
+  }
+
+  const baseAmountItem = offer
+    ? (offer.amount_cents / 100)
+    : (unitPriceCents(item, variant) / 100) * quantity;
   const baseAmount = convert(baseAmountItem, itemCurrency, settlementCurrency);
   let promoDiscount = 0;
   let promoCodeUsed = null;
@@ -495,40 +602,96 @@ function buildCheckout(req) {
     promoDiscount = applied.discount;
     promoCodeUsed = String(promoCode).trim().toUpperCase();
   }
-  const amount = Math.round((baseAmount - promoDiscount) * 100) / 100;
-  const amountCents = Math.round(amount * 100);
+  const merchandiseCents = Math.round((baseAmount - promoDiscount) * 100);
+  const amount = merchandiseCents / 100;
+
+  const line = {
+    item,
+    quantity,
+    variant_option_id: variant?.id || '',
+    variant_label: variantLabel(variant),
+    line_subtotal_cents: Math.round(baseAmount * 100),
+    line_discount_cents: Math.round(promoDiscount * 100),
+    line_net_cents: merchandiseCents,
+  };
+  const shipping = commerce.calculateShipping([line], fulfillment.method);
+  const tax = commerce.calculateTax(merchandiseCents);
+  const totalCents = merchandiseCents + shipping.shippingCents + tax.taxCents;
+
   const promoInfo = promoCodeUsed ? { code: promoCodeUsed, discount: promoDiscount } : null;
 
   let creditCents = 0;
   let giftCard = null;
   if (wantsCredit) {
-    const calc = calculateCredit(req.user.id, giftCardCode, amountCents);
+    const calc = calculateCredit(req.user.id, giftCardCode, merchandiseCents);
     creditCents = calc.creditCents;
     giftCard = calc.giftCard;
   }
-  if (req.body.method === 'credit' || req.body.method === 'gift_card') {
-    if (creditCents < amountCents) {
-      const err = new Error('Insufficient store credit');
-      err.status = 402;
-      err.details = { creditCents, amountCents };
-      throw err;
-    }
+  if ((req.body.method === 'credit' || req.body.method === 'gift_card') && creditCents < totalCents) {
+    const err = new Error('Insufficient store credit');
+    err.status = 402;
+    err.details = { creditCents, amountCents: totalCents };
+    throw err;
   }
-  const chargeCents = amountCents - creditCents;
-  return { item, amount, amountCents, currency: settlementCurrency, baseAmount, itemCurrency, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents, offerId: offer?.id || null };
+  const chargeCents = totalCents - creditCents;
+  return {
+    item,
+    amount,
+    amountCents: totalCents,
+    merchandiseCents,
+    shippingCents: shipping.shippingCents,
+    taxCents: tax.taxCents,
+    totalCents,
+    currency: settlementCurrency,
+    baseAmount,
+    itemCurrency,
+    promoDiscount,
+    promoCodeUsed,
+    promoInfo,
+    creditCents,
+    giftCard,
+    chargeCents,
+    offerId: offer?.id || null,
+    quantity,
+    variantOptionId: variant?.id || '',
+    variantLabel: variantLabel(variant),
+    fulfillmentMethod: fulfillment.method,
+    shippingBreakdown: shipping.breakdown,
+    taxBreakdown: tax.breakdown,
+    taxLabel: tax.settings.label,
+    taxRate: tax.settings.percent,
+    line,
+  };
 }
 
 router.post('/create-intent', authenticateToken, async (req, res) => {
   try {
-    const { item, amount, amountCents, currency, baseAmount, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents } = buildCheckout(req);
+    const b = buildCheckout(req);
+    const { item, amount, amountCents, currency, baseAmount, promoDiscount, promoCodeUsed, promoInfo, creditCents, giftCard, chargeCents } = b;
     const method = normalizePaymentMethod(req.body.method);
     const txnId = uuidv4();
+    const orderFields = {
+      buyerId: req.user.id,
+      lines: [b.line],
+      txnIds: [txnId],
+      currency,
+      paymentReference: txnId,
+      shippingAddressId: req.body.shippingAddressId,
+      shippingCents: b.shippingCents,
+      taxCents: b.taxCents,
+      fulfillmentMethod: b.fulfillmentMethod,
+      shippingBreakdown: b.shippingBreakdown,
+      taxBreakdown: b.taxBreakdown,
+      taxLabel: b.taxLabel,
+      taxRate: b.taxRate,
+    };
 
     // Fully covered by store credit / gift card — nothing to charge.
     if (chargeCents === 0) {
       applyCredit({ userId: req.user.id, giftCard, creditCents });
-      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: 'credit', status: 'pending', paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
-      return res.json({ transactionId: txnId, status: 'pending', method: 'credit', paid: true, amountCents, creditCents, promo: promoInfo, currency });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: 'credit', status: 'pending', paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents, variantOptionId: b.variantOptionId, variantLabelValue: b.variantLabel, quantity: b.quantity });
+      const orderId = attachCheckoutOrder({ ...orderFields, method: 'credit', status: 'processing' });
+      return res.json({ transactionId: txnId, orderId, status: 'pending', method: 'credit', paid: true, amountCents, creditCents, promo: promoInfo, currency });
     }
 
     // One-tap checkout with a saved card: charge the stored Paystack
@@ -553,9 +716,10 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
       // Charge succeeded — reserve the buyer's credit, record the order in
       // escrow (which marks the item sold), and confirm to the buyer.
       applyCredit({ userId: req.user.id, giftCard, creditCents });
-      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: 'saved_card', status: 'pending', paystackRef: txnId, paymentMethodId: savedMethod.id, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method: 'saved_card', status: 'pending', paystackRef: txnId, paymentMethodId: savedMethod.id, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents, variantOptionId: b.variantOptionId, variantLabelValue: b.variantLabel, quantity: b.quantity });
+      const orderId = attachCheckoutOrder({ ...orderFields, method: 'saved_card', status: 'processing' });
       notify(req.user.id, 'payment', 'Payment Received', `Payment of ${amount} ${currency} for "${item.title}" was received and is held in escrow.`);
-      return res.json({ paid: true, transactionId: txnId, status: 'pending', method: 'saved_card', amountCents, chargeCents, creditCents, promo: promoInfo, currency });
+      return res.json({ paid: true, transactionId: txnId, orderId, status: 'pending', method: 'saved_card', amountCents, chargeCents, creditCents, promo: promoInfo, currency });
     }
 
     // Card / bank via Paystack.
@@ -564,8 +728,9 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
         return res.status(503).json({ error: 'Payments are not configured. Set PAYSTACK_SECRET_KEY or enable DEMO_MODE.' });
       }
       applyCredit({ userId: req.user.id, giftCard, creditCents });
-      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'pending', paystackRef: `demo_${txnId}`, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
-      return res.json({ demo: true, transactionId: txnId, status: 'pending', paid: true, amountCents, creditCents, promo: promoInfo, currency });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'pending', paystackRef: `demo_${txnId}`, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents, variantOptionId: b.variantOptionId, variantLabelValue: b.variantLabel, quantity: b.quantity });
+      const orderId = attachCheckoutOrder({ ...orderFields, method, status: 'processing' });
+      return res.json({ demo: true, transactionId: txnId, orderId, status: 'pending', paid: true, amountCents, creditCents, promo: promoInfo, currency });
     }
 
     // Dedicated in-app bank transfer: mint a temporary account number instead
@@ -580,11 +745,13 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
         expiresAt: process.env.PAYSTACK_BANK_TRANSFER_EXPIRES_AT || null,
       });
       applyCredit({ userId: req.user.id, giftCard, creditCents });
-      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
+      insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents, variantOptionId: b.variantOptionId, variantLabelValue: b.variantLabel, quantity: b.quantity });
       attachBankDetails(txnId, charge);
+      const orderId = attachCheckoutOrder({ ...orderFields, method, status: 'awaiting_payment' });
       const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(txnId);
       return res.json({
         transactionId: txnId,
+        orderId,
         reference: txnId,
         status: 'awaiting_payment',
         method,
@@ -610,10 +777,12 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
 
     // Reserve the buyer's credit now; it is restored if the payment is abandoned.
     applyCredit({ userId: req.user.id, giftCard, creditCents });
-    insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents });
+    insertTransaction({ txnId, item, amount, currency, buyerId: req.user.id, sellerId: item.seller_id, method, status: 'awaiting_payment', paystackRef: txnId, paymentMethodId: null, promoCode: promoCodeUsed, discountAmount: promoDiscount, originalAmount: baseAmount, creditCents, variantOptionId: b.variantOptionId, variantLabelValue: b.variantLabel, quantity: b.quantity });
+    const orderId = attachCheckoutOrder({ ...orderFields, method, status: 'awaiting_payment' });
 
     res.json({
       transactionId: txnId,
+      orderId,
       reference: txnId,
       accessCode: initialized.access_code,
       authorizationUrl: initialized.authorization_url,
@@ -638,13 +807,21 @@ router.post('/create-intent', authenticateToken, async (req, res) => {
 
 function getCart(userId) {
   return db.prepare(`
-    SELECT c.item_id, c.quantity, c.created_at,
+    SELECT c.item_id, c.quantity, c.variant_option_id, c.created_at,
       i.title, i.price, i.sale_price, i.currency, i.category, i.condition, i.status,
-      i.seller_id, i.quantity AS stock,
+      i.seller_id, i.quantity AS stock, i.shipping_fee_cents,
+      i.free_shipping_threshold_cents, i.pickup_available, i.processing_days,
+      o.variant_name, o.value AS variant_value, o.sku AS variant_sku,
+      o.stock AS variant_stock, o.price_cents AS variant_price_cents,
+      CASE WHEN o.price_cents IS NOT NULL THEN o.price_cents / 100.0
+        ELSE COALESCE(i.sale_price, i.price) END AS unit_price,
+      CASE WHEN o.id IS NOT NULL THEN o.price_cents
+        ELSE ROUND(COALESCE(i.sale_price, i.price) * 100) END AS unit_price_cents,
       (SELECT url FROM item_images WHERE item_id = i.id ORDER BY sort_order LIMIT 1) AS image,
       u.name AS seller_name, u.avatar AS seller_avatar
     FROM carts c
     JOIN items i ON i.id = c.item_id
+    LEFT JOIN item_variant_options o ON o.id = c.variant_option_id AND o.item_id = i.id
     LEFT JOIN users u ON u.id = i.seller_id
     WHERE c.user_id = ?
     ORDER BY c.created_at DESC
@@ -652,7 +829,10 @@ function getCart(userId) {
 }
 
 function cartSubtotal(items) {
-  return items.reduce((sum, it) => sum + Math.round((it.sale_price || it.price) * it.quantity * 100), 0);
+  return items.reduce(
+    (sum, item) => sum + Number(item.unit_price_cents || Math.round((item.sale_price || item.price) * 100)) * item.quantity,
+    0,
+  );
 }
 
 function insertCartLine(line, index, txnIds, { method, status, paystackRef, paymentMethodId, promoCodeUsed, currency, buyerId }) {
@@ -671,6 +851,9 @@ function insertCartLine(line, index, txnIds, { method, status, paystackRef, paym
     discountAmount: line.lineDiscountCents / 100,
     originalAmount: line.baseAmount,
     creditCents: line.lineCreditCents,
+    variantOptionId: line.variant_option_id,
+    variantLabelValue: line.variant_label,
+    quantity: line.quantity,
   });
 }
 
@@ -686,7 +869,7 @@ router.get('/cart', authenticateToken, (req, res) => {
 
 router.post('/cart', authenticateToken, (req, res) => {
   try {
-    const { itemId, quantity = 1 } = req.body;
+    const { itemId, quantity = 1, variantOptionId } = req.body;
     const qty = Math.max(1, parseInt(quantity, 10) || 1);
     if (!itemId) return res.status(400).json({ error: 'Item required' });
 
@@ -694,14 +877,20 @@ router.post('/cart', authenticateToken, (req, res) => {
     if (!item) return res.status(404).json({ error: 'Item not found' });
     if (item.seller_id === req.user.id) return res.status(400).json({ error: 'Cannot add your own item to cart' });
     if (item.status === 'sold') return res.status(400).json({ error: 'Item is already sold' });
-    if (item.quantity != null && item.quantity > 0 && qty > item.quantity) {
-      return res.status(400).json({ error: `Only ${item.quantity} available` });
+    const variant = getVariantOption(item.id, variantOptionId);
+    checkVariantStock(variant, qty);
+    const availableStock = variant?.stock != null ? Number(variant.stock) : item.quantity;
+    if (availableStock != null && availableStock > 0 && qty > availableStock) {
+      return res.status(400).json({ error: `Only ${availableStock} available` });
     }
 
     db.prepare(`
-      INSERT INTO carts (user_id, item_id, quantity) VALUES (?, ?, ?)
-      ON CONFLICT(user_id, item_id) DO UPDATE SET quantity = quantity + excluded.quantity, updated_at = datetime('now')
-    `).run(req.user.id, itemId, qty);
+      INSERT INTO carts (user_id, item_id, quantity, variant_option_id) VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id, item_id) DO UPDATE SET
+        quantity = quantity + excluded.quantity,
+        variant_option_id = excluded.variant_option_id,
+        updated_at = datetime('now')
+    `).run(req.user.id, itemId, qty, variant?.id || null);
 
     const cart = getCart(req.user.id);
     res.status(201).json({ items: cart, count: cart.length, subtotalCents: cartSubtotal(cart) });
@@ -714,14 +903,22 @@ router.post('/cart', authenticateToken, (req, res) => {
 
 router.put('/cart/:itemId', authenticateToken, (req, res) => {
   try {
-    const { quantity } = req.body;
+    const { quantity, variantOptionId } = req.body;
     const qty = Math.max(1, parseInt(quantity, 10) || 1);
     const item = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.itemId);
-    if (item && item.quantity != null && item.quantity > 0 && qty > item.quantity) {
-      return res.status(400).json({ error: `Only ${item.quantity} available` });
+    const variant = variantOptionId !== undefined ? getVariantOption(req.params.itemId, variantOptionId) : null;
+    checkVariantStock(variant, qty);
+    const availableStock = variant?.stock != null ? Number(variant.stock) : item?.quantity;
+    if (availableStock != null && availableStock > 0 && qty > availableStock) {
+      return res.status(400).json({ error: `Only ${availableStock} available` });
     }
-    db.prepare("UPDATE carts SET quantity = ?, updated_at = datetime('now') WHERE user_id = ? AND item_id = ?")
-      .run(qty, req.user.id, req.params.itemId);
+    if (variantOptionId !== undefined) {
+      db.prepare("UPDATE carts SET quantity = ?, variant_option_id = ?, updated_at = datetime('now') WHERE user_id = ? AND item_id = ?")
+        .run(qty, variant?.id || null, req.user.id, req.params.itemId);
+    } else {
+      db.prepare("UPDATE carts SET quantity = ?, updated_at = datetime('now') WHERE user_id = ? AND item_id = ?")
+        .run(qty, req.user.id, req.params.itemId);
+    }
     const cart = getCart(req.user.id);
     res.json({ items: cart, count: cart.length, subtotalCents: cartSubtotal(cart) });
   } catch (err) {
@@ -758,6 +955,8 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
     const method = normalizePaymentMethod(rawMethod);
     const cartItems = getCart(req.user.id);
     if (!cartItems.length) return res.status(400).json({ error: 'Your cart is empty' });
+    const fulfillment = commerce.validateFulfillment(cartItems, req.body.fulfillmentMethod);
+    if (fulfillment.error) return res.status(400).json({ error: fulfillment.error });
 
     const rawLines = [];
     for (const line of cartItems) {
@@ -765,21 +964,26 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       if (!item) { const e = new Error('Item no longer exists'); e.status = 400; throw e; }
       if (item.seller_id === req.user.id) { const e = new Error('Cannot buy your own item'); e.status = 400; throw e; }
       if (item.status === 'sold') { const e = new Error(`"${item.title}" is already sold`); e.status = 400; throw e; }
-      if (item.quantity != null && item.quantity > 0 && line.quantity > item.quantity) {
-        const e = new Error(`Only ${item.quantity} of "${item.title}" available`); e.status = 400; throw e;
+      const variant = getVariantOption(item.id, line.variant_option_id);
+      checkVariantStock(variant, line.quantity);
+      const availableStock = variant?.stock != null ? Number(variant.stock) : item.quantity;
+      if (availableStock != null && availableStock > 0 && line.quantity > availableStock) {
+        const e = new Error(`Only ${availableStock} of "${item.title}" available`); e.status = 400; throw e;
       }
       rawLines.push({
         item,
         quantity: line.quantity,
+        variant_option_id: variant?.id || '',
+        variant_label: variantLabel(variant),
         itemCurrency: isValidCurrency(item.currency) ? item.currency : DEFAULT_CURRENCY,
-        baseAmountItem: (item.sale_price || item.price) * line.quantity,
+        baseAmountItem: (unitPriceCents(item, variant) / 100) * line.quantity,
       });
     }
 
     // A cart settles in one currency. Use the shared supported currency when
     // every line agrees and no NGN-denominated instrument (credit/promo) is in
     // play; otherwise convert every line to NGN.
-    const wantsCredit = method === 'credit' || method === 'gift_card' || !!giftCardCode;
+    const wantsCredit = method === 'credit' || method === 'gift_card' || !!giftCardCode || req.body.useCredit === true;
     const usesPromo = !!promoCode && String(promoCode).trim() !== '';
     const lineCurrencies = [...new Set(rawLines.map((l) => l.itemCurrency))];
     const singleSupported = lineCurrencies.length === 1 && isPaystackCurrency(lineCurrencies[0]);
@@ -788,6 +992,8 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
     const lines = rawLines.map((l) => ({
       item: l.item,
       quantity: l.quantity,
+      variant_option_id: l.variant_option_id,
+      variant_label: l.variant_label,
       baseAmount: convert(l.baseAmountItem, l.itemCurrency, currency),
     }));
 
@@ -813,18 +1019,22 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       return { ...l, lineSubtotalCents, lineDiscountCents, lineNetCents };
     });
 
-    let totalCents = allocated.reduce((s, l) => s + l.lineNetCents, 0);
+    let merchandiseCents = allocated.reduce((s, l) => s + l.lineNetCents, 0);
     if (promoDiscount > 0) {
       const expected = Math.round((subtotal - promoDiscount) * 100);
-      const drift = expected - totalCents;
+      const drift = expected - merchandiseCents;
       if (drift !== 0) {
         allocated[allocated.length - 1].lineNetCents += drift;
         allocated[allocated.length - 1].lineDiscountCents -= drift;
-        totalCents = expected;
+        merchandiseCents = expected;
       }
     }
 
-    const calc = calculateCredit(req.user.id, giftCardCode, totalCents);
+    const shipping = commerce.calculateShipping(allocated, fulfillment.method);
+    const tax = commerce.calculateTax(merchandiseCents);
+    const totalCents = merchandiseCents + shipping.shippingCents + tax.taxCents;
+
+    const calc = calculateCredit(req.user.id, giftCardCode, merchandiseCents);
     const creditCents = calc.creditCents;
     const giftCard = calc.giftCard;
     let remainingCredit = creditCents;
@@ -833,17 +1043,38 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       l.lineCreditCents = use;
       remainingCredit -= use;
     }
+    if ((method === 'credit' || method === 'gift_card') && creditCents < totalCents) {
+      const e = new Error('Insufficient store credit');
+      e.status = 402;
+      e.details = { creditCents, amountCents: totalCents };
+      throw e;
+    }
     const chargeCents = totalCents - creditCents;
 
     const txnIds = allocated.map(() => uuidv4());
     const paystackRef = chargeCents > 0 ? uuidv4() : null;
+    const orderFields = {
+      buyerId: req.user.id,
+      lines: allocated,
+      txnIds,
+      currency,
+      shippingAddressId: req.body.shippingAddressId,
+      shippingCents: shipping.shippingCents,
+      taxCents: tax.taxCents,
+      fulfillmentMethod: fulfillment.method,
+      shippingBreakdown: shipping.breakdown,
+      taxBreakdown: tax.breakdown,
+      taxLabel: tax.settings.label,
+      taxRate: tax.settings.percent,
+    };
 
     // Fully covered by credit / gift card.
     if (chargeCents === 0) {
       applyCredit({ userId: req.user.id, giftCard, creditCents });
       allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method: 'credit', status: 'pending', paystackRef: null, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
+      const orderId = attachCheckoutOrder({ ...orderFields, method: 'credit', status: 'processing', paymentReference: txnIds[0] });
       db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
-      return res.json({ paid: true, status: 'pending', method: 'credit', transactionIds: txnIds, totalCents, creditCents, count: allocated.length, promo: promoInfo, currency });
+      return res.json({ paid: true, status: 'pending', method: 'credit', orderId, transactionIds: txnIds, totalCents, creditCents, count: allocated.length, promo: promoInfo, currency });
     }
 
     // One-tap checkout with a saved card: one charge_authorization covers the
@@ -867,9 +1098,10 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       });
       applyCredit({ userId: req.user.id, giftCard, creditCents });
       allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method: 'saved_card', status: 'pending', paystackRef, paymentMethodId: savedMethod.id, promoCodeUsed, currency, buyerId: req.user.id }));
+      const orderId = attachCheckoutOrder({ ...orderFields, method: 'saved_card', status: 'processing', paymentReference: paystackRef });
       allocated.forEach((l) => notify(req.user.id, 'payment', 'Payment Received', `Payment for "${l.item.title}" was received and is held in escrow.`));
       db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
-      return res.json({ paid: true, status: 'pending', method: 'saved_card', transactionIds: txnIds, totalCents, chargeCents, creditCents, count: allocated.length, promo: promoInfo, currency });
+      return res.json({ paid: true, status: 'pending', method: 'saved_card', orderId, transactionIds: txnIds, totalCents, chargeCents, creditCents, count: allocated.length, promo: promoInfo, currency });
     }
 
     // Demo mode (no Paystack configured).
@@ -879,8 +1111,9 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       }
       applyCredit({ userId: req.user.id, giftCard, creditCents });
       allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method, status: 'pending', paystackRef: `demo_${txnIds[i]}`, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
+      const orderId = attachCheckoutOrder({ ...orderFields, method, status: 'processing', paymentReference: `demo_${txnIds[0]}` });
       db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
-      return res.json({ demo: true, paid: true, status: 'pending', transactionIds: txnIds, totalCents, creditCents, count: allocated.length, promo: promoInfo, currency });
+      return res.json({ demo: true, paid: true, status: 'pending', orderId, transactionIds: txnIds, totalCents, creditCents, count: allocated.length, promo: promoInfo, currency });
     }
 
     // Dedicated in-app bank transfer for the whole cart.
@@ -897,9 +1130,11 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
       allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method, status: 'awaiting_payment', paystackRef, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
       // Every line shares one charge, so mirror the account onto each row.
       txnIds.forEach((id) => attachBankDetails(id, charge));
+      const orderId = attachCheckoutOrder({ ...orderFields, method, status: 'awaiting_payment', paymentReference: paystackRef });
       db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
       const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(txnIds[0]);
       return res.json({
+        orderId,
         transactionIds: txnIds,
         reference: paystackRef,
         status: 'awaiting_payment',
@@ -927,9 +1162,11 @@ router.post('/cart/checkout', authenticateToken, async (req, res) => {
     });
     applyCredit({ userId: req.user.id, giftCard, creditCents });
     allocated.forEach((l, i) => insertCartLine(l, i, txnIds, { method, status: 'awaiting_payment', paystackRef, paymentMethodId: null, promoCodeUsed, currency, buyerId: req.user.id }));
+    const orderId = attachCheckoutOrder({ ...orderFields, method, status: 'awaiting_payment', paymentReference: paystackRef });
     db.prepare('DELETE FROM carts WHERE user_id = ?').run(req.user.id);
 
     res.json({
+      orderId,
       transactionIds: txnIds,
       reference: paystackRef,
       accessCode: initialized.access_code,

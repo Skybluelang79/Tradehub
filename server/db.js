@@ -243,6 +243,11 @@ function applySchema() {
       boost_expires_at TEXT,
       quantity INTEGER DEFAULT 1,
       currency TEXT DEFAULT 'NGN',
+      shipping_fee_cents INTEGER DEFAULT 0,
+      free_shipping_threshold_cents INTEGER DEFAULT 0,
+      pickup_available INTEGER DEFAULT 1,
+      processing_days INTEGER DEFAULT 2,
+      shipping_notes TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -328,6 +333,10 @@ function applySchema() {
       payment_method_id TEXT,
       status TEXT DEFAULT 'pending',
       paystack_reference TEXT,
+      variant_option_id TEXT,
+      variant_label TEXT DEFAULT '',
+      quantity INTEGER DEFAULT 1,
+      refunded_cents INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       completed_at TEXT
     );
@@ -361,7 +370,19 @@ function applySchema() {
       status TEXT NOT NULL DEFAULT 'pending',
       shipping_address_id TEXT,
       billing_address_id TEXT,
+      shipping_address_json TEXT DEFAULT '{}',
+      billing_address_json TEXT DEFAULT '{}',
       payment_reference TEXT,
+      payment_method TEXT DEFAULT '',
+      fulfillment_method TEXT DEFAULT 'shipping',
+      shipping_breakdown_json TEXT DEFAULT '[]',
+      tax_breakdown_json TEXT DEFAULT '[]',
+      tax_label TEXT DEFAULT '',
+      tax_rate REAL DEFAULT 0,
+      refunded_cents INTEGER DEFAULT 0,
+      cancelled_at TEXT,
+      invoice_number TEXT,
+      invoice_issued_at TEXT,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -374,7 +395,12 @@ function applySchema() {
       quantity INTEGER NOT NULL DEFAULT 1,
       unit_price_cents INTEGER NOT NULL DEFAULT 0,
       currency TEXT DEFAULT 'NGN',
+      item_title TEXT DEFAULT '',
+      item_image TEXT DEFAULT '',
+      variant_option_id TEXT DEFAULT '',
+      variant_label TEXT DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
+      refunded_cents INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now'))
     );
 
@@ -386,10 +412,13 @@ function applySchema() {
       service TEXT DEFAULT '',
       tracking_number TEXT DEFAULT '',
       tracking_url TEXT DEFAULT '',
+      label_url TEXT DEFAULT '',
+      label_reference TEXT DEFAULT '',
       status TEXT NOT NULL DEFAULT 'pending',
       shipped_at TEXT,
       delivered_at TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS returns (
@@ -470,6 +499,19 @@ function applySchema() {
       name TEXT NOT NULL,
       variant_values TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS item_variant_options (
+      id TEXT PRIMARY KEY,
+      item_id TEXT NOT NULL,
+      variant_name TEXT NOT NULL,
+      value TEXT NOT NULL,
+      sku TEXT DEFAULT '',
+      price_cents INTEGER,
+      stock INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_variant_options_item ON item_variant_options(item_id);
 
     CREATE TABLE IF NOT EXISTS email_verifications (
       id TEXT PRIMARY KEY,
@@ -678,6 +720,7 @@ function applySchema() {
     CREATE TABLE IF NOT EXISTS carts (
       user_id TEXT NOT NULL,
       item_id TEXT NOT NULL,
+      variant_option_id TEXT,
       quantity INTEGER NOT NULL DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
@@ -961,8 +1004,43 @@ function migrate() {
   ensureColumn('items', 'expires_at', 'TEXT');
   ensureColumn('items', 'expiry_warned_at', 'TEXT');
   ensureColumn('items', 'is_distress', 'INTEGER DEFAULT 0');
-  ensureColumn('items', 'locked_at', 'TEXT');
-  ensureColumn('items', 'lock_reason', 'TEXT');
+ensureColumn('items', 'locked_at', 'TEXT');
+ensureColumn('items', 'lock_reason', 'TEXT');
+ensureColumn('items', 'shipping_fee_cents', 'INTEGER DEFAULT 0');
+ensureColumn('items', 'free_shipping_threshold_cents', 'INTEGER DEFAULT 0');
+ensureColumn('items', 'pickup_available', 'INTEGER DEFAULT 1');
+ensureColumn('items', 'processing_days', 'INTEGER DEFAULT 2');
+ensureColumn('items', 'shipping_notes', "TEXT DEFAULT ''");
+
+ensureColumn('orders', 'shipping_address_json', "TEXT DEFAULT '{}'");
+ensureColumn('orders', 'billing_address_json', "TEXT DEFAULT '{}'");
+ensureColumn('orders', 'payment_method', "TEXT DEFAULT ''");
+ensureColumn('orders', 'fulfillment_method', "TEXT DEFAULT 'shipping'");
+ensureColumn('orders', 'shipping_breakdown_json', "TEXT DEFAULT '[]'");
+ensureColumn('orders', 'tax_breakdown_json', "TEXT DEFAULT '[]'");
+ensureColumn('orders', 'tax_label', "TEXT DEFAULT ''");
+ensureColumn('orders', 'tax_rate', 'REAL DEFAULT 0');
+ensureColumn('orders', 'refunded_cents', 'INTEGER DEFAULT 0');
+ensureColumn('orders', 'cancelled_at', 'TEXT');
+ensureColumn('orders', 'invoice_number', 'TEXT');
+ensureColumn('orders', 'invoice_issued_at', 'TEXT');
+
+ensureColumn('order_items', 'item_title', "TEXT DEFAULT ''");
+ensureColumn('order_items', 'item_image', "TEXT DEFAULT ''");
+ensureColumn('order_items', 'variant_option_id', "TEXT DEFAULT ''");
+ensureColumn('order_items', 'variant_label', "TEXT DEFAULT ''");
+ensureColumn('order_items', 'refunded_cents', 'INTEGER DEFAULT 0');
+
+ensureColumn('shipments', 'label_url', "TEXT DEFAULT ''");
+ensureColumn('shipments', 'label_reference', "TEXT DEFAULT ''");
+ensureColumn('shipments', 'updated_at', 'TEXT');
+
+ensureColumn('transactions', 'variant_option_id', 'TEXT');
+ensureColumn('transactions', 'variant_label', "TEXT DEFAULT ''");
+ensureColumn('transactions', 'quantity', 'INTEGER DEFAULT 1');
+ensureColumn('transactions', 'refunded_cents', 'INTEGER DEFAULT 0');
+
+ensureColumn('carts', 'variant_option_id', 'TEXT');
 
   ensureColumn('users', 'firebase_uid', "TEXT DEFAULT ''");
   ensureColumn('users', 'auth_provider', "TEXT DEFAULT 'local'");
@@ -1069,6 +1147,9 @@ function seedPlatformSettings() {
     maintenance_mode: '0',
     platform_fee_percent: '4',
     currency: 'NGN',
+    tax_percent: '0',
+    tax_label: 'VAT',
+    tax_inclusive: '0',
     terms_url: '',
     privacy_url: '',
     about_text: '',

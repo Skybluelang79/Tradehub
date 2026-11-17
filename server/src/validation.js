@@ -62,9 +62,21 @@ const locationSchema = z.object({
   address: z.string().max(200).optional(),
 }).optional();
 
+const variantValueSchema = z.union([
+  z.string().min(1),
+  z.object({
+    value: z.string().min(1),
+    sku: z.string().max(80).optional().default(''),
+    price: z.number().nonnegative().optional().nullable(),
+    price_cents: z.number().int().nonnegative().optional().nullable(),
+    stock: z.number().int().nonnegative().optional().nullable(),
+  }),
+]);
+
 const variantSchema = z.object({
   name: z.string().min(1),
-  values: z.array(z.string().min(1)),
+  values: z.array(variantValueSchema).min(1),
+  options: z.array(variantValueSchema).optional(),
 });
 
 export const createItemSchema = z.object({
@@ -88,6 +100,11 @@ export const createItemSchema = z.object({
   location: locationSchema,
   quantity: z.number().int().positive().optional().default(1),
   currency: z.string().optional().default('NGN').refine(isValidCurrency, 'Unsupported currency'),
+  shipping_fee_cents: z.number().int().nonnegative().optional().default(0),
+  free_shipping_threshold_cents: z.number().int().nonnegative().optional().default(0),
+  pickup_available: z.boolean().optional().default(true),
+  processing_days: z.number().int().nonnegative().max(60).optional().default(2),
+  shipping_notes: z.string().max(500).optional().default(''),
   variants: z.array(variantSchema).optional().default([]),
   boosted: z.boolean().optional().default(false),
   boost_expires_at: z.string().optional().nullable(),

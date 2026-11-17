@@ -13,6 +13,63 @@ function futureSqlDate(days) {
   return new Date(Date.now() + days * 86400000).toISOString().replace('T', ' ').slice(0, 19);
 }
 
+function normalizeVariantValues(values) {
+  return (values || [])
+    .map((entry) => {
+      if (typeof entry === 'string') {
+        return { value: entry.trim(), sku: '', priceCents: null, stock: 1 };
+      }
+      if (!entry || typeof entry !== 'object') return null;
+      const value = String(entry.value ?? '').trim();
+      if (!value) return null;
+      const priceCents = entry.price_cents != null
+        ? Math.max(0, Math.round(Number(entry.price_cents) || 0))
+        : (entry.price != null ? Math.max(0, Math.round(Number(entry.price) * 100)) : null);
+      return {
+        value,
+        sku: String(entry.sku || '').trim(),
+        priceCents,
+        stock: Math.max(0, Math.round(Number(entry.stock) || 0)),
+      };
+    })
+    .filter(Boolean);
+}
+
+function saveVariants(itemId, variants) {
+  db.prepare('DELETE FROM item_variant_options WHERE item_id = ?').run(itemId);
+  db.prepare('DELETE FROM item_variants WHERE item_id = ?').run(itemId);
+  const insertVariant = db.prepare('INSERT INTO item_variants (id, item_id, name, variant_values) VALUES (?, ?, ?, ?)');
+  const insertOption = db.prepare(`
+    INSERT INTO item_variant_options (id, item_id, variant_name, value, sku, price_cents, stock)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const variant of variants || []) {
+    const name = String(variant?.name || '').trim();
+    if (!name) continue;
+    const options = normalizeVariantValues(variant.options?.length ? variant.options : variant.values);
+    if (!options.length) continue;
+    insertVariant.run(uuidv4(), itemId, name, JSON.stringify(options.map((option) => option.value)));
+    for (const option of options) {
+      insertOption.run(
+        uuidv4(),
+        itemId,
+        name,
+        option.value,
+        option.sku,
+        option.priceCents,
+        option.stock,
+      );
+    }
+  }
+}
+
+function variantOptionsFor(itemId) {
+  return db.prepare(`
+    SELECT id, variant_name, value, sku, price_cents, stock
+    FROM item_variant_options WHERE item_id = ? ORDER BY variant_name, rowid
+  `).all(itemId);
+}
+
 function sellerPlan(userId) {
   const sub = db.prepare(
     'SELECT plan, status, trial_end, current_period_end FROM subscriptions WHERE user_id = ?'
@@ -272,6 +329,7 @@ router.get('/:id', optionalAuth, (req, res) => {
 
     const variants = db.prepare('SELECT name, variant_values FROM item_variants WHERE item_id = ?').all(item.id);
     item.variants = variants.map(v => ({ name: v.name, values: JSON.parse(v.variant_values) }));
+    item.variant_options = variantOptionsFor(item.id);
 
     db.prepare('UPDATE items SET views = views + 1 WHERE id = ?').run(item.id);
 
@@ -306,6 +364,8 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
       variants, boosted, boost_expires_at,
       is_auction, starting_bid, min_increment, auction_ends_at,
       status, currency, video_url, is_distress,
+      shipping_fee_cents, free_shipping_threshold_cents, pickup_available,
+      processing_days, shipping_notes,
     } = req.validatedBody;
 
     const id = uuidv4();
@@ -341,8 +401,8 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
     const distress = plan.distressPinned && is_distress ? 1 : 0;
 
     db.prepare(`
-      INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, current_bid, current_bidder_id, status, expires_at, video_url, is_distress)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO items (id, title, description, price, sale_price, sale_ends_at, category, condition, seller_id, location_lat, location_lng, location_address, quantity, currency, boosted, boost_expires_at, is_auction, starting_bid, min_increment, auction_ends_at, auction_status, current_bid, current_bidder_id, status, expires_at, video_url, is_distress, shipping_fee_cents, free_shipping_threshold_cents, pickup_available, processing_days, shipping_notes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, title, description, price,
       sale_price || null, sale_ends_at || null,
@@ -361,7 +421,12 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
       listingStatus,
       expiresAt,
       video_url || null,
-      distress
+      distress,
+      shipping_fee_cents || 0,
+      free_shipping_threshold_cents || 0,
+      pickup_available === false ? 0 : 1,
+      processing_days ?? 2,
+      shipping_notes || ''
     );
 
     if (images && images.length > 0) {
@@ -370,8 +435,7 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
     }
 
     if (variants && variants.length > 0) {
-      const insertVar = db.prepare('INSERT INTO item_variants (id, item_id, name, variant_values) VALUES (?, ?, ?, ?)');
-      variants.forEach(v => insertVar.run(uuidv4(), id, v.name, JSON.stringify(v.values)));
+      saveVariants(id, variants);
     }
 
     const item = db.prepare('SELECT * FROM items WHERE id = ?').get(id);
@@ -459,7 +523,9 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
         category = ?, condition = ?, location_lat = ?, location_lng = ?, location_address = ?,
         quantity = ?, status = ?, boosted = ?, boost_expires_at = ?, updated_at = datetime('now'),
         is_auction = ?, starting_bid = ?, min_increment = ?, auction_ends_at = ?, auction_status = ?,
-        currency = ?, video_url = ?, expires_at = ?, is_distress = ?
+        currency = ?, video_url = ?, expires_at = ?, is_distress = ?,
+        shipping_fee_cents = ?, free_shipping_threshold_cents = ?, pickup_available = ?,
+        processing_days = ?, shipping_notes = ?
       WHERE id = ?
     `).run(
       data.title ?? item.title, data.description ?? item.description,
@@ -480,6 +546,13 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
       data.video_url !== undefined ? (data.video_url || null) : item.video_url,
       expiresAt,
       nextDistress,
+      data.shipping_fee_cents ?? item.shipping_fee_cents ?? 0,
+      data.free_shipping_threshold_cents ?? item.free_shipping_threshold_cents ?? 0,
+      data.pickup_available === undefined
+        ? (item.pickup_available ?? 1)
+        : (data.pickup_available ? 1 : 0),
+      data.processing_days ?? item.processing_days ?? 2,
+      data.shipping_notes ?? item.shipping_notes ?? '',
       req.params.id
     );
 
@@ -490,9 +563,7 @@ router.put('/:id', authenticateToken, validate(updateItemSchema), (req, res) => 
     }
 
     if (data.variants) {
-      db.prepare('DELETE FROM item_variants WHERE item_id = ?').run(req.params.id);
-      const insertVar = db.prepare('INSERT INTO item_variants (id, item_id, name, variant_values) VALUES (?, ?, ?, ?)');
-      data.variants.forEach(v => insertVar.run(uuidv4(), req.params.id, v.name, JSON.stringify(v.values)));
+      saveVariants(req.params.id, data.variants);
     }
 
     const updated = db.prepare('SELECT * FROM items WHERE id = ?').get(req.params.id);
