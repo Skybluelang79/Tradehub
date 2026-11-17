@@ -87,7 +87,10 @@
 .setting-item input[type="text"],
 .setting-item input[type="url"],
 .setting-item input[type="email"],
-.setting-item input[type="number"] {
+.setting-item input[type="number"],
+.setting-item input[type="password"],
+.setting-item select,
+.setting-item textarea {
   width: 100%;
   padding: 12px 16px;
   background: var(--surface-hover);
@@ -98,9 +101,44 @@
   transition: border-color 0.2s;
 }
 
-.setting-item input:focus {
+.setting-item select,
+.setting-item textarea {
+  font-family: inherit;
+}
+
+.setting-item textarea {
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.setting-item input:focus,
+.setting-item select:focus,
+.setting-item textarea:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.setting-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
+.ai-clear-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.ai-clear-key input {
+  accent-color: var(--accent);
 }
 
 .toggle-item {

@@ -57,11 +57,222 @@ AUTO_DESCRIPTIONS = {
 CONDITION_LABELS = {"new": "new", "like_new": "like new", "good": "good", "fair": "fair"}
 
 
+AI_PROVIDERS = ["openai", "openai-compatible", "anthropic", "google"]
+
+AI_PROMPT_DEFAULTS = {
+    "listing": (
+        "You are a marketplace listing copywriter. Write a compelling, honest secondhand listing. "
+        "Respond with valid JSON ONLY, no prose, using this exact shape: "
+        '{"title": string, "description": string (2-4 sentences, no emojis), "price": number|null}. '
+        "Give a single integer price in Nigerian naira (NGN). If you cannot estimate a price, set price to null."
+    ),
+    "search": (
+        "You parse marketplace search phrases into filters. Respond with valid JSON ONLY: "
+        '{"category": string (one of: {{categories}}, or "" if none), '
+        '"minPrice": number|null, "maxPrice": number|null, "query": string (the cleaned, non-numeric keywords)}. '
+        "Only set minPrice/maxPrice when the phrase clearly states a budget."
+    ),
+    "question": (
+        "You are a helpful, honest assistant answering a buyer question about a listing on TradeHub, "
+        "a local buy-and-sell marketplace with escrow-protected payments. "
+        "Answer in 2-4 short sentences. Be friendly, factual, and never invent details not present in the listing. "
+        "If the question is about buying/shipping/meeting, suggest the buyer message the seller or check out via escrow."
+    ),
+}
+
+DEFAULT_MODELS = {
+    "openai": "gpt-4o-mini",
+    "openai-compatible": "gpt-4o-mini",
+    "anthropic": "claude-3-5-haiku-latest",
+    "google": "gemini-1.5-flash",
+}
+
+
+def _setting_value(key, default=""):
+    try:
+        row = db.get("SELECT value FROM platform_settings WHERE key = ?", (key,))
+        if row and row.get("value") is not None:
+            return str(row["value"])
+    except Exception:
+        pass
+    return default
+
+
+def _normalize_provider(value):
+    raw = str(value or "").strip().lower()
+    aliases = {
+        "compatible": "openai-compatible",
+        "custom": "openai-compatible",
+        "gemini": "google",
+        "google-gemini": "google",
+        "claude": "anthropic",
+    }
+    provider = aliases.get(raw, raw)
+    return provider if provider in AI_PROVIDERS else "openai"
+
+
+def _env_api_key(provider):
+    by_provider = {
+        "openai": os.environ.get("OPENAI_API_KEY"),
+        "openai-compatible": os.environ.get("AI_API_KEY"),
+        "anthropic": os.environ.get("ANTHROPIC_API_KEY"),
+        "google": os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY"),
+    }
+    return str(by_provider.get(provider) or os.environ.get("AI_API_KEY") or "").strip()
+
+
+def _env_base_url(provider):
+    by_provider = {
+        "openai": os.environ.get("OPENAI_BASE_URL"),
+        "openai-compatible": os.environ.get("AI_BASE_URL"),
+        "anthropic": os.environ.get("ANTHROPIC_BASE_URL"),
+        "google": os.environ.get("GOOGLE_BASE_URL"),
+    }
+    return str(by_provider.get(provider) or os.environ.get("AI_BASE_URL") or "").strip()
+
+
+def ai_config():
+    provider = _normalize_provider(_setting_value("ai_provider", os.environ.get("AI_PROVIDER") or "openai"))
+    stored_key = _setting_value("ai_api_key", "").strip()
+    fallback_key = _env_api_key(provider)
+    return {
+        "enabled": _setting_value("ai_enabled", "1") != "0",
+        "provider": provider,
+        "model": _setting_value("ai_model", "").strip() or os.environ.get("AI_MODEL") or DEFAULT_MODELS[provider],
+        "baseUrl": _setting_value("ai_base_url", "").strip() or _env_base_url(provider),
+        "apiKey": stored_key or fallback_key,
+        "apiKeySource": "database" if stored_key else "environment" if fallback_key else "none",
+    }
+
+
 def has_llm():
-    return bool(os.environ.get("OPENAI_API_KEY"))
+    config = ai_config()
+    return config["enabled"] and bool(config["apiKey"])
 
 
-AI_MODEL = os.environ.get("AI_MODEL") or "gpt-4o-mini"
+def prompt_for(setting_key, default_key, known_categories=None):
+    known_categories = known_categories or KNOWN_CATEGORIES
+    prompt = _setting_value(setting_key, "").strip() or AI_PROMPT_DEFAULTS[default_key]
+    return prompt.replace("{{categories}}", ", ".join(known_categories))
+
+
+def _trim_base_url(base_url, fallback):
+    return str(base_url or fallback).rstrip("/")
+
+
+def _parse_json_content(content):
+    if not isinstance(content, str):
+        return None
+    try:
+        return _json.loads(content)
+    except Exception:
+        match = re.search(r"\{[\s\S]*\}", content)
+        if not match:
+            return None
+        try:
+            return _json.loads(match.group(0))
+        except Exception:
+            return None
+
+
+async def _call_openai_compatible(client, config, messages, json, max_tokens, temperature):
+    base = _trim_base_url(config["baseUrl"], "https://api.openai.com/v1")
+    endpoint = base if re.search(r"/chat/completions$", base, re.I) else f"{base}/chat/completions"
+    body = {
+        "model": config["model"],
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    if json:
+        body["response_format"] = {"type": "json_object"}
+    res = await client.post(
+        endpoint,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {config['apiKey']}"},
+        json=body,
+    )
+    if not (200 <= res.status_code < 300):
+        return None
+    try:
+        data = res.json()
+    except Exception:
+        return None
+    return ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
+
+
+async def _call_anthropic(client, config, messages, max_tokens, temperature):
+    base = _trim_base_url(config["baseUrl"], "https://api.anthropic.com/v1")
+    endpoint = base if re.search(r"/messages$", base, re.I) else f"{base}/messages"
+    system = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
+    body = {
+        "model": config["model"],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "messages": [
+            {"role": "assistant" if m.get("role") == "assistant" else "user", "content": m["content"]}
+            for m in messages
+            if m.get("role") != "system"
+        ],
+    }
+    if system:
+        body["system"] = system
+    res = await client.post(
+        endpoint,
+        headers={
+            "Content-Type": "application/json",
+            "x-api-key": config["apiKey"],
+            "anthropic-version": "2023-06-01",
+        },
+        json=body,
+    )
+    if not (200 <= res.status_code < 300):
+        return None
+    try:
+        data = res.json()
+    except Exception:
+        return None
+    parts = data.get("content") if isinstance(data, dict) else None
+    if not isinstance(parts, list):
+        return None
+    return "".join(part.get("text", "") for part in parts if part.get("type") == "text") or None
+
+
+async def _call_google(client, config, messages, json, max_tokens, temperature):
+    base = _trim_base_url(config["baseUrl"], "https://generativelanguage.googleapis.com/v1beta")
+    endpoint = f"{base}/models/{config['model']}:generateContent"
+    system = "\n\n".join(m["content"] for m in messages if m.get("role") == "system")
+    generation_config = {"temperature": temperature, "maxOutputTokens": max_tokens}
+    if json:
+        generation_config["responseMimeType"] = "application/json"
+    body = {
+        "contents": [
+            {
+                "role": "model" if m.get("role") == "assistant" else "user",
+                "parts": [{"text": m["content"]}],
+            }
+            for m in messages
+            if m.get("role") != "system"
+        ],
+        "generationConfig": generation_config,
+    }
+    if system:
+        body["systemInstruction"] = {"parts": [{"text": system}]}
+    res = await client.post(
+        endpoint,
+        headers={"Content-Type": "application/json", "x-goog-api-key": config["apiKey"]},
+        json=body,
+    )
+    if not (200 <= res.status_code < 300):
+        return None
+    try:
+        data = res.json()
+    except Exception:
+        return None
+    candidates = data.get("candidates") if isinstance(data, dict) else None
+    if not isinstance(candidates, list) or not candidates:
+        return None
+    parts = ((candidates[0].get("content") or {}).get("parts") or [])
+    return "".join(part.get("text", "") for part in parts) or None
 
 
 def _to_number(value):
@@ -97,57 +308,20 @@ def _locale_number(value):
 
 
 async def llm(messages, json=False, maxTokens=500, temperature=0.6):
-    if not has_llm():
+    config = ai_config()
+    if not config["enabled"] or not config["apiKey"]:
         return None
     try:
-        body = {
-            "model": AI_MODEL,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": maxTokens,
-        }
-        if json:
-            body["response_format"] = {"type": "json_object"}
-
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
-        }
         async with httpx.AsyncClient(timeout=30.0) as client:
-            res = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json=body,
-            )
-        if not (200 <= res.status_code < 300):
+            if config["provider"] == "anthropic":
+                content = await _call_anthropic(client, config, messages, maxTokens, temperature)
+            elif config["provider"] == "google":
+                content = await _call_google(client, config, messages, json, maxTokens, temperature)
+            else:
+                content = await _call_openai_compatible(client, config, messages, json, maxTokens, temperature)
+        if not isinstance(content, str) or not content.strip():
             return None
-        try:
-            data = res.json()
-        except Exception:
-            return None
-        content = None
-        if isinstance(data, dict):
-            choices = data.get("choices")
-            if isinstance(choices, list) and choices:
-                first = choices[0]
-                if isinstance(first, dict):
-                    message = first.get("message")
-                    if isinstance(message, dict):
-                        content = message.get("content")
-        if not isinstance(content, str):
-            return None
-        if not json:
-            return content.strip()
-        try:
-            return _json.loads(content)
-        except Exception:
-            match = re.search(r"\{[\s\S]*\}", content)
-            if match:
-                try:
-                    return _json.loads(match.group(0))
-                except Exception:
-                    return None
-            return None
+        return _parse_json_content(content) if json else content.strip()
     except Exception:
         return None
 
@@ -234,15 +408,7 @@ async def generate_listing(title="", description="", category="", condition="", 
 
     ai_data = await llm(
         [
-            {
-                "role": "system",
-                "content": (
-                    "You are a marketplace listing copywriter. Write a compelling, honest secondhand listing. "
-                    "Respond with valid JSON ONLY, no prose, using this exact shape: "
-                    '{"title": string, "description": string (2-4 sentences, no emojis), "price": number|null}. '
-                    "Give a single integer price in USD. If you cannot estimate a price, set price to null."
-                ),
-            },
+            {"role": "system", "content": prompt_for("ai_prompt_listing", "listing")},
             {"role": "user", "content": user_content},
         ],
         json=True,
@@ -268,15 +434,7 @@ async def generate_listing(title="", description="", category="", condition="", 
 async def parse_search(query="", knownCategories=KNOWN_CATEGORIES):
     ai_data = await llm(
         [
-            {
-                "role": "system",
-                "content": (
-                    "You parse marketplace search phrases into filters. Respond with valid JSON ONLY: "
-                    '{"category": string (one of: ' + ", ".join(knownCategories) + ', or "" if none), '
-                    '"minPrice": number|null, "maxPrice": number|null, "query": string (the cleaned, non-numeric keywords)}. '
-                    "Only set minPrice/maxPrice when the phrase clearly states a budget."
-                ),
-            },
+            {"role": "system", "content": prompt_for("ai_prompt_search", "search", knownCategories)},
             {"role": "user", "content": f'Search phrase: "{query}"'},
         ],
         json=True,
@@ -334,15 +492,7 @@ async def answer_listing_question(item=None, sellerName="", question=""):
         return "Sorry, this listing could not be found."
     ai_data = await llm(
         [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful, honest assistant answering a buyer question about a listing on TradeHub, "
-                    "a local buy-and-sell marketplace with escrow-protected payments. "
-                    "Answer in 2-4 short sentences. Be friendly, factual, and never invent details not present in the listing. "
-                    "If the question is about buying/shipping/meeting, suggest the buyer message the seller or check out via escrow."
-                ),
-            },
+            {"role": "system", "content": prompt_for("ai_prompt_question", "question")},
             {
                 "role": "user",
                 "content": (

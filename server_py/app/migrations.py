@@ -83,6 +83,14 @@ def seed_platform_settings():
         "terms_url": "",
         "privacy_url": "",
         "about_text": "",
+        "ai_enabled": "1",
+        "ai_provider": "openai",
+        "ai_model": "gpt-4o-mini",
+        "ai_base_url": "",
+        "ai_api_key": "",
+        "ai_prompt_listing": "",
+        "ai_prompt_search": "",
+        "ai_prompt_question": "",
     }
     for key, value in defaults.items():
         db.run("INSERT OR IGNORE INTO platform_settings (key, value) VALUES (?, ?)", (key, value))

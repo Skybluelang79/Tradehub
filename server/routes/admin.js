@@ -8,6 +8,7 @@ import db from '../db.js';
 import { exportDatabase, replaceDatabase } from '../db.js';
 import { adminLimiter } from '../src/rateLimiter.js';
 import { sendNotificationEmail } from '../src/email.js';
+import { AI_PROMPT_DEFAULTS, AI_PROVIDERS, aiConfig, hasLLM } from '../src/ai.js';
 import { refundTxn } from './payments.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import { requiredSecret, requiredEnv } from '../src/env.js';
@@ -774,20 +775,48 @@ router.post(
 
 // ---- Platform settings -----------------------------------------------------
 
+function readPlatformSettings() {
+  const rows = db.prepare('SELECT * FROM platform_settings ORDER BY key').all();
+  const settings = {};
+  rows.forEach((r) => { settings[r.key] = r.value; });
+  return settings;
+}
+
+function publicPlatformSettings() {
+  const settings = readPlatformSettings();
+  const config = aiConfig();
+  delete settings.ai_api_key;
+  settings.ai_api_key_set = config.apiKey ? '1' : '0';
+  settings.ai_api_key_source = config.apiKeySource;
+  settings.ai_ready = hasLLM() ? '1' : '0';
+  return settings;
+}
+
 router.get('/settings', adminAuth, (req, res) => {
   try {
-    const rows = db.prepare('SELECT * FROM platform_settings ORDER BY key').all();
-    const settings = {};
-    rows.forEach((r) => { settings[r.key] = r.value; });
-    res.json({ settings });
+    res.json({
+      settings: publicPlatformSettings(),
+      ai_prompt_defaults: AI_PROMPT_DEFAULTS,
+    });
   } catch (err) {
+    logger.error('Get platform settings error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 router.put('/settings', adminAuth, (req, res) => {
   try {
-    const allowed = ['site_name', 'support_email', 'maintenance_mode', 'platform_fee_percent', 'currency', 'terms_url', 'privacy_url', 'about_text'];
+    const provider = req.body.ai_provider;
+    if (provider !== undefined && !AI_PROVIDERS.includes(String(provider))) {
+      return res.status(400).json({ error: 'Unsupported AI provider' });
+    }
+
+    const allowed = [
+      'site_name', 'support_email', 'maintenance_mode', 'platform_fee_percent', 'currency',
+      'terms_url', 'privacy_url', 'about_text',
+      'ai_enabled', 'ai_provider', 'ai_model', 'ai_base_url',
+      'ai_prompt_listing', 'ai_prompt_search', 'ai_prompt_question',
+    ];
     const updated = [];
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
@@ -795,11 +824,22 @@ router.put('/settings', adminAuth, (req, res) => {
         updated.push(key);
       }
     }
+
+    const apiKey = typeof req.body.ai_api_key === 'string' ? req.body.ai_api_key.trim() : '';
+    if (apiKey) {
+      db.prepare(`UPDATE platform_settings SET value = ?, updated_at = datetime('now') WHERE key = 'ai_api_key'`).run(apiKey);
+      updated.push('ai_api_key');
+    } else if (req.body.ai_api_key_clear === true || req.body.ai_api_key_clear === '1') {
+      db.prepare(`UPDATE platform_settings SET value = '', updated_at = datetime('now') WHERE key = 'ai_api_key'`).run();
+      updated.push('ai_api_key');
+    }
+
     logAudit(req.adminId, 'settings_update', 'platform_settings', null, { updated });
-    const rows = db.prepare('SELECT * FROM platform_settings ORDER BY key').all();
-    const settings = {};
-    rows.forEach((r) => { settings[r.key] = r.value; });
-    res.json({ success: true, settings });
+    res.json({
+      success: true,
+      settings: publicPlatformSettings(),
+      ai_prompt_defaults: AI_PROMPT_DEFAULTS,
+    });
   } catch (err) {
     logger.error('Update platform settings error:', err);
     res.status(500).json({ error: 'Internal server error' });

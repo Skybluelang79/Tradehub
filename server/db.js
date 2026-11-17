@@ -1153,6 +1153,14 @@ function seedPlatformSettings() {
     terms_url: '',
     privacy_url: '',
     about_text: '',
+    ai_enabled: '1',
+    ai_provider: 'openai',
+    ai_model: 'gpt-4o-mini',
+    ai_base_url: '',
+    ai_api_key: '',
+    ai_prompt_listing: '',
+    ai_prompt_search: '',
+    ai_prompt_question: '',
   };
   for (const [key, value] of Object.entries(defaults)) {
     db.prepare('INSERT OR IGNORE INTO platform_settings (key, value) VALUES (?, ?)').run(key, value);

@@ -10,6 +10,7 @@ import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Response
 
 from .. import config, db
+from ..ai import AI_PROMPT_DEFAULTS, AI_PROVIDERS, ai_config, has_llm
 from ..deps import require_admin
 from ..email import send_notification_email
 from ..notifications import notify
@@ -913,13 +914,30 @@ def _platform_settings():
     return {row["key"]: row["value"] for row in rows}
 
 
+def _public_platform_settings():
+    settings = _platform_settings()
+    cfg = ai_config()
+    settings.pop("ai_api_key", None)
+    settings["ai_api_key_set"] = "1" if cfg["apiKey"] else "0"
+    settings["ai_api_key_source"] = cfg["apiKeySource"]
+    settings["ai_ready"] = "1" if has_llm() else "0"
+    return settings
+
+
 @router.get("/settings")
 def get_platform_settings(admin: dict = Depends(require_admin)):
-    return {"settings": _platform_settings()}
+    return {
+        "settings": _public_platform_settings(),
+        "ai_prompt_defaults": AI_PROMPT_DEFAULTS,
+    }
 
 
 @router.put("/settings")
 def update_platform_settings(body: dict = Body(...), admin: dict = Depends(require_admin)):
+    provider = body.get("ai_provider")
+    if provider is not None and str(provider) not in AI_PROVIDERS:
+        raise HTTPException(status_code=400, detail="Unsupported AI provider")
+
     allowed = [
         "site_name",
         "support_email",
@@ -932,6 +950,13 @@ def update_platform_settings(body: dict = Body(...), admin: dict = Depends(requi
         "terms_url",
         "privacy_url",
         "about_text",
+        "ai_enabled",
+        "ai_provider",
+        "ai_model",
+        "ai_base_url",
+        "ai_prompt_listing",
+        "ai_prompt_search",
+        "ai_prompt_question",
     ]
     updated = []
     for key in allowed:
@@ -941,8 +966,26 @@ def update_platform_settings(body: dict = Body(...), admin: dict = Depends(requi
                 (str(body[key]), key),
             )
             updated.append(key)
+
+    api_key = str(body.get("ai_api_key") or "").strip()
+    if api_key:
+        db.run(
+            "UPDATE platform_settings SET value = ?, updated_at = datetime('now') WHERE key = 'ai_api_key'",
+            (api_key,),
+        )
+        updated.append("ai_api_key")
+    elif body.get("ai_api_key_clear") is True or str(body.get("ai_api_key_clear")) == "1":
+        db.run(
+            "UPDATE platform_settings SET value = '', updated_at = datetime('now') WHERE key = 'ai_api_key'"
+        )
+        updated.append("ai_api_key")
+
     _log_audit(admin["id"], "settings_update", "platform_settings", None, {"updated": updated})
-    return {"success": True, "settings": _platform_settings()}
+    return {
+        "success": True,
+        "settings": _public_platform_settings(),
+        "ai_prompt_defaults": AI_PROMPT_DEFAULTS,
+    }
 
 
 # ---- Bulk item delete -------------------------------------------------------

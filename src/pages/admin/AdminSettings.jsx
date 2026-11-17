@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldIcon, BellIcon, LockIcon, GlobeIcon, SaveIcon } from './Icons.jsx';
+import { ShieldIcon, BellIcon, LockIcon, GlobeIcon, SaveIcon, ServerIcon } from './Icons.jsx';
 import Modal from '../../components/ui/Modal.jsx';
 import LanguageSwitcher from '../../components/ui/LanguageSwitcher.jsx';
 import { api } from '../../services/client.js';
@@ -36,6 +36,25 @@ const defaultSettings = {
   cookieAnalytics: false,
   cookieMarketing: false,
   cookiePreferences: false,
+  aiEnabled: true,
+  aiProvider: 'openai',
+  aiModel: 'gpt-4o-mini',
+  aiBaseUrl: '',
+  aiApiKey: '',
+  aiApiKeySet: false,
+  aiApiKeySource: 'none',
+  aiReady: false,
+  aiPromptListing: '',
+  aiPromptSearch: '',
+  aiPromptQuestion: '',
+  aiClearKey: false,
+};
+
+const AI_DEFAULT_MODELS = {
+  openai: 'gpt-4o-mini',
+  'openai-compatible': 'gpt-4o-mini',
+  anthropic: 'claude-3-5-haiku-latest',
+  google: 'gemini-1.5-flash',
 };
 
 const BACKEND_KEYS = {
@@ -47,6 +66,16 @@ const BACKEND_KEYS = {
   terms_url: 'termsUrl',
   privacy_url: 'privacyUrl',
   about_text: 'aboutText',
+  ai_enabled: 'aiEnabled',
+  ai_provider: 'aiProvider',
+  ai_model: 'aiModel',
+  ai_base_url: 'aiBaseUrl',
+  ai_prompt_listing: 'aiPromptListing',
+  ai_prompt_search: 'aiPromptSearch',
+  ai_prompt_question: 'aiPromptQuestion',
+  ai_api_key_set: 'aiApiKeySet',
+  ai_api_key_source: 'aiApiKeySource',
+  ai_ready: 'aiReady',
 };
 
 const toServerPayload = (s) => ({
@@ -58,6 +87,15 @@ const toServerPayload = (s) => ({
   terms_url: s.termsUrl,
   privacy_url: s.privacyUrl,
   about_text: s.aboutText,
+  ai_enabled: s.aiEnabled ? '1' : '0',
+  ai_provider: s.aiProvider,
+  ai_model: s.aiModel,
+  ai_base_url: s.aiBaseUrl,
+  ai_prompt_listing: s.aiPromptListing,
+  ai_prompt_search: s.aiPromptSearch,
+  ai_prompt_question: s.aiPromptQuestion,
+  ...(s.aiApiKey.trim() ? { ai_api_key: s.aiApiKey.trim() } : {}),
+  ...(s.aiClearKey ? { ai_api_key_clear: '1' } : {}),
 });
 
 const applyServerSettings = (s, server) => {
@@ -65,8 +103,9 @@ const applyServerSettings = (s, server) => {
   for (const [serverKey, uiKey] of Object.entries(BACKEND_KEYS)) {
     const v = server[serverKey];
     if (v === undefined || v === null) continue;
-    if (uiKey === 'maintenanceMode') next[uiKey] = String(v) === '1' || v === true;
-    else if (uiKey === 'transactionFeePercent') next[uiKey] = parseFloat(v) || 0;
+    if (['maintenanceMode', 'aiEnabled', 'aiApiKeySet', 'aiReady'].includes(uiKey)) {
+      next[uiKey] = String(v) === '1' || v === true;
+    } else if (uiKey === 'transactionFeePercent') next[uiKey] = parseFloat(v) || 0;
     else next[uiKey] = String(v);
   }
   return next;
@@ -85,6 +124,7 @@ const AdminSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [promptDefaults, setPromptDefaults] = useState({});
   const { addToast } = useToast();
 
   useEffect(() => {
@@ -94,6 +134,7 @@ const AdminSettings = () => {
         const data = await api.admin.settingsGet();
         if (!active) return;
         setSettings((prev) => applyServerSettings(prev, data.settings || {}));
+        setPromptDefaults(data.ai_prompt_defaults || {});
       } catch (err) {
         if (active) addToast(err.message || 'Failed to load settings', 'error');
       } finally {
@@ -115,12 +156,29 @@ const AdminSettings = () => {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
+  const handleProviderChange = (provider) => {
+    setSettings((prev) => {
+      const knownModels = Object.values(AI_DEFAULT_MODELS);
+      return {
+        ...prev,
+        aiProvider: provider,
+        aiModel: !prev.aiModel || knownModels.includes(prev.aiModel)
+          ? AI_DEFAULT_MODELS[provider]
+          : prev.aiModel,
+      };
+    });
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
       const data = await api.admin.settingsUpdate(toServerPayload(settings));
-      setSettings((prev) => applyServerSettings(prev, data.settings || {}));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+      setSettings((prev) => {
+        const next = { ...applyServerSettings(prev, data.settings || {}), aiApiKey: '', aiClearKey: false };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        return next;
+      });
+      setPromptDefaults(data.ai_prompt_defaults || promptDefaults);
       setShowSaveModal(true);
       setTimeout(() => setShowSaveModal(false), 2000);
     } catch (err) {
@@ -135,6 +193,7 @@ const AdminSettings = () => {
     { id: 'security', label: 'Security', icon: LockIcon },
     { id: 'listing', label: 'Listings', icon: ShieldIcon },
     { id: 'payments', label: 'Payments', icon: BellIcon },
+    { id: 'ai', label: 'AI', icon: ServerIcon },
     { id: 'notifications', label: 'Notifications', icon: BellIcon },
     { id: 'cookies', label: 'Cookies & Language', icon: GlobeIcon },
   ];
@@ -404,6 +463,131 @@ const AdminSettings = () => {
                     />
                     <span className="toggle-slider"></span>
                   </label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'ai' && (
+            <div className="settings-section">
+              <h2>AI Settings</h2>
+              <div className="setting-group">
+                <h3>Provider & Model</h3>
+                <div className="toggle-item">
+                  <div>
+                    <span className="toggle-label">Enable AI Features</span>
+                    <span className="toggle-description">
+                      {settings.aiReady ? 'AI is configured and ready' : 'Add an API key to activate AI features'}
+                    </span>
+                  </div>
+                  <label className="toggle-switch">
+                    <input
+                      type="checkbox"
+                      checked={settings.aiEnabled}
+                      disabled={loading}
+                      onChange={() => handleToggle('aiEnabled')}
+                    />
+                    <span className="toggle-slider"></span>
+                  </label>
+                </div>
+                <div className="setting-item">
+                  <label>Provider</label>
+                  <select
+                    value={settings.aiProvider}
+                    disabled={loading}
+                    onChange={(e) => handleProviderChange(e.target.value)}
+                  >
+                    <option value="openai">OpenAI</option>
+                    <option value="openai-compatible">OpenAI-compatible (OpenRouter, Groq, local)</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="google">Google Gemini</option>
+                  </select>
+                </div>
+                <div className="setting-item">
+                  <label>Model</label>
+                  <input
+                    type="text"
+                    value={settings.aiModel}
+                    disabled={loading}
+                    placeholder="e.g. gpt-4o-mini"
+                    onChange={(e) => handleChange('aiModel', e.target.value)}
+                  />
+                </div>
+                <div className="setting-item">
+                  <label>API Base URL</label>
+                  <input
+                    type="url"
+                    value={settings.aiBaseUrl}
+                    disabled={loading}
+                    placeholder="Leave blank to use the provider default"
+                    onChange={(e) => handleChange('aiBaseUrl', e.target.value)}
+                  />
+                  <span className="setting-hint">Use the full API root, e.g. https://api.openai.com/v1</span>
+                </div>
+                <div className="setting-item">
+                  <label>API Key</label>
+                  <input
+                    type="password"
+                    value={settings.aiApiKey}
+                    disabled={loading || settings.aiClearKey}
+                    placeholder={settings.aiApiKeySet ? 'Leave blank to keep the saved key' : 'Enter provider API key'}
+                    autoComplete="new-password"
+                    onChange={(e) => handleChange('aiApiKey', e.target.value)}
+                  />
+                  <span className="setting-hint">
+                    {settings.aiApiKeySource === 'environment'
+                      ? 'A key is already provided by the server environment.'
+                      : settings.aiApiKeySet
+                        ? 'A key is saved. It is never sent back to this page.'
+                        : 'The key is stored on the server and never returned by the API.'}
+                  </span>
+                  {settings.aiApiKeySet && (
+                    <label className="ai-clear-key">
+                      <input
+                        type="checkbox"
+                        checked={settings.aiClearKey}
+                        disabled={loading}
+                        onChange={() => handleToggle('aiClearKey')}
+                      />
+                      Remove the saved key
+                    </label>
+                  )}
+                </div>
+              </div>
+              <div className="setting-group">
+                <h3>System Prompts</h3>
+                <div className="setting-item">
+                  <label>Listing Generator Prompt</label>
+                  <textarea
+                    rows="6"
+                    value={settings.aiPromptListing}
+                    disabled={loading}
+                    placeholder={promptDefaults.listing || 'Using the built-in prompt'}
+                    onChange={(e) => handleChange('aiPromptListing', e.target.value)}
+                  />
+                  <span className="setting-hint">Leave blank to use the built-in prompt. It must return the required JSON shape.</span>
+                </div>
+                <div className="setting-item">
+                  <label>Search Parser Prompt</label>
+                  <textarea
+                    rows="6"
+                    value={settings.aiPromptSearch}
+                    disabled={loading}
+                    placeholder={promptDefaults.search || 'Using the built-in prompt'}
+                    onChange={(e) => handleChange('aiPromptSearch', e.target.value)}
+                  />
+                  <span className="setting-hint">Leave blank to use the built-in prompt. Use {'{{categories}}'} for the category list.</span>
+                </div>
+                <div className="setting-item">
+                  <label>Listing Q&A Prompt</label>
+                  <textarea
+                    rows="6"
+                    value={settings.aiPromptQuestion}
+                    disabled={loading}
+                    placeholder={promptDefaults.question || 'Using the built-in prompt'}
+                    onChange={(e) => handleChange('aiPromptQuestion', e.target.value)}
+                  />
+                  <span className="setting-hint">Leave blank to use the built-in prompt.</span>
                 </div>
               </div>
             </div>

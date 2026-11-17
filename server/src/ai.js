@@ -27,47 +27,219 @@ const AUTO_DESCRIPTIONS = {
 
 const CONDITION_LABELS = { new: 'new', like_new: 'like new', good: 'good', fair: 'fair' };
 
-export function hasLLM() {
-  return Boolean(process.env.OPENAI_API_KEY);
+export const AI_PROVIDERS = ['openai', 'openai-compatible', 'anthropic', 'google'];
+
+export const AI_PROMPT_DEFAULTS = {
+  listing:
+    'You are a marketplace listing copywriter. Write a compelling, honest secondhand listing. ' +
+    'Respond with valid JSON ONLY, no prose, using this exact shape: ' +
+    '{"title": string, "description": string (2-4 sentences, no emojis), "price": number|null}. ' +
+    'Give a single integer price in Nigerian naira (NGN). If you cannot estimate a price, set price to null.',
+  search:
+    'You parse marketplace search phrases into filters. Respond with valid JSON ONLY: ' +
+    '{"category": string (one of: {{categories}}, or "" if none), ' +
+    '"minPrice": number|null, "maxPrice": number|null, "query": string (the cleaned, non-numeric keywords)}. ' +
+    'Only set minPrice/maxPrice when the phrase clearly states a budget.',
+  question:
+    'You are a helpful, honest assistant answering a buyer question about a listing on TradeHub, a local buy-and-sell marketplace with escrow-protected payments. ' +
+    'Answer in 2-4 short sentences. Be friendly, factual, and never invent details not present in the listing. ' +
+    'If the question is about buying/shipping/meeting, suggest the buyer message the seller or check out via escrow.',
+};
+
+const DEFAULT_MODELS = {
+  openai: 'gpt-4o-mini',
+  'openai-compatible': 'gpt-4o-mini',
+  anthropic: 'claude-3-5-haiku-latest',
+  google: 'gemini-1.5-flash',
+};
+
+function settingValue(key, fallback = '') {
+  try {
+    const row = db.prepare('SELECT value FROM platform_settings WHERE key = ?').get(key);
+    if (row && row.value !== undefined && row.value !== null) return String(row.value);
+  } catch {
+    // The database may not be loaded yet during boot-time feature checks.
+  }
+  return fallback;
 }
 
-const AI_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
+function normalizeProvider(value) {
+  const raw = String(value || '').trim().toLowerCase();
+  const aliases = {
+    compatible: 'openai-compatible',
+    custom: 'openai-compatible',
+    gemini: 'google',
+    'google-gemini': 'google',
+    claude: 'anthropic',
+  };
+  const provider = aliases[raw] || raw;
+  return AI_PROVIDERS.includes(provider) ? provider : 'openai';
+}
+
+function envApiKey(provider) {
+  const byProvider = {
+    openai: process.env.OPENAI_API_KEY,
+    'openai-compatible': process.env.AI_API_KEY,
+    anthropic: process.env.ANTHROPIC_API_KEY,
+    google: process.env.GOOGLE_API_KEY || process.env.GEMINI_API_KEY,
+  };
+  return String(byProvider[provider] || process.env.AI_API_KEY || '').trim();
+}
+
+function envBaseUrl(provider) {
+  const byProvider = {
+    openai: process.env.OPENAI_BASE_URL,
+    'openai-compatible': process.env.AI_BASE_URL,
+    anthropic: process.env.ANTHROPIC_BASE_URL,
+    google: process.env.GOOGLE_BASE_URL,
+  };
+  return String(byProvider[provider] || process.env.AI_BASE_URL || '').trim();
+}
+
+export function aiConfig() {
+  const provider = normalizeProvider(settingValue('ai_provider', process.env.AI_PROVIDER || 'openai'));
+  const storedKey = settingValue('ai_api_key', '').trim();
+  const fallbackKey = envApiKey(provider);
+  const apiKey = storedKey || fallbackKey;
+  return {
+    enabled: settingValue('ai_enabled', '1') !== '0',
+    provider,
+    model: settingValue('ai_model', '').trim() || process.env.AI_MODEL || DEFAULT_MODELS[provider],
+    baseUrl: settingValue('ai_base_url', '').trim() || envBaseUrl(provider),
+    apiKey,
+    apiKeySource: storedKey ? 'database' : fallbackKey ? 'environment' : 'none',
+  };
+}
+
+export function hasLLM() {
+  const config = aiConfig();
+  return config.enabled && Boolean(config.apiKey);
+}
+
+function promptFor(settingKey, defaultKey, knownCategories = KNOWN_CATEGORIES) {
+  const custom = settingValue(settingKey, '').trim();
+  const prompt = custom || AI_PROMPT_DEFAULTS[defaultKey];
+  return prompt.replace(/\{\{categories\}\}/g, knownCategories.join(', '));
+}
+
+function trimBaseUrl(baseUrl, fallback) {
+  return String(baseUrl || fallback).replace(/\/+$/, '');
+}
+
+function parseJsonContent(content) {
+  if (typeof content !== 'string') return null;
+  try {
+    return JSON.parse(content);
+  } catch {
+    const match = content.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try { return JSON.parse(match[0]); } catch { return null; }
+  }
+}
+
+function openAIEndpoint(baseUrl) {
+  const base = trimBaseUrl(baseUrl, 'https://api.openai.com/v1');
+  return /\/chat\/completions$/i.test(base) ? base : `${base}/chat/completions`;
+}
+
+async function callOpenAICompatible(config, messages, { json, maxTokens, temperature, signal }) {
+  const body = {
+    model: config.model,
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+  };
+  if (json) body.response_format = { type: 'json_object' };
+  const res = await fetch(openAIEndpoint(config.baseUrl), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${config.apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  return data?.choices?.[0]?.message?.content ?? null;
+}
+
+async function callAnthropic(config, messages, { maxTokens, temperature, signal }) {
+  const base = trimBaseUrl(config.baseUrl, 'https://api.anthropic.com/v1');
+  const endpoint = /\/messages$/i.test(base) ? base : `${base}/messages`;
+  const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+  const body = {
+    model: config.model,
+    max_tokens: maxTokens,
+    temperature,
+    messages: messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+  };
+  if (system) body.system = system;
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': config.apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  if (!Array.isArray(data?.content)) return null;
+  return data.content.filter((part) => part?.type === 'text').map((part) => part.text).join('') || null;
+}
+
+async function callGoogle(config, messages, { json, maxTokens, temperature, signal }) {
+  const base = trimBaseUrl(config.baseUrl, 'https://generativelanguage.googleapis.com/v1beta');
+  const endpoint = `${base}/models/${encodeURIComponent(config.model)}:generateContent`;
+  const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n\n');
+  const body = {
+    contents: messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }],
+      })),
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens,
+      ...(json ? { responseMimeType: 'application/json' } : {}),
+    },
+  };
+  if (system) body.systemInstruction = { parts: [{ text: system }] };
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': config.apiKey,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!res.ok) return null;
+  const data = await res.json();
+  const parts = data?.candidates?.[0]?.content?.parts;
+  if (!Array.isArray(parts)) return null;
+  return parts.map((part) => part?.text || '').join('') || null;
+}
 
 async function llm(messages, { json = false, maxTokens = 500, temperature = 0.6 } = {}) {
-  if (!hasLLM()) return null;
+  const config = aiConfig();
+  if (!config.enabled || !config.apiKey) return null;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
+  const options = { json, maxTokens, temperature, signal: controller.signal };
   try {
-    const body = {
-      model: AI_MODEL,
-      messages,
-      temperature,
-      max_tokens: maxTokens,
-    };
-    if (json) body.response_format = { type: 'json_object' };
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const content = data?.choices?.[0]?.message?.content;
-    if (typeof content !== 'string') return null;
-    if (!json) return content.trim();
-    try {
-      return JSON.parse(content);
-    } catch {
-      const match = content.match(/\{[\s\S]*\}/);
-      if (match) {
-        try { return JSON.parse(match[0]); } catch { return null; }
-      }
-      return null;
-    }
+    let content;
+    if (config.provider === 'anthropic') content = await callAnthropic(config, messages, options);
+    else if (config.provider === 'google') content = await callGoogle(config, messages, options);
+    else content = await callOpenAICompatible(config, messages, options);
+    if (typeof content !== 'string' || !content.trim()) return null;
+    return json ? parseJsonContent(content) : content.trim();
   } catch {
     return null;
   } finally {
@@ -136,11 +308,7 @@ export async function generateListing({ title = '', description = '', category =
   const aiData = await llm([
     {
       role: 'system',
-      content:
-        'You are a marketplace listing copywriter. Write a compelling, honest secondhand listing. ' +
-        'Respond with valid JSON ONLY, no prose, using this exact shape: ' +
-        '{"title": string, "description": string (2-4 sentences, no emojis), "price": number|null}. ' +
-        'Give a single integer price in USD. If you cannot estimate a price, set price to null.',
+      content: promptFor('ai_prompt_listing', 'listing'),
     },
     {
       role: 'user',
@@ -168,11 +336,7 @@ export async function parseSearch(query = '', knownCategories = KNOWN_CATEGORIES
   const aiData = await llm([
     {
       role: 'system',
-      content:
-        'You parse marketplace search phrases into filters. Respond with valid JSON ONLY: ' +
-        '{"category": string (one of: ' + knownCategories.join(', ') + ', or "" if none), ' +
-        '"minPrice": number|null, "maxPrice": number|null, "query": string (the cleaned, non-numeric keywords)}. ' +
-        'Only set minPrice/maxPrice when the phrase clearly states a budget.',
+      content: promptFor('ai_prompt_search', 'search', knownCategories),
     },
     { role: 'user', content: `Search phrase: "${query}"` },
   ], { json: true, maxTokens: 200 });
@@ -219,10 +383,7 @@ export async function answerListingQuestion({ item, sellerName = '', question = 
   const aiData = await llm([
     {
       role: 'system',
-      content:
-        'You are a helpful, honest assistant answering a buyer question about a listing on TradeHub, a local buy-and-sell marketplace with escrow-protected payments. ' +
-        'Answer in 2-4 short sentences. Be friendly, factual, and never invent details not present in the listing. ' +
-        'If the question is about buying/shipping/meeting, suggest the buyer message the seller or check out via escrow.',
+      content: promptFor('ai_prompt_question', 'question'),
     },
     {
       role: 'user',
