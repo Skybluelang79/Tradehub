@@ -190,6 +190,10 @@
 
 @keyframes upgradeBodySlide { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
+.premium-pricing-copy { margin-bottom: 12px; }
+.premium-pricing-title { font-size: 14px; font-weight: 700; color: white; margin: 0 0 4px; }
+.premium-pricing-subtitle { font-size: 11px; line-height: 1.45; color: rgba(255,255,255,0.6); margin: 0; }
+
 /* ── Calculator ── */
 .premium-calculator {
   background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query
 
 from .. import db
 from ..deps import require_user
+from ..moderation import OFF_PLATFORM_MESSAGE, has_offplatform_contact
 from ..notifications import notify
 
 router = APIRouter()
@@ -268,6 +269,8 @@ def send_message(conversation_id: str, user: dict = Depends(require_user), body:
         raise HTTPException(status_code=403, detail={"error": "Message blocked"})
 
     trimmed = (text or "").strip()
+    if has_offplatform_contact(trimmed):
+        raise HTTPException(status_code=400, detail={"error": OFF_PLATFORM_MESSAGE})
     message_id = str(uuid.uuid4())
     db.run(
         "INSERT INTO messages (id, conversation_id, sender_id, text, encrypted, ciphertext, iv, type, reply_to_id) "

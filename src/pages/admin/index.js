@@ -12,3 +12,4 @@ export { default as AdminAuditLogs } from './AdminAuditLogs.jsx';
 export { default as AdminPromotions } from './AdminPromotions.jsx';
 export { default as AdminSystem } from './AdminSystem.jsx';
 export { default as AdminSettings } from './AdminSettings.jsx';
+export { default as AdminSupport } from './AdminSupport.jsx';

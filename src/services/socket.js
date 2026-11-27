@@ -29,6 +29,10 @@ export function connectSocket(token) {
   // one is transiently disconnected orphaned the old one along with every
   // listener registered against it.
   if (socket) {
+    if (token && socket.auth?.token !== token) {
+      socket.auth = { token };
+      if (socket.connected) socket.disconnect();
+    }
     if (!socket.connected && !socket.active) socket.connect();
     return socket;
   }
@@ -240,4 +244,34 @@ export function onRtcAnswer(callback) {
 export function onRtcIce(callback) {
   socket?.on('rtc_ice', callback);
   return () => socket?.off('rtc_ice', callback);
+}
+
+export function joinSupportThread(threadId) {
+  socket?.emit('support_join', threadId);
+}
+
+export function leaveSupportThread(threadId) {
+  socket?.emit('support_leave', threadId);
+}
+
+export function supportTyping(threadId) {
+  socket?.emit('support_typing', { threadId });
+}
+
+export function onSupportMessage(callback) {
+  socket?.on('support_message', callback);
+  return () => socket?.off('support_message', callback);
+}
+
+export function onSupportTyping(callback) {
+  socket?.on('support_typing', callback);
+  return () => socket?.off('support_typing', callback);
+}
+
+export function createSupportSocket(token) {
+  if (!token || SOCKET_DISABLED) return null;
+  return io(SOCKET_URL, {
+    auth: { token },
+    transports: ['websocket', 'polling'],
+  });
 }

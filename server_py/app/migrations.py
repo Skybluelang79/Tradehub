@@ -75,7 +75,7 @@ def seed_platform_settings():
         "site_name": "TradeHub",
         "support_email": "support@tradehub.app",
         "maintenance_mode": "0",
-        "platform_fee_percent": "4",
+        "platform_fee_percent": "10",
         "tax_percent": "0",
         "tax_label": "VAT",
         "tax_inclusive": "0",
@@ -214,6 +214,11 @@ def apply():
     ensure_column("conversations", "is_secure", "INTEGER DEFAULT 0")
     ensure_column("users", "phone_verified", "INTEGER DEFAULT 0")
 
+    ensure_column("support_tickets", "context", "TEXT DEFAULT 'general'")
+    ensure_column("support_tickets", "handoff", "INTEGER DEFAULT 0")
+    ensure_column("support_tickets", "assigned_admin_id", "TEXT")
+    ensure_column("support_tickets", "last_message_at", "TEXT")
+
     ensure_column("verification_requests", "ai_verdict", "TEXT DEFAULT ''")
     ensure_column("verification_requests", "ai_extracted", "TEXT DEFAULT ''")
     ensure_column("verification_requests", "ai_checks", "TEXT DEFAULT ''")
@@ -224,6 +229,7 @@ def apply():
         UPDATE user_settings SET currency = 'NGN' WHERE currency IS NULL OR currency = '' OR currency = 'USD';
         UPDATE offers SET currency = 'NGN' WHERE currency IS NULL OR currency = '' OR currency = 'USD';
         UPDATE platform_settings SET value = 'NGN' WHERE key = 'currency' AND (value IS NULL OR value = '' OR value = 'USD');
+        UPDATE platform_settings SET value = '10' WHERE key = 'platform_fee_percent' AND value IN ('4', '4.0');
         """
     )
 

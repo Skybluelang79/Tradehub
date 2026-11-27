@@ -39,7 +39,7 @@ const premiumSellers = [
   },
 ];
 
-const PLATFORM_FEE_RATE = 0.02;
+const PLATFORM_FEE_RATE = 0.05;
 
 const perks = [
   { icon: '👑', title: 'Priority Listing', desc: 'Your items appear first in search results' },
@@ -47,28 +47,40 @@ const perks = [
   { icon: '📊', title: 'Seller Analytics', desc: 'Track views, clicks, and conversion rates' },
   { icon: '🚀', title: '7 Featured Slots', desc: 'Keep seven listings featured at once' },
   { icon: '📦', title: '120 Listings', desc: 'List up to 120 items for 90 days each' },
-  { icon: '🏷️', title: 'Reduced 2% Fee', desc: 'Gold cuts the transaction fee from 4% to 2%' },
+  { icon: '🏷️', title: 'Reduced 5% Fee', desc: 'Premium cuts the transaction fee from 10% to 5%' },
 ];
 
 const plans = [
   {
     id: 'free',
-    name: 'Free',
+    name: 'Basic',
     price: 0,
     displayPrice: 'Free',
     period: '',
     color: '#6B6B7B',
-    features: ['30 listings', '6 photos per listing', '30-day listings', '4% transaction fee', 'Standard support'],
+    features: [
+      '$0 monthly fee — list items with zero subscription commitment',
+      '10% commission per completed sale (deducted automatically from escrow payout)',
+      'Protected In-App Escrow — buyer pays upfront before you ship or hand over the item',
+      'Direct P2P Delivery — arrange local pickup, dispatch riders, or waybills directly with your buyer',
+      'Standard Search Placement',
+    ],
     cta: 'Current Plan',
   },
   {
     id: 'premium',
-    name: 'Gold',
-    price: 9.99,
-    displayPrice: '$9.99',
+    name: 'Premium',
+    price: 11.99,
+    displayPrice: '$11.99',
     period: '/mo',
     color: '#FBBF24',
-    features: ['120 listings', '10 photos + 1 video', '90-day listings', '7 featured slots', 'Auctions auto-approved', '2% escrow fee', 'Real-time analytics', 'Distress sales pinned'],
+    features: [
+      'Cut your commission in half — just 5% per completed sale',
+      'Pays for itself at $240/month in sales (save $5 on every $100 sold)',
+      'Verified Seller Badge to build instant buyer trust',
+      'Priority Search & Category Placement so your listings sell faster',
+      'Billed in your local currency (auto-converted at checkout; cancel anytime)',
+    ],
     cta: 'Subscribe',
     badge: 'Best Value',
   },
@@ -79,7 +91,7 @@ const plans = [
     displayPrice: '$24.99',
     period: '/mo',
     color: '#A78BFA',
-    features: ['Unlimited listings', 'Everything in Gold', '2% escrow fee', 'Priority support', 'Custom storefront'],
+    features: ['Unlimited listings', 'Everything in Premium', '5% escrow fee', 'Priority support', 'Custom storefront'],
     cta: 'Subscribe',
     badge: 'For Power Sellers',
   },
@@ -279,7 +291,7 @@ export default function PremiumSeller() {
             <div className="premium-upgrade-crown">👑</div>
             <div>
               <h4 className="premium-upgrade-title">Become a Gold Seller</h4>
-              <p className="premium-upgrade-sub">$9.99/month · cancel anytime</p>
+              <p className="premium-upgrade-sub">$11.99/month · taxes &amp; VAT included · cancel anytime</p>
             </div>
           </div>
           <svg className={`premium-upgrade-chevron ${showUpgrade ? 'rotated' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="6 9 12 15 18 9" /></svg>
@@ -287,6 +299,14 @@ export default function PremiumSeller() {
 
         {showUpgrade && (
           <div className="premium-upgrade-body">
+            <div className="premium-pricing-copy">
+              <h5 className="premium-pricing-title">Start Selling for Free. Upgrade When You Grow.</h5>
+              <p className="premium-pricing-subtitle">
+                List your items with zero upfront costs. Pay a small commission only when you make a
+                successful sale—and keep 100% control over how you ship or meet your buyers.
+              </p>
+            </div>
+
             {/* Earnings Calculator */}
             <div className="premium-calculator">
               <h5 className="premium-calc-title">💰 Earnings Calculator</h5>
@@ -314,7 +334,7 @@ export default function PremiumSeller() {
                   <span className="premium-calc-result-value">{formatPrice(monthlyRevenue)}</span>
                 </div>
                 <div className="premium-calc-result free">
-                  <span className="premium-calc-result-label">Gold fee (2%)</span>
+                  <span className="premium-calc-result-label">Gold fee (5%)</span>
                   <span className="premium-calc-result-value">-{formatPrice(platformFee)}</span>
                 </div>
                 <div className="premium-calc-result savings">

@@ -13,7 +13,8 @@ import {
   LogOutIcon,
   EyeIcon,
   TagIcon,
-  ServerIcon
+  ServerIcon,
+  HeadphonesIcon
 } from '../../pages/admin/Icons.jsx';
 import './AdminLayout.css';
 
@@ -28,6 +29,7 @@ const navItems = [
   { path: '/admin/disputes', label: 'Disputes', icon: ShieldIcon },
   { path: '/admin/trust', label: 'Trust & Safety', icon: ShieldIcon },
   { path: '/admin/reports', label: 'Reports', icon: ChartIcon },
+  { path: '/admin/support', label: 'Support Inbox', icon: HeadphonesIcon },
   { path: '/admin/promotions', label: 'Promotions', icon: TagIcon },
   { path: '/admin/audit-logs', label: 'Audit Logs', icon: EyeIcon },
   { path: '/admin/system', label: 'System', icon: ServerIcon },

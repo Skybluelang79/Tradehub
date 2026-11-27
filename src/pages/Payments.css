@@ -11,6 +11,16 @@
   gap: 14px;
 }
 
+.payments-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payments-section > .section-header {
+  margin-bottom: 0;
+}
+
 .buyer-protection-card {
   background: linear-gradient(135deg, var(--secondary), var(--primary));
   border: 1px solid var(--border);

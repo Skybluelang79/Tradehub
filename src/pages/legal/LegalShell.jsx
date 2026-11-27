@@ -58,11 +58,11 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Is it safe to pay another user directly?',
-    a: 'We recommend paying through TradeHub so your payment and delivery are recorded. Payments made outside the platform are not covered if something goes wrong, and we may be unable to help you recover the money. Never send money to someone you have not verified, and be wary of anyone asking you to move to a different payment method.',
+      a: 'Payments must be made through TradeHub escrow so your payment and delivery are recorded. Payments made outside the platform are not covered if something goes wrong, and we may be unable to help you recover the money. Never send money to someone you have not verified, and be wary of anyone asking you to move to a different payment method.',
   },
   {
     q: 'A seller is asking me to pay outside TradeHub. What should I do?',
-    a: 'Treat it as a warning sign and decline. Report the seller from their profile so our team can review the account. We will not ask you to pay anyone outside the platform, and messages asking you to do so are a common scam.',
+      a: 'Treat it as a warning sign and decline. All payments must stay in TradeHub escrow, and asking you to move off-platform is prohibited. Report the seller from their profile so our team can review the account.',
   },
   {
     q: 'How do I report a problem with a listing or a user?',
@@ -78,7 +78,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'Do you charge any fees?',
-    a: 'Listing items is free. We may charge a fee when a sale completes, and some optional paid features are available. Any fee is shown clearly before you pay, and we never add charges afterwards.',
+      a: 'Listing items is free. Basic sellers pay a 10% commission on completed sales. Premium costs $11.99/month (taxes and VAT included) and lowers the commission to 5%. Any fee is shown clearly before you pay, and we never add charges afterwards.',
   },
   {
     q: 'I cannot open the app properly on my phone. What should I try?',

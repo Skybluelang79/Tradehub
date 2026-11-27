@@ -1,13 +1,13 @@
 from .datetime_util import parse_iso, utc_now
 
-GOLD_PRICE_USD = 9.99
+GOLD_PRICE_USD = 11.99
 
 PLANS = {
     "free": {
         "name": "Free",
         "price": 0,
         "priceUsd": 0,
-        "fee": 0.04,
+        "fee": 0.10,
         "boosts": 0,
         "maxListings": 30,
         "maxPhotos": 6,
@@ -23,7 +23,7 @@ PLANS = {
         "name": "Gold",
         "price": GOLD_PRICE_USD,
         "priceUsd": GOLD_PRICE_USD,
-        "fee": 0.02,
+        "fee": 0.05,
         "boosts": 7,
         "maxListings": 120,
         "maxPhotos": 10,
@@ -39,7 +39,7 @@ PLANS = {
         "name": "Pro",
         "price": 24.99,
         "priceUsd": 24.99,
-        "fee": 0.02,
+        "fee": 0.05,
         "boosts": 7,
         "maxListings": -1,
         "maxPhotos": 10,

@@ -18,3 +18,4 @@ export { default as AuthGate } from './AuthGate';
 export { default as BankTransferPanel } from './BankTransferPanel';
 export { default as ShippingAddressSelect } from './ShippingAddressSelect';
 export { default as OrdersPanel } from './OrdersPanel';
+export { default as SupportChat } from './SupportChat';

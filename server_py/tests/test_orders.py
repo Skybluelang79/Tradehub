@@ -145,7 +145,7 @@ def test_cart_checkout_creates_order_and_full_lifecycle():
     txn = db.get("SELECT * FROM transactions WHERE order_id = ?", (order_id,))
     assert txn["status"] == "completed"
     wallet = db.get("SELECT * FROM wallets WHERE user_id = ?", (seller["id"],))
-    assert wallet["available_cents"] == 490000
+    assert wallet["available_cents"] == 475000
 
     outsider = client.get(f"/api/orders/{order_id}", headers=auth(outsider_token))
     assert outsider.status_code == 403

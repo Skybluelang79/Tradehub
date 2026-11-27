@@ -5,7 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { EncryptionProvider } from './context/EncryptionContext';
 import { ToastProvider, OnboardingGate } from './components/ui';
 import { BottomNav } from './components/layout';
-import { OfflineIndicator, AuthGate } from './components/features';
+import { OfflineIndicator, AuthGate, SupportChat } from './components/features';
 import { AUTH_GATED_TABS, GATE_COPY } from './config/authGate';
 
 
@@ -36,7 +36,8 @@ import {
   AdminAuditLogs,
   AdminPromotions,
   AdminSystem,
-  AdminSettings
+  AdminSettings,
+  AdminSupport
 } from './pages/admin';
 import './styles/globals.css';
 
@@ -232,6 +233,8 @@ function AppContent() {
         return <AdminDisputes />;
       case '/admin/reports':
         return <AdminReports />;
+      case '/admin/support':
+        return <AdminSupport />;
       case '/admin/trust':
         return <AdminTrust />;
       case '/admin/promotions':
@@ -388,6 +391,7 @@ function AppContent() {
       )}
 
       <OfflineIndicator />
+      <SupportChat />
 
       <main className="main-content">
         <div className="page-transition-wrapper" key={activeTab}>

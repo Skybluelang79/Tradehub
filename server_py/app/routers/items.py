@@ -11,6 +11,7 @@ from .. import db
 from ..currencies import format_money, is_valid_currency
 from ..datetime_util import parse_iso, utc_now
 from ..deps import optional_user, require_user
+from ..moderation import has_offplatform_contact
 from ..notifications import notify
 from ..plans import get_effective_plan, get_plan
 from ..search import match as search_match
@@ -323,6 +324,8 @@ def _check_item_fields(payload, update=False):
     if description is None and not update:
         description = ""
     out["description"] = _clean_named_string("description", description, 2000, details)
+    if isinstance(out["description"], str) and has_offplatform_contact(out["description"]):
+        details.append("description: Remove phone numbers, WhatsApp links and social handles")
 
     price = payload.get("price")
     if price is None and not update:

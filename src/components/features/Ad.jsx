@@ -118,7 +118,7 @@ const banners = [
 ];
 
 const pushes = [
-  { title: 'Go Gold', desc: 'Unlock featured slots for $9.99/month', btn: 'Upgrade', action: 'upgrade' },
+  { title: 'Go Gold', desc: 'Unlock featured slots for $11.99/month', btn: 'Upgrade', action: 'upgrade' },
   { title: 'List for Free!', desc: 'Up to 30 active listings on the Free plan', btn: 'Start Selling', action: 'add' },
   { title: 'Safe Trading', desc: 'Escrow protection for every transaction', btn: 'Learn More', action: 'learn' },
   { title: 'Refer a Friend', desc: 'Earn ₦1,000 credit for each referral', btn: 'Invite', action: 'invite' },

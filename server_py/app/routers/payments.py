@@ -63,17 +63,17 @@ def normalize_payment_method(method):
 def platform_fee_percent():
     try:
         row = db.get("SELECT value FROM platform_settings WHERE key = 'platform_fee_percent'")
-        v = float(row["value"]) if row else 4.0
+        v = float(row["value"]) if row else 10.0
         if v >= 0:
             return v
     except Exception:
         pass
-    return 4
+    return 10
 
 
 def get_fee_rate_for_seller(seller_id):
     admin_percent = platform_fee_percent()
-    platform_rate = admin_percent / 100 if admin_percent >= 0 else 0.04
+    platform_rate = admin_percent / 100 if admin_percent >= 0 else 0.10
     try:
         sub = db.get(
             "SELECT plan, status, trial_end, current_period_end FROM subscriptions WHERE user_id = ? LIMIT 1",

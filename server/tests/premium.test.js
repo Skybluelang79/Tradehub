@@ -50,8 +50,8 @@ describe('Gold subscription entitlements', () => {
     const plans = await supertest(app).get('/api/subscription/plans');
     const gold = plans.body.plans.find((p) => p.id === 'premium');
     expect(gold.name).toBe('Gold');
-    expect(gold.price).toBe(9.99);
-    expect(gold.fee).toBe(0.02);
+    expect(gold.price).toBe(11.99);
+    expect(gold.fee).toBe(0.05);
     expect(gold.maxListings).toBe(120);
     expect(gold.maxPhotos).toBe(10);
     expect(gold.maxVideos).toBe(1);

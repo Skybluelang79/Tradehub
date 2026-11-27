@@ -386,6 +386,14 @@ export const api = {
   support: {
     create: (data) => request('/reports/support', { method: 'POST', body: JSON.stringify(data) }),
     list: () => request('/reports/support'),
+    faq: () => request('/support/faq'),
+    conversations: () => request('/support/conversations'),
+    createConversation: (data) => request('/support/conversations', { method: 'POST', body: JSON.stringify(data) }),
+    messages: (threadId) => request(`/support/conversations/${threadId}/messages`),
+    send: (threadId, text) => request(`/support/conversations/${threadId}/messages`, { method: 'POST', body: JSON.stringify({ text }) }),
+    handoff: (threadId) => request(`/support/conversations/${threadId}/handoff`, { method: 'POST' }),
+    read: (threadId) => request(`/support/conversations/${threadId}/read`, { method: 'POST' }),
+    unreadCount: () => request('/support/unread/count'),
   },
 
   offers: {
@@ -442,6 +450,11 @@ restore: (data) => adminRequest('/admin/backup', { method: 'POST', body: JSON.st
     verifications: (params = {}) => adminRequest(`/admin/verifications?${new URLSearchParams(params).toString()}`),
     verificationApprove: (id) => adminRequest(`/admin/verifications/${id}/approve`, { method: 'POST' }),
     verificationReject: (id, note = '') => adminRequest(`/admin/verifications/${id}/reject`, { method: 'POST', body: JSON.stringify({ note }) }),
+    supportConversations: (params = {}) => adminRequest(`/admin/support/conversations?${new URLSearchParams(params).toString()}`),
+    supportStats: () => adminRequest('/admin/support/stats'),
+    supportMessages: (threadId) => adminRequest(`/admin/support/conversations/${threadId}/messages`),
+    supportSend: (threadId, text) => adminRequest(`/admin/support/conversations/${threadId}/messages`, { method: 'POST', body: JSON.stringify({ text }) }),
+    supportUpdate: (threadId, status) => adminRequest(`/admin/support/conversations/${threadId}`, { method: 'PUT', body: JSON.stringify({ status }) }),
   },
 
   fcm: {

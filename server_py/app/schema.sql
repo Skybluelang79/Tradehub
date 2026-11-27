@@ -595,6 +595,16 @@ CREATE TABLE IF NOT EXISTS support_tickets (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS support_messages (
+  id TEXT PRIMARY KEY,
+  thread_id TEXT NOT NULL,
+  sender_id TEXT NOT NULL,
+  sender_role TEXT NOT NULL DEFAULT 'user',
+  text TEXT NOT NULL,
+  read_at TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS phone_otp_codes (
   id TEXT PRIMARY KEY,
   phone TEXT NOT NULL,
@@ -713,6 +723,8 @@ CREATE INDEX IF NOT EXISTS idx_payment_events_txn ON payment_events(txn_id);
 CREATE INDEX IF NOT EXISTS idx_payment_events_type ON payment_events(event_type);
 
 CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id);
+CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
+CREATE INDEX IF NOT EXISTS idx_support_messages_thread ON support_messages(thread_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_phone_otp_phone ON phone_otp_codes(phone);
 CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user ON webauthn_credentials(user_id);
 CREATE INDEX IF NOT EXISTS idx_webauthn_challenges_expiry ON webauthn_challenges(expires_at);

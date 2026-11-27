@@ -5,6 +5,7 @@ from datetime import datetime
 import socketio
 
 from . import config, db
+from .moderation import OFF_PLATFORM_MESSAGE, has_offplatform_contact
 from .security import decode_token
 from .routers.chat import (
     _row_to_message,
@@ -97,11 +98,13 @@ async def connect(sid, environ, auth):
     try:
         decoded = decode_token(token)
         user = db.get(
-            "SELECT id, name, avatar FROM users WHERE id = ?",
+            "SELECT id, name, avatar, status, is_admin AS is_admin FROM users WHERE id = ?",
             (decoded.get("userId"),),
         )
         if not user:
             raise socketio.exceptions.ConnectionRefusedError("User not found")
+        if user["status"] in ("banned", "suspended"):
+            raise socketio.exceptions.ConnectionRefusedError("Account unavailable")
     except socketio.exceptions.ConnectionRefusedError:
         raise
     except Exception:
@@ -176,6 +179,9 @@ async def _send_message(sid, data):
         return
     if not is_file and len(text.strip()) > 5000:
         await sio.emit("conversation_error", {"error": "Message too long"}, to=sid)
+        return
+    if not is_file and has_offplatform_contact(text.strip()):
+        await sio.emit("conversation_error", {"error": OFF_PLATFORM_MESSAGE}, to=sid)
         return
     if attachments and len(attachments) > 6:
         await sio.emit(
@@ -585,6 +591,55 @@ async def disconnect(sid, reason=None):
     await sio.emit("online_users", list(online_users.keys()))
 
 
+def _is_support_member(thread_id, user):
+    thread = db.get("SELECT user_id FROM support_tickets WHERE id = ?", (thread_id,))
+    if not thread:
+        return False
+    return thread["user_id"] == user["id"] or bool(user.get("is_admin"))
+
+
+async def _join_support(sid, thread_id):
+    user = await _current_user(sid)
+    if not _is_support_member(thread_id, user):
+        await sio.emit("support_error", {"error": "Not authorized"}, to=sid)
+        return
+    await sio.enter_room(sid, f"support:{thread_id}")
+    if user.get("is_admin"):
+        db.run(
+            "UPDATE support_messages SET read_at = datetime('now') "
+            "WHERE thread_id = ? AND sender_role = 'user' AND read_at IS NULL",
+            (thread_id,),
+        )
+    else:
+        db.run(
+            "UPDATE support_messages SET read_at = datetime('now') "
+            "WHERE thread_id = ? AND sender_role != 'user' AND read_at IS NULL",
+            (thread_id,),
+        )
+
+
+async def _leave_support(sid, thread_id):
+    await sio.leave_room(sid, f"support:{thread_id}")
+
+
+async def _support_typing(sid, data):
+    data = data or {}
+    thread_id = data.get("threadId")
+    user = await _current_user(sid)
+    if not _is_support_member(thread_id, user):
+        return
+    await sio.emit(
+        "support_typing",
+        {"threadId": thread_id, "senderRole": "admin" if user.get("is_admin") else "user"},
+        room=f"support:{thread_id}",
+        skip_sid=sid,
+    )
+
+
+async def emit_support_message(thread_id, message, event="support_message"):
+    await sio.emit(event, {"threadId": thread_id, "message": message}, room=f"support:{thread_id}")
+
+
 def register_handlers():
     sio.on("connect", connect)
     sio.on("disconnect", disconnect)
@@ -597,6 +652,10 @@ def register_handlers():
     sio.on("typing_start", _typing_start)
     sio.on("typing_stop", _typing_stop)
     sio.on("mark_read", _mark_read)
+
+    sio.on("support_join", _join_support)
+    sio.on("support_leave", _leave_support)
+    sio.on("support_typing", _support_typing)
 
     sio.on("call_user", _call_user)
     sio.on("call_accept", _call_accept)

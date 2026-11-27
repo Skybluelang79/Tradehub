@@ -43,6 +43,7 @@ from .routers import (
     settings,
     store,
     subscriptions,
+    support,
     templates,
     trust,
     upload,
@@ -123,6 +124,7 @@ app.include_router(trust.router, prefix="/api/trust")
 app.include_router(verification.router, prefix="/api/verification")
 app.include_router(chat.router, prefix="/api/chat")
 app.include_router(notifications.router, prefix="/api/notifications")
+app.include_router(support.router, prefix="/api/support")
 
 app.include_router(auth_social.router, prefix="/api/auth")
 app.include_router(upload.router, prefix="/api/upload")
@@ -142,6 +144,7 @@ app.include_router(blocking.router, prefix="/api/blocking")
 app.include_router(phone_auth.router, prefix="/api/phone-auth")
 app.include_router(webauthn.router, prefix="/api/webauthn")
 app.include_router(admin.router, prefix="/api/admin")
+app.include_router(support.admin_router, prefix="/api/admin/support")
 app.include_router(ai.router, prefix="/api/ai")
 app.include_router(vision.router, prefix="/api/vision")
 

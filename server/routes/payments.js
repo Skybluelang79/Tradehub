@@ -80,7 +80,7 @@ const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE
 // unexpired trial or an active subscription).
 export function getFeeRateForSeller(sellerId) {
   const adminPercent = platformFeePercent();
-  const platformRate = Number.isFinite(adminPercent) && adminPercent >= 0 ? adminPercent / 100 : 0.04;
+  const platformRate = Number.isFinite(adminPercent) && adminPercent >= 0 ? adminPercent / 100 : 0.10;
   try {
     const sub = db.prepare(
       'SELECT plan, status, trial_end, current_period_end FROM subscriptions WHERE user_id = ? LIMIT 1'
@@ -100,7 +100,7 @@ function platformFeePercent() {
     const v = parseFloat(row?.value);
     if (Number.isFinite(v) && v >= 0) return v;
   } catch {}
-  return 4;
+  return 10;
 }
 
 function notify(userId, type, title, body, data = {}) {

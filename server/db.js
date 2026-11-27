@@ -1145,7 +1145,7 @@ function seedPlatformSettings() {
     site_name: 'TradeHub',
     support_email: 'support@tradehub.app',
     maintenance_mode: '0',
-    platform_fee_percent: '4',
+    platform_fee_percent: '10',
     currency: 'NGN',
     tax_percent: '0',
     tax_label: 'VAT',

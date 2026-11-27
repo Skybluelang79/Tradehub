@@ -6,6 +6,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException
 from .. import db
 from ..currencies import format_money
 from ..deps import require_user
+from ..moderation import OFF_PLATFORM_MESSAGE, has_offplatform_contact
 from ..notifications import notify
 
 logger = logging.getLogger("tradehub")
@@ -77,6 +78,8 @@ def create_offer(body: dict = Body(...), user: dict = Depends(require_user)):
         raise HTTPException(status_code=400, detail={"error": "Offer amount must be greater than 0"})
     if len(str(message)) > 500:
         raise HTTPException(status_code=400, detail={"error": "Message too long (max 500 characters)"})
+    if has_offplatform_contact(str(message)):
+        raise HTTPException(status_code=400, detail={"error": OFF_PLATFORM_MESSAGE})
 
     item = db.get("SELECT * FROM items WHERE id = ?", (item_id,))
     if not item:
@@ -216,6 +219,8 @@ def counter_offer(offer_id: str, body: dict = Body(...), user: dict = Depends(re
         amount = 0
     if not amount or amount <= 0:
         raise HTTPException(status_code=400, detail={"error": "Counter amount must be greater than 0"})
+    if has_offplatform_contact(str(message)):
+        raise HTTPException(status_code=400, detail={"error": OFF_PLATFORM_MESSAGE})
 
     is_buyers_offer = offer["offered_by"] == "buyer"
     new_offered_by = "seller" if is_buyers_offer else "buyer"

@@ -53,7 +53,7 @@ def test_free_plan_listing_entitlements():
     token, user = signup("Free Entitlements")
     set_plan(user["id"], "free")
 
-    assert get_fee_rate_for_seller(user["id"]) == 0.04
+    assert get_fee_rate_for_seller(user["id"]) == 0.10
 
     make_item(token, {"video_url": "https://example.com/video.mp4"}, status_code=403)
     make_item(token, {"images": [f"https://example.com/{i}.jpg" for i in range(7)]}, status_code=403)
@@ -73,7 +73,7 @@ def test_gold_plan_listing_entitlements():
     token, user = signup("Gold Entitlements")
     set_plan(user["id"], "premium")
 
-    assert get_fee_rate_for_seller(user["id"]) == 0.02
+    assert get_fee_rate_for_seller(user["id"]) == 0.05
 
     item = make_item(
         token,

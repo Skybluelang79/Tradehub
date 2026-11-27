@@ -9,7 +9,7 @@ function Terms() {
       <LegalHeader title="Terms of Service" />
       <div className="legal-doc">
         <h1 className="legal-doc-title">Terms of Service</h1>
-        <p className="legal-doc-updated">Draft version. Last updated: 11 November 2026.</p>
+        <p className="legal-doc-updated">Draft version. Last updated: 27 November 2026.</p>
         <DraftNotice />
 
         <LegalSection title="1. Who these terms apply to">
@@ -78,11 +78,12 @@ function Terms() {
             is reviewed, while a dispute is open, or where we reasonably suspect fraud. We do not
             store your full card details.
           </p>
-          <h3 className="legal-h3">4.4 Pay outside the platform</h3>
+          <h3 className="legal-h3">4.4 Mandatory in-app escrow</h3>
           <p>
-            We strongly recommend paying through TradeHub. Payments made outside the platform are
-            not covered, and we may be unable to help you recover the money. Anyone asking you to
-            pay outside TradeHub may be committing fraud, so report them.
+            All item payments must be completed through the platform&apos;s in-app escrow checkout.
+            Sharing phone numbers, WhatsApp links, bank account details, or social media handles
+            prior to checkout—or encouraging buyers to pay outside the app to avoid platform fees—is
+            strictly prohibited and will result in immediate account suspension.
           </p>
           <h3 className="legal-h3">4.5 Delivery, inspection and acceptance</h3>
           <p>
@@ -93,12 +94,48 @@ function Terms() {
           </p>
         </LegalSection>
 
-        <LegalSection title="5. Fees and payouts">
+        <LegalSection title="5. Seller pricing, P2P fees, escrow and anti-circumvention">
+          <h3 className="legal-h3">5.1 Commission structure &amp; calculation</h3>
           <p>
-            We may charge a fee when a sale completes, and may offer optional paid features. Sellers
-            are responsible for their own taxes and must provide any information we reasonably need
-            to report payments to the tax authorities. We may withhold payouts where we reasonably
-            suspect fraud, where a dispute is open, or where we are legally required to do so.
+            Sellers on the Basic Plan are charged a 10% platform commission on the final agreed item
+            price of every completed order. Sellers on the Premium Plan ($11.99/month, inclusive of
+            applicable local VAT/GST) are charged a 5% platform commission on the final agreed item
+            price. Commissions are automatically deducted from the seller&apos;s payout upon order
+            completion.
+          </p>
+          <h3 className="legal-h3">5.2 Peer-to-peer (P2P) shipping &amp; delivery</h3>
+          <p>
+            This platform operates as a peer-to-peer marketplace and does not provide logistics or
+            courier services. Buyers and sellers are solely responsible for arranging and paying for
+            delivery, local dispatch riders, waybills, or in-person handoffs directly. Shipping costs
+            are not processed through the platform and are excluded from commission calculations.
+          </p>
+          <h3 className="legal-h3">5.3 Mandatory in-app escrow &amp; off-platform trading ban</h3>
+          <p>
+            All item payments must be completed through the platform&apos;s in-app escrow checkout.
+            Sharing phone numbers, WhatsApp links, bank account details, or social media handles
+            prior to checkout—or encouraging buyers to pay outside the app to avoid platform fees—is
+            strictly prohibited and will result in immediate account suspension.
+          </p>
+          <h3 className="legal-h3">5.4 Price manipulation &amp; fee avoidance</h3>
+          <p>
+            Sellers must list the true, full price of the item. Artificially lowering an item&apos;s
+            listed price and requesting the balance as an off-platform &quot;shipping&quot; or
+            &quot;handling&quot; fee to reduce commission charges is a violation of these Terms and
+            may result in permanent account termination and forfeiture of pending payouts.
+          </p>
+          <h3 className="legal-h3">5.5 Currency conversion &amp; cross-border settlements</h3>
+          <p>
+            Monthly Premium subscriptions ($11.99/month) and item payouts are displayed and settled
+            in the user&apos;s local currency using prevailing exchange rates at the time of
+            transaction. For cross-border orders, a standard foreign exchange conversion spread may
+            apply during settlement.
+          </p>
+          <p>
+            Sellers are responsible for their own taxes and must provide any information we
+            reasonably need to report payments to the tax authorities. We may withhold payouts where
+            we reasonably suspect fraud, where a dispute is open, or where we are legally required to
+            do so.
           </p>
         </LegalSection>
 

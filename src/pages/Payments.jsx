@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Header } from '../components/layout';
 import { Badge, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
-import { GiftCardModal, OrdersPanel } from '../components/features';
+import { GiftCardModal, OrdersPanel, SupportChat } from '../components/features';
 import { MeetupPanel, ReturnRequests, SecurityActivity } from '../components/marketplace/MarketplaceExtras';
 import { useToast } from '../components/ui/Toast';
 import { ShieldIcon, PlusIcon, CheckIcon, ClockIcon, GiftIcon, TrendingUpIcon } from '../components/ui/Icons';
@@ -436,74 +436,76 @@ export default function Payments() {
       <Header title="Payments" subtitle="Manage your payments, wallet and payouts" />
 
       <div className="payments-content">
-
-      <div className="buyer-protection-card" onClick={() => setShowEscrowInfo(true)} style={{ cursor: 'pointer' }}>
-        <div className="protection-icon"><ShieldIcon size={24} /></div>
-        <div className="protection-content">
-          <h3 className="protection-title">Buyer Protection</h3>
-          <p className="protection-text">All payments are secured with escrow. Your money is held safely until you confirm receipt of the item.</p>
-          <span className="protection-learn">Tap to learn more →</span>
-        </div>
-      </div>
-
-      <OrdersPanel />
-
-      {wallet && (
-        <>
-        <div className="pay-hero">
-          <div className="pay-hero-glow" aria-hidden="true" />
-          <div className="pay-hero-top">
-            <div>
-              <span className="pay-hero-label">Total Balance</span>
-              <div className="pay-hero-balance">{formatCents(wallet.available_cents + wallet.credit_cents)}</div>
-              <span className="pay-hero-sub">Store credit + available earnings</span>
-            </div>
-            <span className="pay-hero-shield" title="Escrow protected">
-              <ShieldIcon size={22} />
-            </span>
-          </div>
-          <div className="pay-hero-actions">
-            <button className="pay-hero-btn" onClick={() => setShowRedeemModal(true)}>
-              <GiftIcon size={16} />
-              Redeem Gift Card
-            </button>
-            <button className="pay-hero-btn" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
-              <GiftIcon size={16} />
-              Gift Mall
-            </button>
-            <button className="pay-hero-btn" onClick={() => setShowPayoutModal(true)} disabled={!wallet || wallet.available_cents < 100}>
-              <TrendingUpIcon size={16} />
-              Payout
-            </button>
-          </div>
-        </div>
-
-        {wallet && (
-        <div className="section">
-          <div className="wallet-grid">
-            <div className="wallet-cell">
-              <span className="wallet-label">Store Credit</span>
-              <span className="wallet-value accent">{formatCents(wallet.credit_cents)}</span>
-            </div>
-            <div className="wallet-cell">
-              <span className="wallet-label">Available Balance</span>
-              <span className="wallet-value">{formatCents(wallet.available_cents)}</span>
-            </div>
-            <div className="wallet-cell">
-              <span className="wallet-label">Pending Payout</span>
-              <span className="wallet-value">{formatCents(wallet.pending_cents)}</span>
-            </div>
-            <div className="wallet-cell">
-              <span className="wallet-label">Lifetime Earnings</span>
-              <span className="wallet-value">{formatCents(wallet.lifetime_cents)}</span>
+        <section className="payments-section">
+          <div className="buyer-protection-card" onClick={() => setShowEscrowInfo(true)} style={{ cursor: 'pointer' }}>
+            <div className="protection-icon"><ShieldIcon size={24} /></div>
+            <div className="protection-content">
+              <h3 className="protection-title">Buyer Protection</h3>
+              <p className="protection-text">All payments are secured with escrow. Your money is held safely until you confirm receipt of the item.</p>
+              <span className="protection-learn">Tap to learn more →</span>
             </div>
           </div>
-        </div>
-      )}
-        </>
-      )}
 
-      <div className="payments-layout">
+          {wallet && (
+            <>
+              <div className="pay-hero">
+                <div className="pay-hero-glow" aria-hidden="true" />
+                <div className="pay-hero-top">
+                  <div>
+                    <span className="pay-hero-label">Total Balance</span>
+                    <div className="pay-hero-balance">{formatCents(wallet.available_cents + wallet.credit_cents)}</div>
+                    <span className="pay-hero-sub">Store credit + available earnings</span>
+                  </div>
+                  <span className="pay-hero-shield" title="Escrow protected">
+                    <ShieldIcon size={22} />
+                  </span>
+                </div>
+                <div className="pay-hero-actions">
+                  <button className="pay-hero-btn" onClick={() => setShowRedeemModal(true)}>
+                    <GiftIcon size={16} />
+                    Redeem Gift Card
+                  </button>
+                  <button className="pay-hero-btn" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>
+                    <GiftIcon size={16} />
+                    Gift Mall
+                  </button>
+                  <button className="pay-hero-btn" onClick={() => setShowPayoutModal(true)} disabled={wallet.available_cents < 100}>
+                    <TrendingUpIcon size={16} />
+                    Payout
+                  </button>
+                </div>
+              </div>
+              <div className="wallet-grid">
+                <div className="wallet-cell">
+                  <span className="wallet-label">Store Credit</span>
+                  <span className="wallet-value accent">{formatCents(wallet.credit_cents)}</span>
+                </div>
+                <div className="wallet-cell">
+                  <span className="wallet-label">Available Balance</span>
+                  <span className="wallet-value">{formatCents(wallet.available_cents)}</span>
+                </div>
+                <div className="wallet-cell">
+                  <span className="wallet-label">Pending Payout</span>
+                  <span className="wallet-value">{formatCents(wallet.pending_cents)}</span>
+                </div>
+                <div className="wallet-cell">
+                  <span className="wallet-label">Lifetime Earnings</span>
+                  <span className="wallet-value">{formatCents(wallet.lifetime_cents)}</span>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="payments-section">
+          <div className="section-header">
+            <h2 className="section-title">Orders</h2>
+            <span className="section-subtitle">Purchases, shipping and handoffs</span>
+          </div>
+          <OrdersPanel />
+        </section>
+
+        <div className="payments-layout">
         <div className="payments-col">
       <div className="section">
         <div className="section-header">
@@ -562,50 +564,51 @@ export default function Payments() {
               </button>
             </div>
           </div>
-
-      <div className="section">
-        <div className="section-header">
-          <h2 className="section-title">Payouts</h2>
         </div>
-        {payouts.length === 0 ? (
-          <div className="empty-state" style={{ padding: '20px' }}>
-            <p className="empty-text" style={{ marginBottom: 12 }}>Earn from sales, then request a payout to your bank account.</p>
-            <Button onClick={() => setShowPayoutModal(true)}>Request Payout</Button>
+        </div>
+
+        <section className="payments-section">
+          <div className="section-header">
+            <h2 className="section-title">Payouts</h2>
+            <span className="section-subtitle">Move earnings to your bank</span>
           </div>
-        ) : (
-          <>
-            {payouts.map((p) => (
-              <div key={p.id} className="transaction-item">
-                <div className="transaction-icon">
-                  {p.status === 'pending' ? <ClockIcon size={20} /> : <CheckIcon size={20} />}
-                </div>
-                <div className="transaction-info">
-                  <div className="transaction-title">Payout · {p.method}</div>
-                  <div className="transaction-date">{formatDate(p.created_at)}</div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-                    <span className={`transaction-status ${p.status}`}>{STATUS_LABELS[p.status] || p.status}</span>
+          {payouts.length === 0 ? (
+            <div className="empty-state" style={{ padding: '20px' }}>
+              <p className="empty-text" style={{ marginBottom: 12 }}>Earn from sales, then request a payout to your bank account.</p>
+              <Button onClick={() => setShowPayoutModal(true)}>Request Payout</Button>
+            </div>
+          ) : (
+            <>
+              {payouts.map((p) => (
+                <div key={p.id} className="transaction-item">
+                  <div className="transaction-icon">
+                    {p.status === 'pending' ? <ClockIcon size={20} /> : <CheckIcon size={20} />}
+                  </div>
+                  <div className="transaction-info">
+                    <div className="transaction-title">Payout · {p.method}</div>
+                    <div className="transaction-date">{formatDate(p.created_at)}</div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+                      <span className={`transaction-status ${p.status}`}>{STATUS_LABELS[p.status] || p.status}</span>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+                    <div className="transaction-amount">{formatCents(p.amount_cents)}</div>
+                    {p.status === 'pending' && (
+                      <button className="card-action-btn danger" onClick={() => handleCancelPayout(p.id)}>Cancel</button>
+                    )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
-                  <div className="transaction-amount">{formatCents(p.amount_cents)}</div>
-                  {p.status === 'pending' && (
-                    <button className="card-action-btn danger" onClick={() => handleCancelPayout(p.id)}>Cancel</button>
-                  )}
-                </div>
+              ))}
+              <div style={{ marginTop: 12 }}>
+                <Button block onClick={() => setShowPayoutModal(true)} disabled={!wallet || wallet.available_cents < 100}>
+                  {wallet && wallet.available_cents < 100 ? 'No available balance to withdraw' : 'Request Payout'}
+                </Button>
               </div>
-            ))}
-            <div style={{ marginTop: 12 }}>
-              <Button block onClick={() => setShowPayoutModal(true)} disabled={!wallet || wallet.available_cents < 100}>
-                {wallet && wallet.available_cents < 100 ? 'No available balance to withdraw' : 'Request Payout'}
-              </Button>
-            </div>
-          </>
-        )}
-      </div>
-        </div>
-        </div>
+            </>
+          )}
+        </section>
 
-      <div className="section">
+        <section className="payments-section">
         <div className="section-header">
           <h2 className="section-title">Transaction History</h2>
         </div>
@@ -731,19 +734,33 @@ export default function Payments() {
             );
           })
         )}
+        </section>
+
+        <section className="payments-section">
+          <div className="section-header">
+            <h2 className="section-title">Get Help</h2>
+            <span className="section-subtitle">Payment support and quick answers</span>
+          </div>
+          <SupportChat variant="inline" context="payments" />
+        </section>
+
+        <section className="payments-section">
+          <div className="section-header">
+            <h2 className="section-title">Delivery &amp; Safety</h2>
+            <span className="section-subtitle">Meetups, returns and account activity</span>
+          </div>
+          {activeTransactions
+            .filter((txn) => ['pending', 'completed'].includes(txn.status || txn.state))
+            .slice(0, 3)
+            .map((txn) => (
+              <MeetupPanel key={txn.id} txnId={txn.id} itemId={txn.item_id || txn.itemId} />
+            ))}
+
+          <ReturnRequests transactions={activeTransactions} />
+
+          <SecurityActivity />
+        </section>
       </div>
-      </div>
-
-      {activeTransactions
-        .filter((txn) => ['pending', 'completed'].includes(txn.status || txn.state))
-        .slice(0, 3)
-        .map((txn) => (
-          <MeetupPanel key={txn.id} txnId={txn.id} itemId={txn.item_id || txn.itemId} />
-        ))}
-
-      <ReturnRequests transactions={activeTransactions} />
-
-      <SecurityActivity />
 
       <Modal isOpen={showEscrowInfo} onClose={() => setShowEscrowInfo(false)} title="How Escrow Works">
         <div className="escrow-info-list">
