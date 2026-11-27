@@ -552,7 +552,7 @@ export default function Payments() {
               <button className="wallet-redeem-btn" onClick={() => setShowRedeemModal(true)}>Redeem</button>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: 13, marginBottom: 12 }}>
-              Redeem a gift card to add store credit, or browse our gift card brands and the Gift Mall.
+              Redeem a TradeHub gift card to add store credit, or buy one from $20, $50, $100, $500 or $1,000.
             </p>
             <div className="gc-actions">
               <button className="wallet-redeem-btn wallet-browse-btn" onClick={() => window.dispatchEvent(new CustomEvent('openGiftMall'))}>

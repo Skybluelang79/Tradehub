@@ -495,7 +495,7 @@ export default function Home() {
           <span className="gift-mall-banner-icon">🎁</span>
           <span className="gift-mall-banner-text">
             <strong>Gift Mall</strong>
-            <small>Browse gift card brands &amp; share your own card design</small>
+            <small>TradeHub gift cards from $20 &amp; share your own card design</small>
           </span>
           <span className="gift-mall-banner-arrow">→</span>
         </button>

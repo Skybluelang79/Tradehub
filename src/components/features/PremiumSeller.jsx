@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { formatPrice } from '../../utils/helpers';
+import { formatMoney } from '../../utils/currency';
 import { api } from '../../services/client';
 import './PremiumSeller.css';
 
@@ -39,7 +40,8 @@ const premiumSellers = [
   },
 ];
 
-const PLATFORM_FEE_RATE = 0.05;
+const BASIC_FEE_RATE = 0.10;
+const PREMIUM_FEE_RATE = 0.05;
 
 const perks = [
   { icon: '👑', title: 'Priority Listing', desc: 'Your items appear first in search results' },
@@ -47,7 +49,7 @@ const perks = [
   { icon: '📊', title: 'Seller Analytics', desc: 'Track views, clicks, and conversion rates' },
   { icon: '🚀', title: '7 Featured Slots', desc: 'Keep seven listings featured at once' },
   { icon: '📦', title: '120 Listings', desc: 'List up to 120 items for 90 days each' },
-  { icon: '🏷️', title: 'Reduced 5% Fee', desc: 'Premium cuts the transaction fee from 10% to 5%' },
+  { icon: '🏷️', title: 'Reduced 5% Fee', desc: 'Premium cuts the fee from 10% ($10 per $100) to 5% ($5 per $100)' },
 ];
 
 const plans = [
@@ -60,7 +62,7 @@ const plans = [
     color: '#6B6B7B',
     features: [
       '$0 monthly fee — list items with zero subscription commitment',
-      '10% commission per completed sale (deducted automatically from escrow payout)',
+      '10% commission per completed sale — $10 for every $100 sold, deducted from escrow payout',
       'Protected In-App Escrow — buyer pays upfront before you ship or hand over the item',
       'Direct P2P Delivery — arrange local pickup, dispatch riders, or waybills directly with your buyer',
       'Standard Search Placement',
@@ -75,8 +77,8 @@ const plans = [
     period: '/mo',
     color: '#FBBF24',
     features: [
-      'Cut your commission in half — just 5% per completed sale',
-      'Pays for itself at $240/month in sales (save $5 on every $100 sold)',
+      'Cut your commission in half — 5% per sale, or $5 for every $100 sold',
+      'Pays for itself at $240/month in sales (Basic would cost $24, Premium costs $12)',
       'Verified Seller Badge to build instant buyer trust',
       'Priority Search & Category Placement so your listings sell faster',
       'Billed in your local currency (auto-converted at checkout; cancel anytime)',
@@ -91,7 +93,7 @@ const plans = [
     displayPrice: '$24.99',
     period: '/mo',
     color: '#A78BFA',
-    features: ['Unlimited listings', 'Everything in Premium', '5% escrow fee', 'Priority support', 'Custom storefront'],
+    features: ['Unlimited listings', 'Everything in Premium', '5% escrow fee ($5 per $100)', 'Priority support', 'Custom storefront'],
     cta: 'Subscribe',
     badge: 'For Power Sellers',
   },
@@ -123,7 +125,7 @@ export default function PremiumSeller() {
   const [currentPlan, setCurrentPlan] = useState('free');
   const [upgradeError, setUpgradeError] = useState('');
   const [monthlySales, setMonthlySales] = useState(20);
-  const [avgPrice, setAvgPrice] = useState(45000);
+  const [avgPrice, setAvgPrice] = useState(300);
   const [upgradeStep, setUpgradeStep] = useState(0);
   const [particles, setParticles] = useState([]);
   const particleTimerRef = useRef(null);
@@ -147,8 +149,10 @@ export default function PremiumSeller() {
   }, []);
 
   const monthlyRevenue = monthlySales * avgPrice;
-  const platformFee = monthlyRevenue * PLATFORM_FEE_RATE;
-  const sellerPayout = useAnimatedCounter(Math.round(monthlyRevenue - platformFee), 1200, showUpgrade);
+  const basicFee = monthlyRevenue * BASIC_FEE_RATE;
+  const premiumFee = monthlyRevenue * PREMIUM_FEE_RATE;
+  const feeSavings = basicFee - premiumFee;
+  const sellerPayout = useAnimatedCounter(Math.round(monthlyRevenue - premiumFee), 1200, showUpgrade);
 
   const spawnParticles = useCallback(() => {
     const newParticles = Array.from({ length: 12 }, (_, i) => ({
@@ -320,26 +324,34 @@ export default function PremiumSeller() {
                   </div>
                 </div>
                 <div className="premium-calc-field">
-                  <label>Avg. Price (₦)</label>
+                  <label>Avg. Price (USD)</label>
                   <div className="premium-calc-slider-row">
-                    <input type="range" min="5000" max="500000" step="5000" value={avgPrice}
+                    <input type="range" min="20" max="5000" step="20" value={avgPrice}
                       onChange={(e) => setAvgPrice(Number(e.target.value))} className="premium-slider" />
-                    <span className="premium-calc-val">{formatPrice(avgPrice)}</span>
+                    <span className="premium-calc-val">{formatMoney(avgPrice, 'USD')}</span>
                   </div>
                 </div>
               </div>
               <div className="premium-calc-results">
                 <div className="premium-calc-result">
                   <span className="premium-calc-result-label">Revenue</span>
-                  <span className="premium-calc-result-value">{formatPrice(monthlyRevenue)}</span>
+                  <span className="premium-calc-result-value">{formatMoney(monthlyRevenue, 'USD')}</span>
                 </div>
                 <div className="premium-calc-result free">
-                  <span className="premium-calc-result-label">Gold fee (5%)</span>
-                  <span className="premium-calc-result-value">-{formatPrice(platformFee)}</span>
+                  <span className="premium-calc-result-label">Basic fee (10%)</span>
+                  <span className="premium-calc-result-value">-{formatMoney(basicFee, 'USD')}</span>
+                </div>
+                <div className="premium-calc-result free">
+                  <span className="premium-calc-result-label">Premium fee (5%)</span>
+                  <span className="premium-calc-result-value">-{formatMoney(premiumFee, 'USD')}</span>
+                </div>
+                <div className="premium-calc-result savings">
+                  <span className="premium-calc-result-label">You save with Premium</span>
+                  <span className="premium-calc-result-value">{formatMoney(feeSavings, 'USD')}/mo</span>
                 </div>
                 <div className="premium-calc-result savings">
                   <span className="premium-calc-result-label">You keep</span>
-                  <span className="premium-calc-result-value">{formatPrice(sellerPayout)}/mo</span>
+                  <span className="premium-calc-result-value">{formatMoney(sellerPayout, 'USD')}/mo</span>
                 </div>
               </div>
             </div>

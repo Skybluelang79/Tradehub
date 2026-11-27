@@ -129,7 +129,7 @@ def test_dashboard_gift_card_count_excludes_voided():
 
     issued = client.post(
         "/api/payments/gift-cards/issue",
-        json={"amountCents": 1000, "count": 1},
+        json={"amountCents": 2000, "count": 1},
         headers=auth(admin),
     )
     code = issued.json()["codes"][0]

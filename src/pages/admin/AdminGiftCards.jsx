@@ -2,13 +2,15 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAdmin } from '../../context/AdminContext.jsx';
 import { api } from '../../services/client';
 import {
-  CheckIcon, BanIcon, EditIcon, AlertIcon, PackageIcon, ChartIcon, DollarIcon, EyeIcon,
+  CheckIcon, BanIcon, PackageIcon, ChartIcon, DollarIcon, EyeIcon,
 } from './Icons.jsx';
 import './AdminTransactions.css';
 import './AdminUsers.css';
 import './AdminGiftCards.css';
 
 const fmt = (cents) => `$${((cents || 0) / 100).toFixed(2)}`;
+
+const USD_DENOMINATIONS = [20, 50, 100, 500, 1000];
 
 const CARD_STATUS = {
   active: { label: 'Active', cls: 'status-active' },
@@ -49,13 +51,8 @@ export default function AdminGiftCards() {
   const [busy, setBusy] = useState('');
   const [copied, setCopied] = useState('');
 
-  const [showBrandModal, setShowBrandModal] = useState(false);
-  const [editingBrand, setEditingBrand] = useState(null);
-  const [brandForm, setBrandForm] = useState({ name: '', description: '', category: 'general', frontImage: '', backImage: '', active: true, sellable: false });
-  const [uploadingImg, setUploadingImg] = useState('');
-
   const [showIssueModal, setShowIssueModal] = useState(false);
-  const [issueForm, setIssueForm] = useState({ amount: '25', count: '1', brandId: '', cardType: 'digital', purchaseCents: '', discountPercent: '' });
+  const [issueForm, setIssueForm] = useState({ amount: '20', count: '1', brandId: '', cardType: 'digital', purchaseCents: '', discountPercent: '' });
   const [issuedCodes, setIssuedCodes] = useState([]);
   const [issueBusy, setIssueBusy] = useState(false);
   const [issueSummary, setIssueSummary] = useState(null);
@@ -128,64 +125,10 @@ export default function AdminGiftCards() {
     }
   };
 
-  const uploadImage = async (file, key) => {
-    if (!file) return;
-    setUploadingImg(key);
-    try {
-      const res = await api.upload.single(file);
-      const url = res?.file?.url || res?.url;
-      if (url) setBrandForm((f) => ({ ...f, [key]: url }));
-      else alert('Upload returned no URL');
-    } catch (err) {
-      alert(`Upload failed: ${err.message || 'unknown error'}`);
-    } finally {
-      setUploadingImg('');
-    }
-  };
-
-  const openBrandModal = (brand) => {
-    setEditingBrand(brand || null);
-    setBrandForm(brand ? {
-      name: brand.name,
-      description: brand.description || '',
-      category: brand.category || 'general',
-      frontImage: brand.front_image || '',
-      backImage: brand.back_image || '',
-      active: !!brand.active,
-      sellable: !!brand.sellable,
-    } : { name: '', description: '', category: 'general', frontImage: '', backImage: '', active: true, sellable: false });
-    setShowBrandModal(true);
-  };
-
-  const saveBrand = async () => {
-    if (!brandForm.name?.trim()) {
-      alert('Brand name required');
-      return;
-    }
-    setBusy('save-brand');
-    try {
-      if (editingBrand) {
-        await api.payments.updateGiftCardBrand(editingBrand.id, brandForm);
-      } else {
-        await api.payments.createGiftCardBrand(brandForm);
-      }
-      setShowBrandModal(false);
-      await refresh();
-    } catch (err) {
-      alert(`Could not save brand: ${err.message}`);
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const toggleBrand = (brand) => {
-    act(`toggle-${brand.id}`, () => api.payments.updateGiftCardBrand(brand.id, { active: !brand.active }), refresh);
-  };
-
   const handleIssue = async () => {
     const amountCents = Math.round(parseFloat(issueForm.amount || '0') * 100);
-    if (!amountCents || amountCents < 100) {
-      alert('Amount must be at least $1.00');
+    if (!USD_DENOMINATIONS.includes(amountCents / 100)) {
+      alert(`Choose a fixed value: ${USD_DENOMINATIONS.map((d) => `$${d}`).join(', ')}`);
       return;
     }
     const payload = {
@@ -220,18 +163,16 @@ export default function AdminGiftCards() {
   };
 
   const activeBrands = brands.filter((b) => b.active);
+  const catalogBrand = activeBrands.find((b) => b.name === 'TradeHub Gift Card') || activeBrands[0];
 
   return (
     <div className="admin-giftcards">
       <div className="admin-page-header">
         <div className="header-left">
           <h1>Gift Cards</h1>
-          <p>Manage brands, issue cards, and track gift card revenue</p>
+          <p>Manage the TradeHub gift card, issue codes, and track revenue</p>
         </div>
         <div className="payout-actions">
-          <button className="btn-secondary" onClick={() => openBrandModal(null)}>
-            <EditIcon size={16} /> New Brand
-          </button>
           <button className="btn-primary" onClick={() => { setIssuedCodes([]); setIssueSummary(null); setShowIssueModal(true); }}>
             <GiftIcon size={16} /> Issue Gift Cards
           </button>
@@ -240,7 +181,7 @@ export default function AdminGiftCards() {
 
       <div className="gc-tabs">
         {[
-          { id: 'brands', label: 'Brands', icon: PackageIcon },
+          { id: 'brands', label: 'Catalog', icon: PackageIcon },
           { id: 'issue', label: 'Issue', icon: GiftIcon },
           { id: 'analytics', label: 'Analytics', icon: ChartIcon },
           { id: 'cards', label: 'Cards', icon: DollarIcon },
@@ -263,45 +204,29 @@ export default function AdminGiftCards() {
         <>
           {tab === 'brands' && (
             <div className="gc-section">
-              <div className="gc-brand-grid">
-                {brands.map((brand) => (
-                  <div key={brand.id} className={`gc-brand-admin ${brand.active ? '' : 'inactive'}`}>
-                    <div className="gc-brand-admin-art">
-                      {brand.front_image ? (
-                        <img src={brand.front_image} alt={brand.name} />
-                      ) : (
-                        <div className="gc-brand-art-fallback"><span>{brand.name}</span></div>
-                      )}
-                      {brand.back_image && (
-                        <div className="gc-brand-art-back">
-                          <img src={brand.back_image} alt={`${brand.name} back`} />
-                          <span className="gc-art-tag">Back</span>
-                        </div>
-                      )}
-                    </div>
-                    <div className="gc-brand-admin-info">
-                      <div className="gc-brand-admin-row">
-                        <strong>{brand.name}</strong>
-                        <span className="gc-brand-cat">{brand.category}</span>
-                      </div>
-                      <p>{brand.description || 'No description'}</p>
-                      <span className={`status-badge ${brand.active ? 'status-active' : 'status-cancelled'}`}>
-                        {brand.active ? 'Active' : 'Deactivated'}
-                      </span>
-                    </div>
-                    <div className="gc-brand-admin-actions">
-                      <button className="btn-sm btn-secondary" onClick={() => openBrandModal(brand)} disabled={!!busy}><EditIcon size={14} /> Edit</button>
-                      <button className="btn-sm btn-secondary" onClick={() => toggleBrand(brand)} disabled={!!busy}>
-                        {brand.active ? <BanIcon size={14} /> : <RefreshIcon size={14} />}
-                        {brand.active ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </div>
+              <div className="gc-catalog-card">
+                <div className="gc-catalog-art">
+                  {catalogBrand?.front_image ? (
+                    <img src={catalogBrand.front_image} alt={catalogBrand.name} />
+                  ) : (
+                    <div className="gc-brand-art-fallback"><span>TradeHub Gift Card</span></div>
+                  )}
+                </div>
+                <div className="gc-catalog-info">
+                  <span className="gc-eyebrow">Marketplace credit</span>
+                  <h2>{catalogBrand?.name || 'TradeHub Gift Card'}</h2>
+                  <p>
+                    {catalogBrand?.description || 'Redeem for store credit to use on any listing, listing boost or subscription on TradeHub.'}
+                  </p>
+                  <span className="status-badge status-active">Active · Available for purchase</span>
+                  <div className="gc-denomination-label">Fixed USD values</div>
+                  <div className="gc-denomination-grid">
+                    {USD_DENOMINATIONS.map((value) => (
+                      <span key={value} className="gc-denomination">{fmt(value * 100)}</span>
+                    ))}
                   </div>
-                ))}
+                </div>
               </div>
-              {brands.length === 0 && (
-                <div className="gc-empty"><AlertIcon size={20} /> No brands yet — create your first brand.</div>
-              )}
             </div>
           )}
 
@@ -309,11 +234,24 @@ export default function AdminGiftCards() {
             <div className="gc-section">
               {issuedCodes.length === 0 ? (
                 <div className="gc-issue-panel">
-                  <p className="gc-section-hint">Issue one or many codes. Purchase price defaults to the card value (0% discount) unless you set a purchase price or discount below.</p>
+                  <p className="gc-section-hint">Issue one or many TradeHub Gift Codes. Purchase price defaults to the card value (0% discount) unless you set a purchase price or discount below.</p>
+                  <div className="gc-denomination-label">Face value</div>
+                  <div className="gc-denomination-grid gc-denomination-select">
+                    {USD_DENOMINATIONS.map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        className={`gc-denomination ${issueForm.amount === String(value) ? 'selected' : ''}`}
+                        onClick={() => setIssueForm({ ...issueForm, amount: String(value) })}
+                      >
+                        {fmt(value * 100)}
+                      </button>
+                    ))}
+                  </div>
                   <div className="gc-form-row">
                     <div className="gc-form-field">
-                      <label className="gift-label">Face Value (₦)</label>
-                      <input className="gift-input" type="number" min="1" value={issueForm.amount} onChange={(e) => setIssueForm({ ...issueForm, amount: e.target.value })} />
+                      <label className="gift-label">Custom Value (USD)</label>
+                      <input className="gift-input" type="number" min="20" step="10" value={issueForm.amount} onChange={(e) => setIssueForm({ ...issueForm, amount: e.target.value })} />
                     </div>
                     <div className="gc-form-field">
                       <label className="gift-label">Count</label>
@@ -338,7 +276,7 @@ export default function AdminGiftCards() {
                   </div>
                   <div className="gc-form-row">
                     <div className="gc-form-field">
-                      <label className="gift-label">Purchase Price (₦, optional)</label>
+                      <label className="gift-label">Purchase Price (USD, optional)</label>
                       <input className="gift-input" type="number" min="0" placeholder="Auto = face value" value={issueForm.purchaseCents} onChange={(e) => setIssueForm({ ...issueForm, purchaseCents: e.target.value })} />
                     </div>
                     <div className="gc-form-field">
@@ -567,71 +505,6 @@ export default function AdminGiftCards() {
         </>
       )}
 
-      {showBrandModal && (
-        <div className="gift-modal-overlay" onClick={() => { if (!busy) setShowBrandModal(false); }}>
-          <div className="gift-modal gc-brand-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="gift-modal-header">
-              <h3>{editingBrand ? 'Edit Brand' : 'New Brand'}</h3>
-              <button className="gift-modal-close" onClick={() => { if (!busy) setShowBrandModal(false); }}>×</button>
-            </div>
-            <div className="gift-modal-body">
-              <div className="gc-form-row">
-                <div className="gc-form-field">
-                  <label className="gift-label">Name *</label>
-                  <input className="gift-input" value={brandForm.name} onChange={(e) => setBrandForm({ ...brandForm, name: e.target.value })} />
-                </div>
-                <div className="gc-form-field">
-                  <label className="gift-label">Category</label>
-                  <input className="gift-input" value={brandForm.category} onChange={(e) => setBrandForm({ ...brandForm, category: e.target.value })} />
-                </div>
-              </div>
-              <div className="gc-form-field">
-                <label className="gift-label">Description</label>
-                <input className="gift-input" value={brandForm.description} onChange={(e) => setBrandForm({ ...brandForm, description: e.target.value })} />
-              </div>
-              <div className="gc-form-row">
-                {[['frontImage', 'Front image'], ['backImage', 'Back image']].map(([key, label]) => (
-                  <div className="gc-form-field" key={key}>
-                    <label className="gift-label">{label}</label>
-                    <label className={`gc-upload-box ${brandForm[key] ? 'has-img' : ''}`}>
-                      {brandForm[key] ? (
-                        <>
-                          <img src={brandForm[key]} alt={label} />
-                          <span className="gc-upload-remove" role="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); setBrandForm((f) => ({ ...f, [key]: '' })); }}>×</span>
-                        </>
-                      ) : (
-                        <span>{uploadingImg === key ? 'Uploading...' : 'Browse from folder'}</span>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                        disabled={!!uploadingImg}
-                        onChange={(e) => uploadImage(e.target.files?.[0], key)}
-                      />
-                    </label>
-                  </div>
-                ))}
-              </div>
-              <label className="gc-checkbox">
-                <input type="checkbox" checked={brandForm.active} onChange={(e) => setBrandForm({ ...brandForm, active: e.target.checked })} />
-                Active (shown to buyers)
-              </label>
-              <label className="gc-checkbox">
-                <input type="checkbox" checked={brandForm.sellable} onChange={(e) => setBrandForm({ ...brandForm, sellable: e.target.checked })} />
-                Sellable (buyers can purchase with card)
-              </label>
-              <div className="payout-actions" style={{ marginTop: 4 }}>
-                <button className="btn-secondary" onClick={() => setShowBrandModal(false)}>Cancel</button>
-                <button className="btn-primary" disabled={!!busy} onClick={saveBrand}>
-                  {busy ? 'Saving...' : <><CheckIcon size={16} /> Save Brand</>}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {showIssueModal && (
         <div className="gift-modal-overlay" onClick={() => { if (!issueBusy) setShowIssueModal(false); }}>
           <div className="gift-modal" onClick={(e) => e.stopPropagation()}>
@@ -640,10 +513,22 @@ export default function AdminGiftCards() {
               <button className="gift-modal-close" onClick={() => { if (!issueBusy) setShowIssueModal(false); }}>×</button>
             </div>
             <div className="gift-modal-body">
+              <div className="gc-denomination-grid gc-denomination-select">
+                {USD_DENOMINATIONS.map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    className={`gc-denomination ${issueForm.amount === String(value) ? 'selected' : ''}`}
+                    onClick={() => setIssueForm({ ...issueForm, amount: String(value) })}
+                  >
+                    {fmt(value * 100)}
+                  </button>
+                ))}
+              </div>
               <div className="gc-form-row">
                 <div className="gc-form-field">
-                  <label className="gift-label">Face Value (₦)</label>
-                  <input className="gift-input" type="number" min="1" value={issueForm.amount} onChange={(e) => setIssueForm({ ...issueForm, amount: e.target.value })} />
+                  <label className="gift-label">Face Value (USD)</label>
+                  <input className="gift-input" type="number" min="20" step="10" value={issueForm.amount} onChange={(e) => setIssueForm({ ...issueForm, amount: e.target.value })} />
                 </div>
                 <div className="gc-form-field">
                   <label className="gift-label">Count</label>
@@ -668,7 +553,7 @@ export default function AdminGiftCards() {
               </div>
               <div className="gc-form-row">
                 <div className="gc-form-field">
-                  <label className="gift-label">Purchase Price (₦, optional)</label>
+                  <label className="gift-label">Purchase Price (USD, optional)</label>
                   <input className="gift-input" type="number" min="0" placeholder="Auto = face value" value={issueForm.purchaseCents} onChange={(e) => setIssueForm({ ...issueForm, purchaseCents: e.target.value })} />
                 </div>
                 <div className="gc-form-field">

@@ -3,6 +3,7 @@ DEFAULT_CURRENCY = "NGN"
 PAYSTACK_CURRENCIES = ["NGN", "GHS", "KES", "ZAR", "UGX"]
 
 AFRICAN_CURRENCIES = [
+    {"code": "USD", "symbol": "$"},
     {"code": "AOA", "symbol": "Kz"},
     {"code": "BIF", "symbol": "FBu"},
     {"code": "BWP", "symbol": "P"},
@@ -46,6 +47,7 @@ AFRICAN_CURRENCIES = [
 ]
 
 USD_RATES = {
+    "USD": 1,
     "AOA": 915, "BIF": 2900, "BWP": 13.5, "CDF": 2850, "CVE": 102, "DJF": 177.7,
     "DZD": 133, "EGP": 48, "ERN": 15, "ETB": 130, "GHS": 10.5, "GMD": 70, "GNF": 8600,
     "KES": 129, "KMF": 455, "LRD": 197, "LSL": 18, "LYD": 4.8, "MAD": 9.2, "MGA": 4400,

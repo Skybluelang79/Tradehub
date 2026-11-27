@@ -4,11 +4,10 @@ import { api } from '../../services/client';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../ui/Toast';
 import { payWithCard } from '../../services/paystack';
-import { formatPrice } from '../../utils/currency';
+import { formatMoney } from '../../utils/currency';
 import './GiftCardModal.css';
 
-const PRESETS = [1000, 2000, 5000, 10000, 20000];
-const MIN_AMOUNT = 100;
+const PRESETS = [20, 50, 100, 500, 1000];
 
 function CardFace({ brand, side }) {
   const image = side === 'front' ? brand.front_image : brand.back_image;
@@ -37,7 +36,7 @@ export default function GiftCardModal({ isOpen, onClose, onPurchased }) {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [amount, setAmount] = useState('5000');
+  const [amount, setAmount] = useState('20');
   const [buying, setBuying] = useState(false);
   const [success, setSuccess] = useState(null);
 
@@ -65,20 +64,20 @@ export default function GiftCardModal({ isOpen, onClose, onPurchased }) {
     setSelected(null);
     setSuccess(null);
     setBuying(false);
-    setAmount('5000');
+    setAmount('20');
     onClose();
   };
 
   const openBrand = (brand) => {
     setSelected(brand);
     setSuccess(null);
-    setAmount('5000');
+    setAmount('20');
   };
 
   const handleBuy = async () => {
     const value = Number(amount);
-    if (!Number.isFinite(value) || value < MIN_AMOUNT) {
-      addToast(`Enter an amount of at least ${formatPrice(MIN_AMOUNT)}`, 'error');
+    if (!PRESETS.includes(value)) {
+      addToast(`Choose one of ${PRESETS.map((preset) => formatMoney(preset, 'USD')).join(', ')}`, 'error');
       return;
     }
     if (!isAuthenticated) {
@@ -91,7 +90,7 @@ export default function GiftCardModal({ isOpen, onClose, onPurchased }) {
       const res = await api.payments.purchaseGiftCard({ brandId: selected.id, amountCents });
       if (res.paid) {
         setSuccess({ amountCents: res.amountCents, creditCents: res.creditCents, demo: !!res.demo });
-        addToast(`${formatPrice(res.amountCents / 100)} added to your store credit`, 'success');
+        addToast(`${formatMoney(res.amountCents / 100, 'USD')} added to your store credit`, 'success');
         onPurchased?.();
         setBuying(false);
         return;
@@ -143,7 +142,7 @@ export default function GiftCardModal({ isOpen, onClose, onPurchased }) {
       ) : selected ? (
         <div className="gcm-detail">
           <button type="button" className="gcm-back" onClick={() => setSelected(null)}>
-            ← All brands
+            ← Gift cards
           </button>
           <div className="gcm-preview">
             <CardFace brand={selected} side="front" />
@@ -154,17 +153,17 @@ export default function GiftCardModal({ isOpen, onClose, onPurchased }) {
           </p>
           {success ? (
             <div className="gcm-success">
-              <strong>{formatPrice(success.amountCents / 100)} added to your store credit</strong>
+              <strong>{formatMoney(success.amountCents / 100, 'USD')} added to your store credit</strong>
               <span>
-                New balance: {formatPrice(success.creditCents / 100)}
+                New balance: {formatMoney(success.creditCents / 100, 'USD')}
                 {success.demo ? ' (demo payment)' : ''}
               </span>
               <button type="button" className="btn-primary" onClick={handleClose}>Done</button>
             </div>
           ) : selected.sellable ? (
             <div className="gcm-buy">
-              <h4>Buy this gift card</h4>
-              <p>Pick an amount. The full value is added to your TradeHub store credit instantly.</p>
+              <h4>TradeHub Gift Card</h4>
+              <p>Choose a USD value. The full amount is added to your TradeHub store credit instantly.</p>
               <div className="gcm-presets">
                 {PRESETS.map((preset) => (
                   <button
@@ -173,23 +172,12 @@ export default function GiftCardModal({ isOpen, onClose, onPurchased }) {
                     className={`gcm-preset ${Number(amount) === preset ? 'active' : ''}`}
                     onClick={() => setAmount(String(preset))}
                   >
-                    {formatPrice(preset)}
+                    {formatMoney(preset, 'USD')}
                   </button>
                 ))}
               </div>
-              <div className="input-group">
-                <label className="input-label">Amount</label>
-                <input
-                  className="input"
-                  type="number"
-                  min={MIN_AMOUNT}
-                  step="50"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
               <button type="button" className="btn-primary gcm-buy-btn" disabled={buying} onClick={handleBuy}>
-                {buying ? 'Processing...' : `Buy for ${formatPrice(Number(amount) || 0)}`}
+                {buying ? 'Processing...' : `Buy for ${formatMoney(Number(amount) || 0, 'USD')}`}
               </button>
             </div>
           ) : (

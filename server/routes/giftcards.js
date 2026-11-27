@@ -20,8 +20,9 @@ const GIFT_CARD_TYPES = ['digital', 'physical'];
 // Same rule as item checkout: demo transactions are only minted outside
 // production or when DEMO_MODE is explicitly enabled.
 const ALLOW_DEMO_PAYMENTS = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV !== 'production';
-const MIN_PURCHASE_CENTS = 10000;
-const MAX_PURCHASE_CENTS = 10000000;
+const GIFT_CARD_DENOMINATIONS_CENTS = [2000, 5000, 10000, 50000, 100000];
+const MIN_PURCHASE_CENTS = GIFT_CARD_DENOMINATIONS_CENTS[0];
+const MAX_PURCHASE_CENTS = GIFT_CARD_DENOMINATIONS_CENTS[GIFT_CARD_DENOMINATIONS_CENTS.length - 1];
 
 // The catalog is intentionally limited to the TradeHub-branded card: its value
 // is platform credit, so every gift card sold on the marketplace is redeemable
@@ -144,7 +145,7 @@ router.get('/brands', authenticateToken, (req, res) => {
   try {
     seedDefaultBrands();
     const brands = db.prepare('SELECT * FROM gift_card_brands WHERE active = 1 ORDER BY name').all();
-    res.json({ brands });
+    res.json({ brands, denominationsCents: GIFT_CARD_DENOMINATIONS_CENTS });
   } catch (err) {
     logger.error('List gift card brands error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -154,8 +155,8 @@ router.get('/brands', authenticateToken, (req, res) => {
 router.get('/brands/all', adminAuth, (req, res) => {
   try {
     seedDefaultBrands();
-    const brands = db.prepare('SELECT * FROM gift_card_brands ORDER BY active DESC, name').all();
-    res.json({ brands });
+    const brands = db.prepare('SELECT * FROM gift_card_brands WHERE active = 1 ORDER BY name').all();
+    res.json({ brands, denominationsCents: GIFT_CARD_DENOMINATIONS_CENTS });
   } catch (err) {
     logger.error('List all brands error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -219,7 +220,7 @@ router.get('/mall', (req, res) => {
   try {
     seedDefaultBrands();
     const brands = db.prepare('SELECT * FROM gift_card_brands WHERE active = 1 ORDER BY name').all();
-    res.json({ brands, canSubmit: true });
+    res.json({ brands, canSubmit: true, denominationsCents: GIFT_CARD_DENOMINATIONS_CENTS });
   } catch (err) {
     logger.error('Gift card mall error:', err);
     res.status(500).json({ error: 'Internal server error' });
@@ -291,11 +292,9 @@ router.post('/purchase-intent', authenticateToken, async (req, res) => {
     const brand = db.prepare('SELECT * FROM gift_card_brands WHERE id = ?').get(brandId);
     if (!brand || !brand.active) return res.status(404).json({ error: 'Gift card brand not found' });
     if (!brand.sellable) return res.status(400).json({ error: 'This gift card is not available for purchase' });
-    if (!Number.isFinite(amount) || amount < MIN_PURCHASE_CENTS) {
-      return res.status(400).json({ error: `Minimum gift card value is ${formatMoney(MIN_PURCHASE_CENTS / 100)}` });
-    }
-    if (amount > MAX_PURCHASE_CENTS) {
-      return res.status(400).json({ error: `Maximum gift card value is ${formatMoney(MAX_PURCHASE_CENTS / 100)}` });
+    if (!Number.isFinite(amount) || amount < MIN_PURCHASE_CENTS || amount > MAX_PURCHASE_CENTS || !GIFT_CARD_DENOMINATIONS_CENTS.includes(amount)) {
+      const values = GIFT_CARD_DENOMINATIONS_CENTS.map((value) => formatMoney(value / 100, 'USD')).join(', ');
+      return res.status(400).json({ error: `Choose a fixed gift card value: ${values}` });
     }
 
     const id = uuidv4();

@@ -1,4 +1,6 @@
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
+const HOSTED_API_URL = 'https://tradehub-0ubw.onrender.com/api';
+const IS_GITHUB_PAGES = typeof window !== 'undefined' && /(^|\.)github\.io$/i.test(window.location.hostname);
+const API_BASE = import.meta.env.VITE_API_URL || (IS_GITHUB_PAGES ? HOSTED_API_URL : '/api');
 
 let authToken = localStorage.getItem('tradehub_token') || null;
 

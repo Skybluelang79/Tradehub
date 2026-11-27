@@ -448,6 +448,9 @@ CREATE TABLE IF NOT EXISTS gift_cards (
   status TEXT NOT NULL DEFAULT 'active',
   redeemed_by TEXT,
   redeemed_at TEXT,
+  sold_to TEXT,
+  sold_at TEXT,
+  payment_reference TEXT,
   expires_at TEXT,
   voided_at TEXT,
   voided_by TEXT,
@@ -462,7 +465,24 @@ CREATE TABLE IF NOT EXISTS gift_card_brands (
   front_image TEXT DEFAULT '',
   back_image TEXT DEFAULT '',
   active INTEGER DEFAULT 1,
+  sellable INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS gift_card_purchases (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  brand_id TEXT NOT NULL,
+  amount_cents INTEGER NOT NULL,
+  charge_amount_minor INTEGER NOT NULL,
+  currency TEXT NOT NULL,
+  reference TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  card_id TEXT,
+  created_at TEXT DEFAULT (datetime('now')),
+  completed_at TEXT,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (brand_id) REFERENCES gift_card_brands(id)
 );
 
 CREATE TABLE IF NOT EXISTS payouts (

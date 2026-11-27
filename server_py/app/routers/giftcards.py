@@ -5,9 +5,18 @@ import uuid
 
 from fastapi import APIRouter, Body, Depends, HTTPException
 
-from .. import db
+from .. import config, db
+from ..currencies import convert, format_money
 from ..datetime_util import parse_iso, utc_now
 from ..deps import require_admin, require_user
+from ..notifications import notify
+from ..paystack import (
+    PAYSTACK_PUBLIC_KEY,
+    PaystackError,
+    is_paystack_configured,
+    paystack,
+    to_minor_units,
+)
 
 logger = logging.getLogger("tradehub")
 
@@ -15,25 +24,19 @@ router = APIRouter()
 
 GIFT_CARD_TYPES = ["digital", "physical"]
 
+TRADEHUB_BRAND_NAME = "TradeHub Gift Card"
+GIFT_CARD_DENOMINATIONS_CENTS = [2000, 5000, 10000, 50000, 100000]
+ALLOW_DEMO_PAYMENTS = config.DEMO_MODE or not config.IS_PRODUCTION
+
 DEFAULT_BRANDS = [
-    {"name": "Amazon Gift Card", "category": "retail", "description": "Shop anything on Amazon with this balance.", "frontImage": "/uploads/amazon-gift-card.png"},
-    {"name": "Apple Gift Card / iTunes Gift Card", "category": "digital", "description": "Apps, music, movies and more from Apple and iTunes.", "frontImage": "/uploads/apple-itunes-gift-card.png"},
-    {"name": "Walmart Gift Card", "category": "retail", "description": "Groceries, electronics, fashion and more at Walmart.", "frontImage": "/uploads/walmart-gift-card.png"},
-    {"name": "Starbucks Gift Card", "category": "food", "description": "Coffee, snacks and more at Starbucks.", "frontImage": "/uploads/starbucks-gift-card.png"},
-    {"name": "American Express & Visa Gift Cards", "category": "finance", "description": "Prepaid cards accepted anywhere American Express or Visa cards are.", "frontImage": "/uploads/amex-visa-gift-card.jpg"},
-    {"name": "Google Play Gift Card", "category": "digital", "description": "Apps, games, movies and books on Google Play.", "frontImage": "/uploads/google-play-gift-card.jpg"},
-    {"name": "Sephora Gift Card", "category": "retail", "description": "Beauty, makeup and skincare at Sephora.", "frontImage": "/uploads/sephora-gift-card.jpg"},
-    {"name": "TradeHub Gift Card", "category": "general", "description": "TradeHub's all-purpose gift card. Redeem for store credit to use on any listing, listing boost or subscription on the marketplace.", "frontImage": "/uploads/tradehub-gift-card.svg", "backImage": "/uploads/tradehub-gift-card-back.svg"},
+    {
+        "name": TRADEHUB_BRAND_NAME,
+        "category": "general",
+        "description": "TradeHub's all-purpose gift card. Redeem for store credit to use on any listing, listing boost or subscription on the marketplace.",
+        "frontImage": "/uploads/tradehub-gift-card.svg",
+        "backImage": "/uploads/tradehub-gift-card-back.svg",
+    },
 ]
-
-BRAND_MERGES = [
-    {"from": "Apple Gift Card", "to": "Apple Gift Card / iTunes Gift Card", "description": "Apps, music, movies and more from Apple and iTunes."},
-    {"from": "American Express Gift Card", "to": "American Express & Visa Gift Cards", "description": "Prepaid cards accepted anywhere American Express or Visa cards are."},
-    {"from": "Amazon", "to": "Amazon Gift Card", "description": "Shop anything on Amazon with this balance."},
-    {"from": "Starbucks", "to": "Starbucks Gift Card", "description": "Coffee, snacks and more at Starbucks."},
-]
-
-RETIRED_BRANDS = ["Steam", "Netflix", "iTunes Gift Card", "Visa Gift Card", "Amazon", "Starbucks", "Smoke Brand"]
 
 
 def _parse_int(value, default=None):
@@ -52,41 +55,23 @@ def _round_number(value):
 
 
 def seed_default_brands():
-    def find(name):
-        return db.get("SELECT * FROM gift_card_brands WHERE name = ?", (name,))
-
-    for merge in BRAND_MERGES:
-        source = find(merge["from"])
-        if not source:
-            continue
-        target = find(merge["to"])
-        if target:
-            db.run("UPDATE gift_card_brands SET active = 0 WHERE id = ?", (source["id"],))
-        else:
-            db.run(
-                "UPDATE gift_card_brands SET name = ?, description = ? WHERE id = ?",
-                (merge["to"], merge["description"], source["id"]),
-            )
-
-    for brand in DEFAULT_BRANDS:
-        if not find(brand["name"]):
-            db.run(
-                "INSERT INTO gift_card_brands (id, name, description, category) VALUES (?, ?, ?, ?)",
-                (str(uuid.uuid4()), brand["name"], brand["description"], brand["category"]),
-            )
-    for brand in DEFAULT_BRANDS:
+    brand = DEFAULT_BRANDS[0]
+    existing = db.get("SELECT * FROM gift_card_brands WHERE name = ?", (brand["name"],))
+    if not existing:
         db.run(
-            "UPDATE gift_card_brands SET front_image = ? WHERE name = ? AND (front_image IS NULL OR front_image = '')",
-            (brand["frontImage"], brand["name"]),
+            "INSERT INTO gift_card_brands (id, name, description, category, active, sellable) "
+            "VALUES (?, ?, ?, ?, 1, 1)",
+            (str(uuid.uuid4()), brand["name"], brand["description"], brand["category"]),
         )
-        if brand.get("backImage"):
-            db.run(
-                "UPDATE gift_card_brands SET back_image = ? WHERE name = ? AND (back_image IS NULL OR back_image = '')",
-                (brand["backImage"], brand["name"]),
-            )
-        db.run("UPDATE gift_card_brands SET active = 1 WHERE name = ?", (brand["name"],))
-    for name in RETIRED_BRANDS:
-        db.run("UPDATE gift_card_brands SET active = 0 WHERE name = ?", (name,))
+    db.run(
+        "UPDATE gift_card_brands SET description = ?, category = ?, front_image = ?, "
+        "back_image = ?, active = 1, sellable = 1 WHERE name = ?",
+        (brand["description"], brand["category"], brand["frontImage"], brand.get("backImage", ""), brand["name"]),
+    )
+    db.run(
+        "UPDATE gift_card_brands SET active = 0, sellable = 0 WHERE name != ?",
+        (TRADEHUB_BRAND_NAME,),
+    )
 
 
 def generate_gift_code(prefix="TRADE"):
@@ -104,6 +89,48 @@ def get_wallet(user_id):
         db.run("INSERT INTO wallets (user_id) VALUES (?)", (user_id,))
         w = db.get("SELECT * FROM wallets WHERE user_id = ?", (user_id,))
     return w
+
+
+def complete_gift_card_purchase(purchase_id):
+    purchase = db.get("SELECT * FROM gift_card_purchases WHERE id = ?", (purchase_id,))
+    if not purchase or purchase["status"] != "pending":
+        return None
+    brand = db.get("SELECT name FROM gift_card_brands WHERE id = ?", (purchase["brand_id"],))
+    brand_name = brand["name"] if brand else TRADEHUB_BRAND_NAME
+    card_id = str(uuid.uuid4())
+    code = generate_gift_code("TRADE")
+    db.run(
+        "INSERT INTO gift_cards (id, code, brand_id, card_type, original_cents, purchase_cents, "
+        "balance_cents, note, status, redeemed_by, redeemed_at, sold_to, sold_at, payment_reference) "
+        "VALUES (?, ?, ?, 'digital', ?, ?, 0, 'Purchased in Gift Mall', 'redeemed', ?, "
+        "datetime('now'), ?, datetime('now'), ?)",
+        (
+            card_id, code, purchase["brand_id"], purchase["amount_cents"],
+            purchase["amount_cents"], purchase["user_id"], purchase["user_id"],
+            purchase["reference"],
+        ),
+    )
+    get_wallet(purchase["user_id"])
+    db.run(
+        "UPDATE wallets SET credit_cents = credit_cents + ?, updated_at = datetime('now') WHERE user_id = ?",
+        (purchase["amount_cents"], purchase["user_id"]),
+    )
+    db.run(
+        "UPDATE gift_card_purchases SET status = 'completed', card_id = ?, completed_at = datetime('now') "
+        "WHERE id = ?",
+        (card_id, purchase["id"]),
+    )
+    notify(
+        purchase["user_id"],
+        "payment",
+        "Gift Card Credited",
+        f"{format_money(purchase['amount_cents'] / 100, 'USD')} was added to your store credit from your {brand_name} purchase.",
+    )
+    return db.get(
+        "SELECT g.*, b.name as brand_name, b.front_image as brand_front_image, b.back_image as brand_back_image "
+        "FROM gift_cards g LEFT JOIN gift_card_brands b ON b.id = g.brand_id WHERE g.id = ?",
+        (card_id,),
+    )
 
 
 def redeem_gift_card(code, user_id):
@@ -143,14 +170,14 @@ def redeem_gift_card(code, user_id):
 def list_brands(user: dict = Depends(require_user)):
     seed_default_brands()
     brands = db.all("SELECT * FROM gift_card_brands WHERE active = 1 ORDER BY name")
-    return {"brands": brands}
+    return {"brands": brands, "denominationsCents": GIFT_CARD_DENOMINATIONS_CENTS}
 
 
 @router.get("/brands/all")
 def list_all_brands(user: dict = Depends(require_admin)):
     seed_default_brands()
-    brands = db.all("SELECT * FROM gift_card_brands ORDER BY active DESC, name")
-    return {"brands": brands}
+    brands = db.all("SELECT * FROM gift_card_brands WHERE active = 1 ORDER BY name")
+    return {"brands": brands, "denominationsCents": GIFT_CARD_DENOMINATIONS_CENTS}
 
 
 @router.post("/brands", status_code=201)
@@ -161,15 +188,16 @@ def create_brand(user: dict = Depends(require_admin), body: dict = Body(...)):
     front_image = body.get("frontImage", "")
     back_image = body.get("backImage", "")
     active = body.get("active", 1)
+    sellable = body.get("sellable", 0)
 
     if not name or not str(name).strip():
         raise HTTPException(status_code=400, detail={"error": "Brand name required"})
 
     brand_id = str(uuid.uuid4())
     db.run(
-        "INSERT INTO gift_card_brands (id, name, description, category, front_image, back_image, active) "
-        "VALUES (?, ?, ?, ?, ?, ?, ?)",
-        (brand_id, str(name).strip(), description, category, front_image, back_image, 1 if active else 0),
+        "INSERT INTO gift_card_brands (id, name, description, category, front_image, back_image, active, sellable) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (brand_id, str(name).strip(), description, category, front_image, back_image, 1 if active else 0, 1 if sellable else 0),
     )
     return {"brand": db.get("SELECT * FROM gift_card_brands WHERE id = ?", (brand_id,))}
 
@@ -186,6 +214,7 @@ def update_brand(brand_id: str, user: dict = Depends(require_admin), body: dict 
     front_image = body.get("frontImage")
     back_image = body.get("backImage")
     active = body.get("active")
+    sellable = body.get("sellable")
 
     next_name = str(name).strip() if name and str(name).strip() else brand["name"]
     next_description = description if description is not None else brand["description"]
@@ -193,11 +222,12 @@ def update_brand(brand_id: str, user: dict = Depends(require_admin), body: dict 
     next_front = front_image if front_image is not None else brand["front_image"]
     next_back = back_image if back_image is not None else brand["back_image"]
     next_active = (1 if active else 0) if active is not None else brand["active"]
+    next_sellable = (1 if sellable else 0) if sellable is not None else brand["sellable"]
 
     db.run(
         "UPDATE gift_card_brands SET name = ?, description = ?, category = ?, front_image = ?, "
-        "back_image = ?, active = ? WHERE id = ?",
-        (next_name, next_description, next_category, next_front, next_back, next_active, brand["id"]),
+        "back_image = ?, active = ?, sellable = ? WHERE id = ?",
+        (next_name, next_description, next_category, next_front, next_back, next_active, next_sellable, brand["id"]),
     )
     return {"brand": db.get("SELECT * FROM gift_card_brands WHERE id = ?", (brand["id"],))}
 
@@ -215,7 +245,11 @@ def deactivate_brand(brand_id: str, user: dict = Depends(require_admin)):
 def gift_card_mall():
     seed_default_brands()
     brands = db.all("SELECT * FROM gift_card_brands WHERE active = 1 ORDER BY name")
-    return {"brands": brands, "canSubmit": True}
+    return {
+        "brands": brands,
+        "canSubmit": True,
+        "denominationsCents": GIFT_CARD_DENOMINATIONS_CENTS,
+    }
 
 
 @router.post("/designs", status_code=201)
@@ -290,8 +324,9 @@ def issue_gift_cards(user: dict = Depends(require_admin), body: dict = Body(...)
     purchase_cents = body.get("purchaseCents")
     discount_percent = body.get("discountPercent", 0)
 
-    if not amount or amount < 100:
-        raise HTTPException(status_code=400, detail={"error": "Amount must be at least \u20a61"})
+    if amount not in GIFT_CARD_DENOMINATIONS_CENTS:
+        denominations = ", ".join(f"${value // 100}" for value in GIFT_CARD_DENOMINATIONS_CENTS)
+        raise HTTPException(status_code=400, detail={"error": f"Choose a fixed value: {denominations}"})
     if card_type not in GIFT_CARD_TYPES:
         raise HTTPException(status_code=400, detail={"error": "Invalid card type"})
 
@@ -444,4 +479,130 @@ def redeem(code_card: dict = Body(...), user: dict = Depends(require_user)):
         "creditCents": get_wallet(user["id"])["credit_cents"],
         "balanceCents": balance,
         "card": card_row,
+    }
+
+
+@router.post("/purchase-intent")
+def purchase_gift_card_intent(body: dict = Body(...), user: dict = Depends(require_user)):
+    brand_id = body.get("brandId")
+    amount = _round_number(body.get("amountCents"))
+    if not brand_id:
+        raise HTTPException(status_code=400, detail={"error": "Choose a gift card brand"})
+    brand = db.get("SELECT * FROM gift_card_brands WHERE id = ?", (brand_id,))
+    if not brand or not brand["active"]:
+        raise HTTPException(status_code=404, detail={"error": "Gift card brand not found"})
+    if not brand["sellable"]:
+        raise HTTPException(status_code=400, detail={"error": "This gift card is not available for purchase"})
+    if amount not in GIFT_CARD_DENOMINATIONS_CENTS:
+        values = ", ".join(format_money(value / 100, "USD") for value in GIFT_CARD_DENOMINATIONS_CENTS)
+        raise HTTPException(status_code=400, detail={"error": f"Choose a fixed gift card value: {values}"})
+
+    purchase_id = str(uuid.uuid4())
+    currency = paystack.DEFAULT_CURRENCY
+    charge_minor = to_minor_units(convert(amount / 100, "USD", currency), currency)
+    db.run(
+        "INSERT INTO gift_card_purchases (id, user_id, brand_id, amount_cents, charge_amount_minor, "
+        "currency, reference, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')",
+        (purchase_id, user["id"], brand["id"], amount, charge_minor, currency, purchase_id),
+    )
+
+    if not is_paystack_configured():
+        if not ALLOW_DEMO_PAYMENTS:
+            db.run("UPDATE gift_card_purchases SET status = 'failed' WHERE id = ?", (purchase_id,))
+            raise HTTPException(
+                status_code=503,
+                detail={"error": "Payments are not configured. Set PAYSTACK_SECRET_KEY or enable DEMO_MODE."},
+            )
+        reference = f"demo_{purchase_id}"
+        db.run("UPDATE gift_card_purchases SET reference = ? WHERE id = ?", (reference, purchase_id))
+        card = complete_gift_card_purchase(purchase_id)
+        return {
+            "paid": True,
+            "demo": True,
+            "purchaseId": purchase_id,
+            "reference": reference,
+            "amountCents": amount,
+            "currency": currency,
+            "creditCents": get_wallet(user["id"])["credit_cents"],
+            "card": card,
+        }
+
+    try:
+        initialized = paystack.initialize_transaction(
+            amount_minor=charge_minor,
+            currency=currency,
+            email=user.get("email") or "",
+            reference=purchase_id,
+            channels=["card"],
+            metadata={
+                "giftCardPurchaseId": purchase_id,
+                "buyerId": user["id"],
+                "brandId": brand["id"],
+                "tradehub_gift_card": True,
+            },
+        )
+    except PaystackError as err:
+        db.run("UPDATE gift_card_purchases SET status = 'failed' WHERE id = ?", (purchase_id,))
+        raise HTTPException(status_code=err.status or 502, detail={"error": str(err)})
+
+    return {
+        "purchaseId": purchase_id,
+        "reference": purchase_id,
+        "accessCode": initialized.get("access_code"),
+        "authorizationUrl": initialized.get("authorization_url"),
+        "publicKey": PAYSTACK_PUBLIC_KEY,
+        "amountCents": amount,
+        "currency": currency,
+        "status": "awaiting_payment",
+    }
+
+
+@router.post("/purchase/verify/{reference}")
+def verify_gift_card_purchase(reference: str, user: dict = Depends(require_user)):
+    purchase = db.get("SELECT * FROM gift_card_purchases WHERE reference = ?", (reference,))
+    if not purchase:
+        raise HTTPException(status_code=404, detail={"error": "Gift card purchase not found"})
+    if purchase["user_id"] != user["id"] and not user.get("isAdmin"):
+        raise HTTPException(status_code=403, detail={"error": "Not authorized"})
+
+    card_for = lambda card_id: db.get(
+        "SELECT g.*, b.name as brand_name, b.front_image as brand_front_image, b.back_image as brand_back_image "
+        "FROM gift_cards g LEFT JOIN gift_card_brands b ON b.id = g.brand_id WHERE g.id = ?",
+        (card_id,),
+    ) if card_id else None
+
+    if purchase["status"] == "completed":
+        return {
+            "success": True,
+            "alreadyProcessed": True,
+            "status": "completed",
+            "creditCents": get_wallet(purchase["user_id"])["credit_cents"],
+            "card": card_for(purchase["card_id"]),
+        }
+    if purchase["status"] != "pending":
+        raise HTTPException(
+            status_code=400,
+            detail={"error": f"Purchase is not awaiting payment ({purchase['status']})"},
+        )
+
+    if str(purchase["reference"]).startswith("demo_"):
+        if is_paystack_configured() or not ALLOW_DEMO_PAYMENTS:
+            raise HTTPException(status_code=400, detail={"error": "Demo purchase cannot be verified"})
+    else:
+        try:
+            verified = paystack.verify_transaction(purchase["reference"])
+        except PaystackError as err:
+            raise HTTPException(status_code=err.status or 502, detail={"error": str(err)})
+        if verified.get("status") != "success":
+            raise HTTPException(
+                status_code=400,
+                detail={"error": f"Payment not successful ({verified.get('status') or 'unknown'})"},
+            )
+
+    card = complete_gift_card_purchase(purchase["id"])
+    return {
+        "success": True,
+        "status": "completed",
+        "creditCents": get_wallet(purchase["user_id"])["credit_cents"],
+        "card": card,
     }

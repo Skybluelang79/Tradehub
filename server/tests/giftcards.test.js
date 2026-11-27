@@ -48,17 +48,18 @@ async function mallBrands() {
 }
 
 describe('Gift Mall purchasing', () => {
-  it('exposes the sellable TradeHub brand to the mall', async () => {
-    const brands = await mallBrands();
-    const tradehub = brands.find((b) => b.name === 'TradeHub Gift Card');
-    expect(tradehub).toBeTruthy();
-    expect(tradehub.sellable).toBe(1);
+  it('exposes only the sellable TradeHub brand with fixed USD values', async () => {
+    const res = await supertest(app).get('/api/payments/gift-cards/mall');
+    expect(res.status).toBe(200);
+    expect(res.body.brands.map((b) => b.name)).toEqual(['TradeHub Gift Card']);
+    expect(res.body.brands[0].sellable).toBe(1);
+    expect(res.body.denominationsCents).toEqual([2000, 5000, 10000, 50000, 100000]);
   });
 
   it('requires authentication to start a purchase', async () => {
     const res = await supertest(app)
       .post('/api/payments/gift-cards/purchase-intent')
-      .send({ brandId: 'anything', amountCents: 500000 });
+      .send({ brandId: 'anything', amountCents: 50000 });
     expect(res.status).toBe(401);
   });
 
@@ -69,7 +70,7 @@ describe('Gift Mall purchasing', () => {
     const res = await supertest(app)
       .post('/api/payments/gift-cards/purchase-intent')
       .set('Authorization', `Bearer ${buyerToken}`)
-      .send({ brandId: catalogOnly.id, amountCents: 500000 });
+      .send({ brandId: catalogOnly.id, amountCents: 50000 });
     expect(res.status).toBe(400);
   });
 
@@ -94,19 +95,19 @@ describe('Gift Mall purchasing', () => {
     const res = await supertest(app)
       .post('/api/payments/gift-cards/purchase-intent')
       .set('Authorization', `Bearer ${buyerToken}`)
-      .send({ brandId: sellable.id, amountCents: 500000 });
+      .send({ brandId: sellable.id, amountCents: 50000 });
 
     expect(res.status).toBe(200);
     expect(res.body.paid).toBe(true);
     expect(res.body.demo).toBe(true);
     expect(res.body.card.status).toBe('redeemed');
     expect(res.body.card.sold_to).toBe(buyerId);
-    expect(res.body.creditCents).toBe(creditBefore + 500000);
+    expect(res.body.creditCents).toBe(creditBefore + 50000);
 
     const walletAfter = await supertest(app)
       .get('/api/payments/wallet')
       .set('Authorization', `Bearer ${buyerToken}`);
-    expect(walletAfter.body.wallet.credit_cents).toBe(creditBefore + 500000);
+    expect(walletAfter.body.wallet.credit_cents).toBe(creditBefore + 50000);
 
     const notifications = await supertest(app)
       .get('/api/notifications')
@@ -121,7 +122,7 @@ describe('Gift Mall purchasing', () => {
     const created = await supertest(app)
       .post('/api/payments/gift-cards/purchase-intent')
       .set('Authorization', `Bearer ${buyerToken}`)
-      .send({ brandId: sellable.id, amountCents: 200000 });
+      .send({ brandId: sellable.id, amountCents: 20000 });
     expect(created.status).toBe(200);
 
     const verify = await supertest(app)
@@ -138,7 +139,7 @@ describe('Gift Mall purchasing', () => {
     const created = await supertest(app)
       .post('/api/payments/gift-cards/purchase-intent')
       .set('Authorization', `Bearer ${buyerToken}`)
-      .send({ brandId: sellable.id, amountCents: 300000 });
+      .send({ brandId: sellable.id, amountCents: 100000 });
 
     const res = await supertest(app)
       .post(`/api/payments/gift-cards/purchase/verify/${created.body.reference}`)

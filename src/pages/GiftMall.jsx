@@ -5,7 +5,7 @@ import { GiftCardModal } from '../components/features';
 import { useToast } from '../components/ui/Toast';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/client';
-import { GiftIcon, XIcon, CheckIcon } from '../components/ui/Icons';
+import { XIcon, CheckIcon } from '../components/ui/Icons';
 import './GiftMall.css';
 
 function GiftIconSvg({ size = 20 }) {
@@ -115,15 +115,13 @@ export default function GiftMall({ onClose }) {
 
       <div className="section">
         <div className="section-header">
-          <h2 className="section-title">Browse Brands</h2>
+          <h2 className="section-title">TradeHub Gift Card</h2>
           <span className="gift-mall-upload-icon"><GiftIconSvg size={20} /></span>
         </div>
         <p className="gift-mall-hint">
-          Buy a TradeHub gift card and the full value lands in your store credit right away, or browse sample
-          designs from each brand in our catalog.
+          Choose a USD value from $20, $50, $100, $500 or $1,000. The full amount lands in your TradeHub store credit right away.
         </p>
-        <Button block onClick={handleBuyGiftCard}>Buy {sellableBrand ? sellableBrand.name : 'a Gift Card'}</Button>
-        <Button block onClick={() => setShowGiftCardModal(true)}>Browse Gift Cards</Button>
+        <Button block onClick={handleBuyGiftCard}>Buy {sellableBrand ? sellableBrand.name : 'a TradeHub Gift Card'}</Button>
       </div>
 
       <div className="section">

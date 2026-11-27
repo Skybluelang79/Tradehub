@@ -155,7 +155,10 @@ def test_promotions_flow():
 
 def test_giftcard_brands_list():
     token, _ = signup("Giftcard User")
-    assert client.get("/api/payments/gift-cards/brands", headers=auth(token)).status_code == 200
+    res = client.get("/api/payments/gift-cards/brands", headers=auth(token))
+    assert res.status_code == 200
+    assert [b["name"] for b in res.json()["brands"]] == ["TradeHub Gift Card"]
+    assert res.json()["denominationsCents"] == [2000, 5000, 10000, 50000, 100000]
 
 
 def test_upload_image():
