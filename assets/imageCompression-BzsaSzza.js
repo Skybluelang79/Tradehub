@@ -1,0 +1,1 @@
+import{t as e}from"./index-fL6qepTs.js";export{e as compressImage};
