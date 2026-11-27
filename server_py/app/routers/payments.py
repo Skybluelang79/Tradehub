@@ -1586,7 +1586,8 @@ def seller_analytics(user: dict = Depends(require_user)):
           (SELECT url FROM item_images WHERE item_id = i.id ORDER BY sort_order LIMIT 1) AS image,
           COALESCE(SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END), 0) AS sold_count,
           COALESCE(SUM(CASE WHEN t.status = 'completed' THEN t.net_amount ELSE 0 END), 0) AS revenue,
-          MAX(CASE WHEN t.status = 'completed' THEN t.completed_at END) AS last_sale
+          MAX(CASE WHEN t.status = 'completed' THEN t.completed_at END) AS last_sale,
+          (SELECT COUNT(*) FROM offers o WHERE o.item_id = i.id) AS offer_count
         FROM items i
         LEFT JOIN transactions t ON t.item_id = i.id AND t.seller_id = i.seller_id
         WHERE i.seller_id = ?
@@ -1601,10 +1602,11 @@ def seller_analytics(user: dict = Depends(require_user)):
           COALESCE(SUM(views), 0) AS views,
           COALESCE(SUM(favorites), 0) AS favorites,
           COUNT(*) AS listings,
-          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active
+          SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
+          (SELECT COUNT(*) FROM offers o WHERE o.seller_id = ?) AS offers
         FROM items WHERE seller_id = ?
         """,
-        (uid,),
+        (uid, uid),
     )
     sales = db.all(
         """
@@ -1632,6 +1634,11 @@ def seller_analytics(user: dict = Depends(require_user)):
             "favorites": totals["favorites"] if totals else 0,
             "listings": totals["listings"] if totals else 0,
             "active": totals["active"] if totals else 0,
+            "offers": totals["offers"] if totals else 0,
+            "conversion": round(
+                ((revenue_totals["sold"] or 0) / totals["listings"] * 100) if totals and totals["listings"] else 0,
+                1,
+            ),
         },
         "revenue": {
             "completed": revenue_totals["completed"] if revenue_totals else 0,

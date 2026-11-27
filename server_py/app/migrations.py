@@ -103,6 +103,7 @@ def apply():
     ensure_column("user_settings", "notif_price_drops", "INTEGER DEFAULT 1")
     ensure_column("user_settings", "notif_followers", "INTEGER DEFAULT 1")
     ensure_column("user_settings", "notif_boosts", "INTEGER DEFAULT 1")
+    ensure_column("user_settings", "notif_saved_searches", "INTEGER DEFAULT 1")
     ensure_column("user_settings", "currency", "TEXT DEFAULT 'NGN'")
     ensure_column("users", "avatar", "TEXT DEFAULT ''")
     ensure_column("users", "bio", "TEXT DEFAULT ''")

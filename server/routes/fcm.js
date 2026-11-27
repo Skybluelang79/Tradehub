@@ -11,10 +11,18 @@ router.post('/fcm-token', authenticateToken, (req, res) => {
       return res.status(400).json({ error: 'FCM token is required' });
     }
 
-    db.prepare(`
-      INSERT OR REPLACE INTO user_settings (user_id, fcm_token, updated_at)
-      VALUES (?, ?, datetime('now'))
-    `).run(req.user.id, token);
+    const existing = db.prepare('SELECT user_id FROM user_settings WHERE user_id = ?').get(req.user.id);
+    if (existing) {
+      db.prepare(`
+        UPDATE user_settings SET fcm_token = ?, updated_at = datetime('now')
+        WHERE user_id = ?
+      `).run(token, req.user.id);
+    } else {
+      db.prepare(`
+        INSERT INTO user_settings (user_id, fcm_token, created_at, updated_at)
+        VALUES (?, ?, datetime('now'), datetime('now'))
+      `).run(req.user.id, token);
+    }
 
     res.json({ success: true });
   } catch (err) {

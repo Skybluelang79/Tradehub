@@ -47,6 +47,10 @@ export function AuthProvider({ children }) {
     return () => { cancelled = true; };
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (isAuthenticated) initializeFCM().catch(() => {});
+  }, [isAuthenticated]);
+
   const login = useCallback(async (email, password) => {
     setIsLoading(true);
     setError(null);

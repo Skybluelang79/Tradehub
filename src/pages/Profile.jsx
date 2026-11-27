@@ -4,6 +4,8 @@ import { Avatar, Rating, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { api } from '../services/client';
+import { initializeFCM, disableFCM } from '../services/fcm';
+import { isFirebaseConfigured } from '../config/firebase';
 import { isPasskeySupported } from '../services/webauthn';
 import {
   PinIcon, SettingsIcon, LogOutIcon, EditIcon, ShieldIcon, HelpIcon,
@@ -194,7 +196,12 @@ export default function Profile() {
     priceDrops: true,
     followers: true,
     boosts: true,
+    savedSearches: true,
   });
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(
+    typeof Notification !== 'undefined' && Notification.permission === 'granted'
+  );
 
   const [savedSearches, setSavedSearches] = useState([]);
 
@@ -208,6 +215,11 @@ export default function Profile() {
   useEffect(() => {
     if (showSettingsModal) loadSavedSearches();
   }, [showSettingsModal, loadSavedSearches]);
+
+  useEffect(() => {
+    if (!showSettingsModal || settingsTab !== 'notifications' || !authUser) return;
+    initializeFCM().then((token) => setPushEnabled(Boolean(token))).catch(() => {});
+  }, [showSettingsModal, settingsTab, authUser]);
 
   const removeSavedSearch = async (id) => {
     try {
@@ -488,6 +500,7 @@ export default function Profile() {
     priceDrops: 'notif_price_drops',
     followers: 'notif_followers',
     boosts: 'notif_boosts',
+    savedSearches: 'notif_saved_searches',
   };
 
   useEffect(() => {
@@ -508,6 +521,7 @@ export default function Profile() {
         priceDrops: !!s.notif_price_drops,
         followers: !!s.notif_followers,
         boosts: !!s.notif_boosts,
+        savedSearches: s.notif_saved_searches !== 0,
       });
       if (s.dark_mode === 1) setTheme(true);
       const langCode = LANGUAGE_TO_CODE[s.language];
@@ -764,6 +778,29 @@ export default function Profile() {
     const newValue = !notifPrefs[key];
     setNotifPrefs((prev) => ({ ...prev, [key]: newValue }));
     api.settings.update({ [NOTIF_KEY_MAP[key]]: newValue }).catch(() => {});
+  };
+
+  const handlePushToggle = async () => {
+    setPushBusy(true);
+    try {
+      if (pushEnabled) {
+        await disableFCM();
+        setPushEnabled(false);
+        addToast('Browser push notifications disabled', 'success');
+      } else {
+        const token = await initializeFCM({ prompt: true });
+        if (token) {
+          setPushEnabled(true);
+          addToast('Browser push notifications enabled', 'success');
+        } else {
+          addToast('Notification permission was not granted', 'error');
+        }
+      }
+    } catch {
+      addToast('Could not update push notifications', 'error');
+    } finally {
+      setPushBusy(false);
+    }
   };
 
   const handleSettingValue = (key, value) => {
@@ -1193,6 +1230,16 @@ export default function Profile() {
                     <span className="analytics-label">Inquiries</span>
                   </div>
                   <div className="analytics-card">
+                    <MessageIcon size={20} />
+                    <span className="analytics-value">{sellerStats?.totals?.offers ?? 0}</span>
+                    <span className="analytics-label">Offers</span>
+                  </div>
+                  <div className="analytics-card">
+                    <TrendingUpIcon size={20} />
+                    <span className="analytics-value">{sellerStats?.totals?.conversion ?? 0}%</span>
+                    <span className="analytics-label">Sell-through</span>
+                  </div>
+                  <div className="analytics-card">
                     <ZapIcon size={20} />
                     <span className="analytics-value">{sellerStats?.revenue?.sold ?? 0}</span>
                     <span className="analytics-label">Items Sold</span>
@@ -1234,6 +1281,10 @@ export default function Profile() {
                         <div className="analytics-stat" title="Favorites">
                           <HeartIcon size={14} />
                           <span>{item.favorites || 0}</span>
+                        </div>
+                        <div className="analytics-stat" title="Offers">
+                          <MessageIcon size={14} />
+                          <span>{item.offer_count || 0}</span>
                         </div>
                         <div className="analytics-stat" title="Sales">
                           <ZapIcon size={14} />
@@ -1601,9 +1652,24 @@ export default function Profile() {
         {settingsTab === 'notifications' && (
           <div className="settings-list">
             <div className="settings-group-title">Notification Preferences</div>
+            <div className="setting-item">
+              <div className="setting-icon"><BellIcon size={20} /></div>
+              <div className="setting-text">
+                <div className="setting-title">Browser Push Notifications</div>
+                <div className="setting-desc">
+                  {isFirebaseConfigured()
+                    ? 'Get alerts even when TradeHub is not open'
+                    : 'Push notifications are not configured on this deployment'}
+                </div>
+              </div>
+              <button className="auth-passkey-btn" onClick={handlePushToggle} disabled={pushBusy || !isFirebaseConfigured()}>
+                {pushBusy ? <span className="loading-spinner"></span> : pushEnabled ? 'Disable' : 'Enable'}
+              </button>
+            </div>
             {[
               { key: 'messages', label: 'New Messages', desc: 'Notify when someone messages you' },
               { key: 'priceDrops', label: 'Price Drops', desc: 'Alerts when a saved item drops in price' },
+              { key: 'savedSearches', label: 'Saved Search Alerts', desc: 'Alerts when new listings match your saved searches' },
               { key: 'followers', label: 'New Followers', desc: 'Notify when someone follows you' },
               { key: 'boosts', label: 'Listing Boosts', desc: 'Updates about boosted listings' },
             ].map(({ key, label, desc }) => (
@@ -2051,7 +2117,7 @@ export default function Profile() {
                 const summary = [
                   s.query && `"${s.query}"`,
                   s.category || null,
-                  s.min_price && s.max_price ? `$${s.min_price}–$${s.max_price}` : s.min_price ? `From $${s.min_price}` : s.max_price ? `Up to $${s.max_price}` : null,
+                  s.min_price && s.max_price ? `${formatPrice(s.min_price)}–${formatPrice(s.max_price)}` : s.min_price ? `From ${formatPrice(s.min_price)}` : s.max_price ? `Up to ${formatPrice(s.max_price)}` : null,
                   savedFilters.condition || null,
                   savedFilters.brand && `Brand: ${savedFilters.brand}`,
                   savedFilters.size && `Size: ${savedFilters.size}`,

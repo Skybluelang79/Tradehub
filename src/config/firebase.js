@@ -43,18 +43,29 @@ export function isFirebaseConfigured() {
   return Boolean(auth);
 }
 
-export async function requestFCMPermission() {
+export async function requestFCMPermission({
+  prompt = false,
+  serviceWorkerRegistration = null,
+} = {}) {
   if (!messaging) return null;
   try {
-    const permission = await Notification.requestPermission();
+    const current = Notification.permission;
+    const permission = current === 'granted' || prompt
+      ? await Notification.requestPermission()
+      : current;
     if (permission !== 'granted') return null;
     const token = await getToken(messaging, {
       vapidKey: import.meta.env.VITE_FIREBASE_VAPID_KEY,
+      serviceWorkerRegistration: serviceWorkerRegistration || undefined,
     });
     return token;
   } catch {
     return null;
   }
+}
+
+export function isPushPermissionGranted() {
+  return typeof Notification !== 'undefined' && Notification.permission === 'granted';
 }
 
 export function onFCMMessage(callback) {

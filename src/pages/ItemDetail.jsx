@@ -1443,7 +1443,13 @@ export default function ItemDetail() {
         ) : (
           <div>
             <p className="checkout-price-line">Total <strong>{formatPrice(displayPrice, selectedItem?.currency)}</strong></p>
-            <p className="checkout-sub">Payments are held in escrow until you confirm receipt.</p>
+            <div className="buyer-protection-inline">
+              <ShieldIcon size={18} />
+              <div>
+                <strong>TradeHub Buyer Protection</strong>
+                <span>Your payment stays in escrow until you confirm the item matches its listing. You can open a dispute within 7 days of delivery.</span>
+              </div>
+            </div>
 
             <ShippingAddressSelect
               value={shippingAddressId}

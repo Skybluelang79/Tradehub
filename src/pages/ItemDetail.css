@@ -771,6 +771,32 @@
   margin-bottom: 16px;
 }
 
+.buyer-protection-inline {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  margin: 12px 0 16px;
+  border: 1px solid rgba(15, 138, 99, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(15, 138, 99, 0.08);
+  color: var(--success);
+}
+
+.buyer-protection-inline strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.buyer-protection-inline span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
 .checkout-methods {
   display: flex;
   flex-direction: column;

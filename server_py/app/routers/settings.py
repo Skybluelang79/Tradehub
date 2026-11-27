@@ -14,6 +14,7 @@ BOOLEAN_KEYS = [
     "notif_price_drops",
     "notif_followers",
     "notif_boosts",
+    "notif_saved_searches",
 ]
 
 ALLOWED_KEYS = BOOLEAN_KEYS + ["distance_unit", "language", "profile_visibility", "currency"]

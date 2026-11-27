@@ -1505,7 +1505,8 @@ router.get('/analytics/seller', authenticateToken, (req, res) => {
         (SELECT url FROM item_images WHERE item_id = i.id ORDER BY sort_order LIMIT 1) AS image,
         COALESCE(SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END), 0) AS sold_count,
         COALESCE(SUM(CASE WHEN t.status = 'completed' THEN t.net_amount ELSE 0 END), 0) AS revenue,
-        MAX(CASE WHEN t.status = 'completed' THEN t.completed_at END) AS last_sale
+        MAX(CASE WHEN t.status = 'completed' THEN t.completed_at END) AS last_sale,
+        (SELECT COUNT(*) FROM offers o WHERE o.item_id = i.id) AS offer_count
       FROM items i
       LEFT JOIN transactions t ON t.item_id = i.id AND t.seller_id = i.seller_id
       WHERE i.seller_id = ?
@@ -1518,9 +1519,10 @@ router.get('/analytics/seller', authenticateToken, (req, res) => {
         COALESCE(SUM(views), 0) AS views,
         COALESCE(SUM(favorites), 0) AS favorites,
         COUNT(*) AS listings,
-        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active
+        SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
+        (SELECT COUNT(*) FROM offers o WHERE o.seller_id = ?) AS offers
       FROM items WHERE seller_id = ?
-    `).get(uid);
+    `).get(uid, uid);
 
     const sales = db.prepare(`
       SELECT t.*, u.name AS buyer_name FROM transactions t
@@ -1544,6 +1546,8 @@ router.get('/analytics/seller', authenticateToken, (req, res) => {
         favorites: totals?.favorites || 0,
         listings: totals?.listings || 0,
         active: totals?.active || 0,
+        offers: totals?.offers || 0,
+        conversion: totals?.listings ? Math.round(((revenueTotals?.sold || 0) / totals.listings) * 1000) / 10 : 0,
       },
       revenue: {
         completed: revenueTotals?.completed || 0,

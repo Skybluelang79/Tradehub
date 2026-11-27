@@ -260,6 +260,14 @@ CREATE TABLE IF NOT EXISTS saved_searches (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS saved_search_alerts (
+  search_id TEXT NOT NULL,
+  item_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now')),
+  PRIMARY KEY (search_id, item_id)
+);
+
 CREATE TABLE IF NOT EXISTS templates (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,
@@ -422,6 +430,13 @@ CREATE TABLE IF NOT EXISTS user_settings (
   distance_unit TEXT DEFAULT 'km',
   language TEXT DEFAULT 'English',
   profile_visibility TEXT DEFAULT 'public',
+  currency TEXT DEFAULT 'NGN',
+  notif_messages INTEGER DEFAULT 1,
+  notif_price_drops INTEGER DEFAULT 1,
+  notif_followers INTEGER DEFAULT 1,
+  notif_boosts INTEGER DEFAULT 1,
+  notif_saved_searches INTEGER DEFAULT 1,
+  fcm_token TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );

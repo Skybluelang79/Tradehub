@@ -665,13 +665,19 @@ export default function Payments() {
                     {status === 'completed' && (
                       <span className="transaction-status completed">Completed</span>
                     )}
-                    {status === 'refunded' && (
-                      <span className="transaction-status refunded">Refunded</span>
-                    )}
-                    {status === 'disputed' && (
-                      <span className="transaction-status disputed">Disputed</span>
-                    )}
-                  </div>
+                     {status === 'refunded' && (
+                       <span className="transaction-status refunded">Refunded</span>
+                     )}
+                     {status === 'disputed' && (
+                       <span className="transaction-status disputed">Disputed</span>
+                     )}
+                     {(status === 'pending' || status === 'completed') && (
+                       <span className="protection-chip">
+                         <ShieldIcon size={11} />
+                         Protected
+                       </span>
+                     )}
+                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
                   <div className={`transaction-amount ${isReceived ? 'received' : 'sent'}`}>
@@ -794,7 +800,7 @@ export default function Payments() {
           </div>
           <div className="escrow-protection-note">
             <ShieldIcon size={16} />
-            <span>Your payment is always protected. If something goes wrong, you're covered.</span>
+            <span>Your payment is protected in escrow. Confirm delivery within 2 days, or open a dispute within 7 days if the item is not as described.</span>
           </div>
         </div>
       </Modal>

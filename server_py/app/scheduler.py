@@ -168,6 +168,13 @@ def run_saved_search_alerts():
             return attributes_by_item[item_id]
 
         for s in searches:
+            settings = db.get(
+                "SELECT notif_saved_searches FROM user_settings WHERE user_id = ?",
+                (s["user_id"],),
+            )
+            if settings and settings["notif_saved_searches"] == 0:
+                continue
+
             try:
                 filters = json.loads(s.get("filters") or "{}")
             except Exception:
@@ -216,12 +223,23 @@ def run_saved_search_alerts():
                     ):
                         continue
 
+                already_sent = db.get(
+                    "SELECT 1 FROM saved_search_alerts WHERE search_id = ? AND item_id = ?",
+                    (s["id"], item["id"]),
+                )
+                if already_sent:
+                    continue
+
                 notify(
                     s["user_id"],
                     "saved_search",
                     f'New match for "{s["name"]}"',
                     f'{item["title"]} is now ₦{_format_ng_amount(price)}',
                     data=json.dumps({"itemId": item["id"], "searchId": s["id"]}),
+                )
+                db.run(
+                    "INSERT OR IGNORE INTO saved_search_alerts (search_id, item_id, user_id) VALUES (?, ?, ?)",
+                    (s["id"], item["id"], s["user_id"]),
                 )
                 notified += 1
         if notified > 0:

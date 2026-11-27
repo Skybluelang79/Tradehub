@@ -40,6 +40,16 @@ export default defineConfig([
     },
   },
   {
+    files: ['public/firebase-messaging-sw.js'],
+    languageOptions: {
+      globals: {
+        ...globals.serviceworker,
+        importScripts: 'readonly',
+        firebase: 'readonly',
+      },
+    },
+  },
+  {
     files: ['server/**/*.js', 'netlify/**/*.js', '*.config.js'],
     languageOptions: {
       globals: globals.node,
