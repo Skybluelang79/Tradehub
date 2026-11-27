@@ -467,6 +467,14 @@ function applySchema() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS saved_search_alerts (
+      search_id TEXT NOT NULL,
+      item_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (search_id, item_id)
+    );
+
     CREATE TABLE IF NOT EXISTS templates (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -643,6 +651,8 @@ function applySchema() {
       distance_unit TEXT DEFAULT 'km',
       language TEXT DEFAULT 'English',
       profile_visibility TEXT DEFAULT 'public',
+      notif_push INTEGER DEFAULT 1,
+      notif_saved_searches INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -947,6 +957,8 @@ function migrate() {
   ensureColumn('user_settings', 'notif_price_drops', 'INTEGER DEFAULT 1');
   ensureColumn('user_settings', 'notif_followers', 'INTEGER DEFAULT 1');
   ensureColumn('user_settings', 'notif_boosts', 'INTEGER DEFAULT 1');
+  ensureColumn('user_settings', 'notif_saved_searches', 'INTEGER DEFAULT 1');
+  ensureColumn('user_settings', 'notif_push', 'INTEGER DEFAULT 1');
   ensureColumn('user_settings', 'currency', "TEXT DEFAULT 'NGN'");
   ensureColumn('users', 'avatar', "TEXT DEFAULT ''");
   ensureColumn('users', 'bio', "TEXT DEFAULT ''");

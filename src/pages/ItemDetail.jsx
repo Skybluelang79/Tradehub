@@ -1447,7 +1447,7 @@ export default function ItemDetail() {
               <ShieldIcon size={18} />
               <div>
                 <strong>TradeHub Buyer Protection</strong>
-                <span>Your payment stays in escrow until you confirm the item matches its listing. You can open a dispute within 7 days of delivery.</span>
+                <span>Your payment stays in escrow until you confirm the item matches its listing, or automatically after 7 days. Open a dispute before release if there is a problem.</span>
               </div>
             </div>
 

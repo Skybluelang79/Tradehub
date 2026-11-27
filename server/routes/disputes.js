@@ -10,6 +10,7 @@ import { refundTxn, getFeeRateForSeller } from './payments.js';
 import { creditFirstPurchase } from './referrals.js';
 import { writeLimiter } from '../src/rateLimiter.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 
 const router = Router();
 
@@ -20,11 +21,6 @@ function deadlinePassed(value) {
   if (!value) return false;
   const timestamp = new Date(`${String(value).replace(' ', 'T')}Z`).getTime();
   return Number.isFinite(timestamp) && timestamp < Date.now();
-}
-
-function notify(userId, type, title, body) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-    .run(uuidv4(), userId, type, title, body);
 }
 
 function getWallet(userId) {

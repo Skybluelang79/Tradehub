@@ -7,6 +7,15 @@ from .firebase import send_push_notification
 
 logger = logging.getLogger("tradehub")
 
+PUSH_PREFERENCE_BY_TYPE = {
+    "message": "notif_messages",
+    "price_drop": "notif_price_drops",
+    "follow": "notif_followers",
+    "follower": "notif_followers",
+    "boost": "notif_boosts",
+    "saved_search": "notif_saved_searches",
+}
+
 
 def notify(user_id, ntype, title, body, data=None):
     values = (str(uuid.uuid4()), user_id, ntype, title, body)
@@ -23,10 +32,17 @@ def notify(user_id, ntype, title, body, data=None):
 
     try:
         settings = db.get(
-            "SELECT fcm_token, notifications FROM user_settings WHERE user_id = ?",
+            "SELECT fcm_token, notifications, notif_push, notif_messages, "
+            "notif_price_drops, notif_followers, notif_boosts, notif_saved_searches "
+            "FROM user_settings WHERE user_id = ?",
             (user_id,),
         )
-        if not settings or settings["notifications"] == 0 or not settings["fcm_token"]:
+        if not settings or settings["notifications"] == 0 or settings.get("notif_push") == 0:
+            return
+        if not settings["fcm_token"]:
+            return
+        preference_key = PUSH_PREFERENCE_BY_TYPE.get(ntype)
+        if preference_key and settings.get(preference_key) == 0:
             return
 
         payload = {}

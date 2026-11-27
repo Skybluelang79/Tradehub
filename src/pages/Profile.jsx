@@ -4,7 +4,7 @@ import { Avatar, Rating, Button } from '../components/ui';
 import Modal from '../components/ui/Modal';
 import { useToast } from '../components/ui/Toast';
 import { api } from '../services/client';
-import { initializeFCM, disableFCM } from '../services/fcm';
+import { initializeFCM, enableFCM, disableFCM } from '../services/fcm';
 import { isFirebaseConfigured } from '../config/firebase';
 import { isPasskeySupported } from '../services/webauthn';
 import {
@@ -199,9 +199,7 @@ export default function Profile() {
     savedSearches: true,
   });
   const [pushBusy, setPushBusy] = useState(false);
-  const [pushEnabled, setPushEnabled] = useState(
-    typeof Notification !== 'undefined' && Notification.permission === 'granted'
-  );
+  const [pushEnabled, setPushEnabled] = useState(false);
 
   const [savedSearches, setSavedSearches] = useState([]);
 
@@ -523,6 +521,11 @@ export default function Profile() {
         boosts: !!s.notif_boosts,
         savedSearches: s.notif_saved_searches !== 0,
       });
+      setPushEnabled(
+        s.notif_push !== 0
+        && typeof Notification !== 'undefined'
+        && Notification.permission === 'granted'
+      );
       if (s.dark_mode === 1) setTheme(true);
       const langCode = LANGUAGE_TO_CODE[s.language];
       if (langCode) setLang(langCode);
@@ -788,7 +791,7 @@ export default function Profile() {
         setPushEnabled(false);
         addToast('Browser push notifications disabled', 'success');
       } else {
-        const token = await initializeFCM({ prompt: true });
+        const token = await enableFCM();
         if (token) {
           setPushEnabled(true);
           addToast('Browser push notifications enabled', 'success');

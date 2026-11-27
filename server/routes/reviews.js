@@ -5,6 +5,7 @@ import { authenticateToken } from '../middleware/auth.js';
 import validate, { createReviewSchema } from '../src/validation.js';
 import { writeLimiter } from '../src/rateLimiter.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 
 const router = Router();
 
@@ -73,10 +74,7 @@ router.post('/', authenticateToken, writeLimiter, validate(createReviewSchema), 
       Math.round(reviews.avg * 10) / 10, reviews.count, revieweeId
     );
 
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, type, title, body)
-      VALUES (?, ?, 'review', 'New Review', ?)
-    `).run(uuidv4(), revieweeId, `${req.user.name} left you a ${rating}-star review.`);
+    notify(revieweeId, 'review', 'New Review', `${req.user.name} left you a ${rating}-star review.`);
 
     const review = db.prepare(`
       SELECT r.*, u.name as reviewer_name, u.avatar as reviewer_avatar

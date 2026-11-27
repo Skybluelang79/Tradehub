@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 
 const router = Router();
 
@@ -17,11 +18,6 @@ const REQUEST_COLUMNS = `
 
 function getLatest(userId) {
   return db.prepare(`SELECT ${REQUEST_COLUMNS} FROM verification_requests r LEFT JOIN users u ON u.id = r.user_id WHERE r.user_id = ? ORDER BY r.created_at DESC LIMIT 1`).get(userId);
-}
-
-function notify(userId, type, title, body) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-    .run(uuidv4(), userId, type, title, body);
 }
 
 // Current user's verification status.

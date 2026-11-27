@@ -4,6 +4,7 @@ import db from '../db.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 import validate, { createItemSchema, updateItemSchema, placeBidSchema } from '../src/validation.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 import { formatMoney } from '../../shared/currencies.js';
 import { getPlan, getEffectivePlan } from '../../shared/plans.js';
 
@@ -442,12 +443,10 @@ router.post('/', authenticateToken, validate(createItemSchema), (req, res) => {
     const itemImages = db.prepare('SELECT url FROM item_images WHERE item_id = ? ORDER BY sort_order').all(id);
     item.images = itemImages.map(i => i.url);
 
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, type, title, body)
-      VALUES (?, ?, 'system', 'Listing Created', ?)
-    `).run(
-      uuidv4(),
+    notify(
       req.user.id,
+      'system',
+      'Listing Created',
       listingStatus === 'active'
         ? `"${title}" is now live!`
         : `"${title}" was submitted for review. Gold sellers get auction auto-approval.`
@@ -610,10 +609,7 @@ router.delete('/:id', authenticateToken, (req, res) => {
 
     db.prepare('DELETE FROM items WHERE id = ?').run(req.params.id);
 
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, type, title, body)
-      VALUES (?, ?, 'system', 'Listing Deleted', ?)
-    `).run(uuidv4(), req.user.id, `"${item.title}" has been removed.`);
+    notify(req.user.id, 'system', 'Listing Deleted', `"${item.title}" has been removed.`);
 
     res.json({ success: true });
   } catch (err) {
@@ -669,11 +665,8 @@ router.post('/bulk/delete', authenticateToken, (req, res) => {
 
     db.prepare(`DELETE FROM items WHERE id IN (${placeholders}) AND seller_id = ?`).run(...ids, req.user.id);
 
-    const insertNotif = db.prepare(
-      `INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, 'system', 'Listing Deleted', ?)`
-    );
     for (const item of owned) {
-      insertNotif.run(uuidv4(), req.user.id, `"${item.title}" has been removed.`);
+      notify(req.user.id, 'system', 'Listing Deleted', `"${item.title}" has been removed.`);
     }
 
     res.json({ success: true, deleted: owned.length });
@@ -748,10 +741,13 @@ router.post('/:id/bid', authenticateToken, validate(placeBidSchema), (req, res) 
     db.prepare('UPDATE items SET current_bid = ?, current_bidder_id = ? WHERE id = ?').run(amount, req.user.id, item.id);
 
     if (item.current_bidder_id && item.current_bidder_id !== req.user.id) {
-      db.prepare(`
-        INSERT INTO notifications (id, user_id, type, title, body, data)
-        VALUES (?, ?, 'system', "You've been outbid", ?, ?)
-      `).run(uuidv4(), item.current_bidder_id, `A new bid of ${formatMoney(amount, item.currency || 'NGN')} was placed on your auction item.`, JSON.stringify({ itemId: item.id }));
+      notify(
+        item.current_bidder_id,
+        'system',
+        "You've been outbid",
+        `A new bid of ${formatMoney(amount, item.currency || 'NGN')} was placed on your auction item.`,
+        { itemId: item.id }
+      );
     }
 
     res.status(201).json({

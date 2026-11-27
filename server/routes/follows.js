@@ -1,16 +1,11 @@
 import { Router } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 import { sendNotificationEmail } from '../src/email.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 
 const router = Router();
-
-function notify(userId, type, title, body) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-    .run(uuidv4(), userId, type, title, body);
-}
 
 function getUserById(id) {
   return db.prepare('SELECT id, name, email, avatar, bio, verified, identity_verified, rating, review_count, created_at FROM users WHERE id = ?').get(id);

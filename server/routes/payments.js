@@ -7,6 +7,7 @@ import { validateAndApplyPromo, consumePromo, releasePromo } from './promotions.
 import { creditFirstPurchase } from './referrals.js';
 import { sendNotificationEmail } from '../src/email.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 import {
   paystack,
   isPaystackConfigured,
@@ -101,11 +102,6 @@ function platformFeePercent() {
     if (Number.isFinite(v) && v >= 0) return v;
   } catch {}
   return 10;
-}
-
-function notify(userId, type, title, body, data = {}) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?, ?)')
-    .run(uuidv4(), userId, type, title, body, JSON.stringify(data));
 }
 
 // ---- Store credit / gift card helpers --------------------------------------

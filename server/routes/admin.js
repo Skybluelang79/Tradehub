@@ -14,6 +14,7 @@ import { adminAuth } from '../middleware/adminAuth.js';
 import { requiredSecret, requiredEnv } from '../src/env.js';
 import { readEnvFileValue } from '../loadEnv.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 import pkg from '../package.json' with { type: 'json' };
 
 const router = Router();
@@ -318,9 +319,8 @@ router.post('/verifications/:id/approve', adminAuth, (req, res) => {
       UPDATE users SET identity_verified = 1, kyc_status = 'verified', kyc_verified_at = datetime('now'),
       updated_at = datetime('now') WHERE id = ?
     `).run(request.user_id);
-    db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-      .run(uuidv4(), request.user_id, 'verification', 'Verification Approved',
-        'Congratulations! Your seller identity has been verified. You can now list with the Verified Seller badge.');
+    notify(request.user_id, 'verification', 'Verification Approved',
+      'Congratulations! Your seller identity has been verified. You can now list with the Verified Seller badge.');
     logAudit(req.adminId, 'verification_approved', 'verification', request.id, { user_id: request.user_id });
     res.json({ success: true });
   } catch (err) {
@@ -336,9 +336,8 @@ router.post('/verifications/:id/reject', adminAuth, (req, res) => {
     const note = String(req.body.note || '').trim().slice(0, 500);
     db.prepare("UPDATE verification_requests SET status = 'rejected', admin_note = ?, admin_id = ?, reviewed_at = datetime('now') WHERE id = ?").run(note, req.adminId, request.id);
     db.prepare("UPDATE users SET kyc_status = 'rejected', updated_at = datetime('now') WHERE id = ?").run(request.user_id);
-    db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-      .run(uuidv4(), request.user_id, 'verification', 'Verification Request Update',
-        note ? `Your verification request was rejected: ${note}` : 'Your verification request was rejected. Please resubmit with a clearer document photo.');
+    notify(request.user_id, 'verification', 'Verification Request Update',
+      note ? `Your verification request was rejected: ${note}` : 'Your verification request was rejected. Please resubmit with a clearer document photo.');
     logAudit(req.adminId, 'verification_rejected', 'verification', request.id, { user_id: request.user_id, note });
     res.json({ success: true });
   } catch (err) {
@@ -714,11 +713,8 @@ router.post('/broadcast', adminAuth, (req, res) => {
     if (!body || !String(body).trim()) return res.status(400).json({ error: 'Body is required' });
 
     const userIds = db.prepare('SELECT id FROM users').all();
-    const insert = db.prepare(
-      'INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)'
-    );
     for (const u of userIds) {
-      insert.run(uuidv4(), u.id, type, title, body);
+      notify(u.id, type, title, body);
     }
     logAudit(req.adminId, 'broadcast', 'notification', null, { title, recipients: userIds.length });
     res.json({ success: true, recipients: userIds.length });

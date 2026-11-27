@@ -10,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid';
 import app from './app.js';
 import db, { flushDB } from './db.js';
 import logger from './src/logger.js';
+import { notify } from './src/notifications.js';
 import { requiredSecret, allowedOrigins } from './src/env.js';
 import { startScheduler } from './src/scheduler.js';
 import { integrationStatus } from './src/features.js';
@@ -270,10 +271,7 @@ io.on('connection', (socket) => {
           message,
         });
       }
-      db.prepare(`
-        INSERT INTO notifications (id, user_id, type, title, body, data)
-        VALUES (?, ?, 'message', 'New Message', ?, ?)
-      `).run(uuidv4(), recipientId, `New message about "${item?.title}"`, JSON.stringify({ conversationId }));
+      notify(recipientId, 'message', 'New Message', `New message about "${item?.title}"`, { conversationId });
     }
   });
 
@@ -286,10 +284,7 @@ io.on('connection', (socket) => {
     const existing = db.prepare('SELECT * FROM blocked_users WHERE blocker_id = ? AND blocked_id = ?').get(socket.user.id, blockedId);
     if (existing) return;
     db.prepare('INSERT INTO blocked_users (blocker_id, blocked_id) VALUES (?, ?)').run(socket.user.id, blockedId);
-    db.prepare(`
-      INSERT INTO notifications (id, user_id, type, title, body, data)
-      VALUES (?, ?, 'system', 'User blocked', 'You blocked this user', ?)
-    `).run(uuidv4(), socket.user.id, JSON.stringify({ userId: blockedId }));
+    notify(socket.user.id, 'system', 'User blocked', 'You blocked this user', { userId: blockedId });
     socket.emit('block_success', { conversationId, userId: blockedId });
   });
 

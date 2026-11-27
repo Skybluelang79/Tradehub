@@ -4,6 +4,7 @@ import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { adminAuth } from '../middleware/adminAuth.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 import { paystack, isPaystackConfigured } from '../src/paystack.js';
 import { verifyTotp, consumeBackupCode } from '../src/totp.js';
 
@@ -30,11 +31,6 @@ function getWallet(userId) {
     w = db.prepare('SELECT * FROM wallets WHERE user_id = ?').get(userId);
   }
   return w;
-}
-
-function notify(userId, type, title, body) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-    .run(uuidv4(), userId, type, title, body);
 }
 
 router.get('/balance', authenticateToken, (req, res) => {

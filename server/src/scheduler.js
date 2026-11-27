@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import logger from './logger.js';
+import { notify } from './notifications.js';
 import { finalizeCompleted, expireAwaitingPayment } from '../routes/payments.js';
 
 const AUTO_RELEASE_DAYS = Math.max(1, parseInt(process.env.AUTO_RELEASE_DAYS || '7', 10));
@@ -65,21 +66,30 @@ export function runAuctionFinalize() {
           VALUES (?, ?, ?, ?, ?, ?, ?, 'auction', ?, 'awaiting_payment')
         `).run(uuidv4(), item.id, item.title, image, item.current_bid, item.current_bidder_id, item.seller_id, `auction_${item.id}`);
         db.prepare("UPDATE items SET status = 'sold', auction_status = 'ended' WHERE id = ?").run(item.id);
-        db.prepare(`
-          INSERT INTO notifications (id, user_id, type, title, body, data)
-          VALUES (?, ?, 'sale', 'You won the auction!', ?, ?)
-        `        ).run(uuidv4(), item.current_bidder_id, `Your winning bid of ₦${Number(item.current_bid).toLocaleString('en-NG')} for "${item.title}" is awaiting payment. Complete checkout to claim it.`, JSON.stringify({ itemId: item.id }));
-        db.prepare(`
-          INSERT INTO notifications (id, user_id, type, title, body, data)
-          VALUES (?, ?, 'sale', 'Auction ended with a sale', ?, ?)
-        `        ).run(uuidv4(), item.seller_id, `"${item.title}" sold at auction for ₦${Number(item.current_bid).toLocaleString('en-NG')}. You will be credited once the winner's payment clears.`, JSON.stringify({ itemId: item.id }));
+        notify(
+          item.current_bidder_id,
+          'sale',
+          'You won the auction!',
+          `Your winning bid of ₦${Number(item.current_bid).toLocaleString('en-NG')} for "${item.title}" is awaiting payment. Complete checkout to claim it.`,
+          { itemId: item.id }
+        );
+        notify(
+          item.seller_id,
+          'sale',
+          'Auction ended with a sale',
+          `"${item.title}" sold at auction for ₦${Number(item.current_bid).toLocaleString('en-NG')}. You will be credited once the winner's payment clears.`,
+          { itemId: item.id }
+        );
         logger.info(`Auction sold: ${item.title} (${item.id}) for ₦${item.current_bid}`);
       } else {
         db.prepare("UPDATE items SET auction_status = 'ended' WHERE id = ?").run(item.id);
-        db.prepare(`
-          INSERT INTO notifications (id, user_id, type, title, body, data)
-          VALUES (?, ?, 'system', 'Auction ended with no bids', ?, ?)
-        `).run(uuidv4(), item.seller_id, `Your auction for "${item.title}" ended with no bids. It remains available as a fixed-price listing.`, JSON.stringify({ itemId: item.id }));
+        notify(
+          item.seller_id,
+          'system',
+          'Auction ended with no bids',
+          `Your auction for "${item.title}" ended with no bids. It remains available as a fixed-price listing.`,
+          { itemId: item.id }
+        );
         logger.info(`Auction ended with no bids: ${item.title} (${item.id})`);
       }
     }
@@ -100,6 +110,8 @@ export function runSavedSearchAlerts() {
     const searches = db.prepare('SELECT * FROM saved_searches').all();
     let notified = 0;
     for (const s of searches) {
+      const settings = db.prepare('SELECT notif_saved_searches FROM user_settings WHERE user_id = ?').get(s.user_id);
+      if (settings && settings.notif_saved_searches === 0) continue;
       const terms = String(s.query || '').toLowerCase().split(/\s+/).filter(Boolean);
       for (const item of recentItems) {
         if (item.seller_id === s.user_id) continue;
@@ -110,16 +122,23 @@ export function runSavedSearchAlerts() {
         if (s.min_price != null && price < s.min_price) continue;
         if (s.max_price != null && price > s.max_price) continue;
 
-        db.prepare(
-          `INSERT INTO notifications (id, user_id, type, title, body, data, created_at)
-           VALUES (?, ?, 'saved_search', ?, ?, ?, datetime('now'))`
-        ).run(
-          uuidv4(),
-          s.user_id,
-          `New match for "${s.name}"`,
-          `${item.title} is now ₦${Number(price).toLocaleString('en-NG')}`,
-          JSON.stringify({ itemId: item.id, searchId: s.id })
-        );
+        const claimed = db.prepare(
+          'INSERT OR IGNORE INTO saved_search_alerts (search_id, item_id, user_id) VALUES (?, ?, ?)'
+        ).run(s.id, item.id, s.user_id);
+        if (!claimed.changes) continue;
+
+        try {
+          notify(
+            s.user_id,
+            'saved_search',
+            `New match for "${s.name}"`,
+            `${item.title} is now ₦${Number(price).toLocaleString('en-NG')}`,
+            { itemId: item.id, searchId: s.id }
+          );
+        } catch (err) {
+          db.prepare('DELETE FROM saved_search_alerts WHERE search_id = ? AND item_id = ?').run(s.id, item.id);
+          throw err;
+        }
         notified++;
       }
     }
@@ -146,15 +165,12 @@ export function runPriceDropAlerts() {
       if (settings && settings.notif_price_drops === 0) continue;
 
       const newPrice = fav.sale_price ?? fav.price;
-      db.prepare(
-        `INSERT INTO notifications (id, user_id, type, title, body, data, created_at)
-         VALUES (?, ?, 'price_drop', ?, ?, ?, datetime('now'))`
-      ).run(
-        uuidv4(),
+      notify(
         fav.user_id,
+        'price_drop',
         `Price dropped on "${fav.title}"`,
         `The item you favorited is now ₦${Number(newPrice).toLocaleString('en-NG')}`,
-        JSON.stringify({ itemId: fav.item_id })
+        { itemId: fav.item_id }
       );
       db.prepare('UPDATE favorites SET price_at_add = ? WHERE user_id = ? AND item_id = ?').run(newPrice, fav.user_id, fav.item_id);
       notified++;
@@ -183,14 +199,12 @@ export function runDisputeDeadlineSweep() {
       const txn = db.prepare('SELECT * FROM transactions WHERE id = ?').get(dispute.transaction_id);
       if (txn) {
         for (const userId of [txn.buyer_id, txn.seller_id]) {
-          db.prepare(`
-            INSERT INTO notifications (id, user_id, type, title, body, data)
-            VALUES (?, ?, 'dispute', 'Evidence Window Closed', ?, ?)
-          `).run(
-            uuidv4(),
+          notify(
             userId,
+            'dispute',
+            'Evidence Window Closed',
             `The evidence window for "${txn.item_title}" has closed. An admin will review the dispute.`,
-            JSON.stringify({ disputeId: dispute.id })
+            { disputeId: dispute.id }
           );
         }
       }
@@ -209,10 +223,7 @@ function runListingExpirySweep() {
     ).all();
 
     for (const item of warningWindow) {
-      db.prepare(`
-        INSERT INTO notifications (id, user_id, type, title, body)
-        VALUES (?, ?, 'system', 'Listing Expiring Soon', ?)
-      `).run(uuidv4(), item.seller_id, `"${item.title}" expires soon. Renew or edit it to keep it live.`);
+      notify(item.seller_id, 'system', 'Listing Expiring Soon', `"${item.title}" expires soon. Renew or edit it to keep it live.`);
       db.prepare("UPDATE items SET expiry_warned_at = datetime('now') WHERE id = ?").run(item.id);
     }
 
@@ -224,10 +235,7 @@ function runListingExpirySweep() {
       db.prepare(
         "UPDATE items SET status = 'expired', locked_at = datetime('now'), lock_reason = 'Listing duration ended' WHERE id = ?"
       ).run(item.id);
-      db.prepare(`
-        INSERT INTO notifications (id, user_id, type, title, body)
-        VALUES (?, ?, 'system', 'Listing Locked', ?)
-      `).run(uuidv4(), item.seller_id, `"${item.title}" has expired and is now locked. Renew it to publish again.`);
+      notify(item.seller_id, 'system', 'Listing Locked', `"${item.title}" has expired and is now locked. Renew it to publish again.`);
     }
 
     if (warningWindow.length || expired.length) {

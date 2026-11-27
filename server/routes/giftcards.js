@@ -12,6 +12,7 @@ import {
   toMinorUnits,
 } from '../src/paystack.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 
 const router = Router();
 
@@ -91,11 +92,6 @@ function redeemGiftCard(code, userId) {
   db.prepare("UPDATE wallets SET credit_cents = credit_cents + ?, updated_at = datetime('now') WHERE user_id = ?")
     .run(balance, userId);
   return balance;
-}
-
-function notify(userId, type, title, body) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-    .run(uuidv4(), userId, type, title, body);
 }
 
 // Completes a paid gift-card purchase: mints a redeemed card, credits the

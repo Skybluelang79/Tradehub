@@ -10,6 +10,7 @@ import {
   toMinorUnits,
 } from '../src/paystack.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 import { convert } from '../../shared/currencies.js';
 import { PLANS, getEffectivePlan } from '../../shared/plans.js';
 
@@ -22,11 +23,6 @@ function planChargeAmount(planId) {
 }
 
 const IS_PROD = process.env.NODE_ENV === 'production';
-
-function notify(userId, type, title, body) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-    .run(uuidv4(), userId, type, title, body);
-}
 
 function getSubscription(userId) {
   let sub = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(userId);

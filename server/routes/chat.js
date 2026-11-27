@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { chatSearchLimiter } from '../src/rateLimiter.js';
+import { notify } from '../src/notifications.js';
 
 const router = Router();
 
@@ -331,10 +332,7 @@ router.post('/:id/messages', authenticateToken, (req, res) => {
     const recipientId = getOtherParticipant(conversation, req.user.id);
     if (!isCall) {
       const item = db.prepare('SELECT title FROM items WHERE id = ?').get(conversation.item_id);
-      db.prepare(`
-        INSERT INTO notifications (id, user_id, type, title, body, data)
-        VALUES (?, ?, 'message', 'New Message', ?, ?)
-      `).run(uuidv4(), recipientId, `New message about "${item?.title}"`, JSON.stringify({ conversationId: req.params.id }));
+      notify(recipientId, 'message', 'New Message', `New message about "${item?.title}"`, { conversationId: req.params.id });
     }
 
     res.status(201).json({ message: rowToMessage(message) });

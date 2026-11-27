@@ -5,6 +5,8 @@ let fcmToken = null;
 let unsubscribeMessage = null;
 let serviceWorkerRegistration = null;
 
+const PUSH_SCOPE = `${import.meta.env.BASE_URL}firebase-cloud-messaging-push-scope/`;
+
 function firebaseConfigParams() {
   return {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY || '',
@@ -19,27 +21,61 @@ async function registerMessagingServiceWorker() {
   if (serviceWorkerRegistration || !('serviceWorker' in navigator)) {
     return serviceWorkerRegistration;
   }
-  const url = new URL(`${import.meta.env.BASE_URL}firebase-messaging-sw.js`, window.location.origin);
+  const url = new URL(`${PUSH_SCOPE}firebase-messaging-sw.js`, window.location.origin);
   Object.entries(firebaseConfigParams()).forEach(([key, value]) => {
     if (value) url.searchParams.set(key, value);
   });
   serviceWorkerRegistration = await navigator.serviceWorker.register(url.pathname + url.search, {
-    scope: import.meta.env.BASE_URL,
+    scope: PUSH_SCOPE,
   });
   return serviceWorkerRegistration;
 }
 
-export async function initializeFCM({ prompt = false } = {}) {
+async function pushPreferenceEnabled() {
   try {
-    const registration = await registerMessagingServiceWorker();
-    fcmToken = await requestFCMPermission({ prompt, serviceWorkerRegistration: registration });
-    if (fcmToken) {
-      await api.fcm.saveToken(fcmToken);
-      setupMessageListener();
+    const { settings } = await api.settings.get();
+    return settings?.notif_push !== 0 && settings?.notif_push !== false;
+  } catch {
+    return true;
+  }
+}
+
+export async function initializeFCM({ prompt = false, persistToken = true } = {}) {
+  try {
+    if (!prompt && !(await pushPreferenceEnabled())) {
+      cleanupFCM();
+      return null;
     }
-    return fcmToken;
+    const registration = await registerMessagingServiceWorker();
+    const token = await requestFCMPermission({ prompt, serviceWorkerRegistration: registration });
+    if (!token) {
+      cleanupFCM();
+      return null;
+    }
+    fcmToken = token;
+    if (persistToken) await api.fcm.saveToken(token);
+    setupMessageListener();
+    return token;
   } catch {
     return null;
+  }
+}
+
+export async function enableFCM() {
+  const token = await initializeFCM({ prompt: true, persistToken: false });
+  if (!token) return null;
+  await api.settings.update({ notif_push: true });
+  await api.fcm.saveToken(token);
+  setupMessageListener();
+  return token;
+}
+
+export async function disableFCM() {
+  await api.settings.update({ notif_push: false });
+  try {
+    await api.fcm.removeToken();
+  } finally {
+    cleanupFCM();
   }
 }
 
@@ -57,9 +93,10 @@ function setupMessageListener() {
 function showBrowserNotification(title, options = {}) {
   if (Notification.permission === 'granted') {
     try {
+      const icon = new URL(`${import.meta.env.BASE_URL}icon-192.png`, window.location.origin).href;
       new Notification(title, {
-        icon: '/icon-192.png',
-        badge: '/icon-192.png',
+        icon,
+        badge: icon,
         ...options,
       });
     } catch {}
@@ -70,13 +107,6 @@ export function getFCMToken() {
   return fcmToken;
 }
 
-export async function disableFCM() {
-  try {
-    await api.fcm.removeToken();
-  } catch {}
-  cleanupFCM();
-}
-
 export function cleanupFCM() {
   if (unsubscribeMessage) {
     unsubscribeMessage();
@@ -85,4 +115,4 @@ export function cleanupFCM() {
   fcmToken = null;
 }
 
-export default { initializeFCM, disableFCM, getFCMToken, cleanupFCM };
+export default { initializeFCM, enableFCM, disableFCM, getFCMToken, cleanupFCM };

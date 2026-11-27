@@ -1,8 +1,8 @@
 .support-launch {
   position: fixed;
-  right: 16px;
-  bottom: 88px;
-  z-index: 60;
+  right: 20px;
+  bottom: calc(88px + var(--safe-area-bottom));
+  z-index: 101;
   width: 54px;
   height: 54px;
   border-radius: 50%;
@@ -35,9 +35,9 @@
 
 .support-chat-panel {
   position: fixed;
-  right: 16px;
-  bottom: 152px;
-  z-index: 61;
+  right: 20px;
+  bottom: calc(152px + var(--safe-area-bottom));
+  z-index: 102;
   width: min(370px, calc(100vw - 32px));
   height: min(600px, calc(100vh - 180px));
   display: flex;
@@ -412,16 +412,16 @@
 
 @media (max-width: 600px) {
   .support-chat-panel {
-    right: 8px;
-    left: 8px;
-    bottom: 140px;
+    right: 12px;
+    left: 12px;
+    bottom: calc(142px + var(--safe-area-bottom));
     width: auto;
-    height: min(560px, calc(100vh - 160px));
+    height: min(560px, calc(100vh - 162px - var(--safe-area-bottom)));
   }
 
   .support-launch {
     right: 14px;
-    bottom: 80px;
+    bottom: calc(82px + var(--safe-area-bottom));
     width: 48px;
     height: 48px;
   }

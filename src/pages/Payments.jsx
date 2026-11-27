@@ -800,7 +800,7 @@ export default function Payments() {
           </div>
           <div className="escrow-protection-note">
             <ShieldIcon size={16} />
-            <span>Your payment is protected in escrow. Confirm delivery within 2 days, or open a dispute within 7 days if the item is not as described.</span>
+            <span>Your payment is protected in escrow. It is released when you confirm delivery or automatically after 7 days. Open a dispute before release if the item is not as described.</span>
           </div>
         </div>
       </Modal>

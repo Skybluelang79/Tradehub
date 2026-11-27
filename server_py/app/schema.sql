@@ -436,6 +436,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   notif_followers INTEGER DEFAULT 1,
   notif_boosts INTEGER DEFAULT 1,
   notif_saved_searches INTEGER DEFAULT 1,
+  notif_push INTEGER DEFAULT 1,
   fcm_token TEXT DEFAULT '',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))

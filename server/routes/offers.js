@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 import { formatMoney } from '../../shared/currencies.js';
 
 const router = Router();
@@ -18,11 +19,6 @@ const OFFER_COLUMNS = `
   u.name AS buyer_name, u.avatar AS buyer_avatar,
   s.name AS seller_name, s.avatar AS seller_avatar
 `;
-
-function notify(userId, type, title, body) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-    .run(uuidv4(), userId, type, title, body);
-}
 
 function getOffer(id) {
   return db.prepare(`SELECT ${OFFER_COLUMNS} FROM offers o LEFT JOIN items i ON i.id = o.item_id LEFT JOIN users u ON u.id = o.buyer_id LEFT JOIN users s ON s.id = o.seller_id WHERE o.id = ?`).get(id);

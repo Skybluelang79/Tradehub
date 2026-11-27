@@ -7,13 +7,9 @@ import { refundTxn, reserveItem } from './payments.js';
 import { activatePlan, planIdForCode } from './subscriptions.js';
 import { completeGiftCardPurchase } from './giftcards.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 
 const router = Router();
-
-function notify(userId, type, title, body) {
-  db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-    .run(crypto.randomUUID(), userId, type, title, body);
-}
 
 // Paystack webhook handler. Requires PAYSTACK_WEBHOOK_SECRET to be configured;
 // requests without a valid signature are rejected (HMAC-SHA512).

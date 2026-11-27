@@ -223,24 +223,27 @@ def run_saved_search_alerts():
                     ):
                         continue
 
-                already_sent = db.get(
-                    "SELECT 1 FROM saved_search_alerts WHERE search_id = ? AND item_id = ?",
-                    (s["id"], item["id"]),
-                )
-                if already_sent:
-                    continue
-
-                notify(
-                    s["user_id"],
-                    "saved_search",
-                    f'New match for "{s["name"]}"',
-                    f'{item["title"]} is now ₦{_format_ng_amount(price)}',
-                    data=json.dumps({"itemId": item["id"], "searchId": s["id"]}),
-                )
-                db.run(
+                claimed = db.run(
                     "INSERT OR IGNORE INTO saved_search_alerts (search_id, item_id, user_id) VALUES (?, ?, ?)",
                     (s["id"], item["id"], s["user_id"]),
                 )
+                if not claimed["changes"]:
+                    continue
+
+                try:
+                    notify(
+                        s["user_id"],
+                        "saved_search",
+                        f'New match for "{s["name"]}"',
+                        f'{item["title"]} is now ₦{_format_ng_amount(price)}',
+                        data=json.dumps({"itemId": item["id"], "searchId": s["id"]}),
+                    )
+                except Exception:
+                    db.run(
+                        "DELETE FROM saved_search_alerts WHERE search_id = ? AND item_id = ?",
+                        (s["id"], item["id"]),
+                    )
+                    raise
                 notified += 1
         if notified > 0:
             logger.info("Saved-search alerts sent: %s", notified)

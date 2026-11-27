@@ -40,7 +40,7 @@ export default defineConfig([
     },
   },
   {
-    files: ['public/firebase-messaging-sw.js'],
+    files: ['public/firebase-cloud-messaging-push-scope/firebase-messaging-sw.js'],
     languageOptions: {
       globals: {
         ...globals.serviceworker,

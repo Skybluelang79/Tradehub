@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import db from '../db.js';
 import { authenticateToken } from '../middleware/auth.js';
 import logger from '../src/logger.js';
+import { notify } from '../src/notifications.js';
 
 const router = Router();
 
@@ -47,9 +48,8 @@ export function applyReferral(referredId, rawCode) {
     VALUES (?, ?, ?, ?, 'pending', ?)
   `).run(id, referrer.id, referredId, code, REWARD_CENTS);
   try {
-    db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-      .run(uuidv4(), referrer.id, 'referral', 'New Referral',
-        'Someone joined TradeHub using your link. You will earn store credit once they complete their first purchase.');
+    notify(referrer.id, 'referral', 'New Referral',
+      'Someone joined TradeHub using your link. You will earn store credit once they complete their first purchase.');
   } catch (err) {
     logger.error('Referral notify error:', err);
   }
@@ -77,9 +77,8 @@ export function creditFirstPurchase(userId) {
   db.prepare("UPDATE referrals SET status = 'credited', credited_at = datetime('now') WHERE id = ?").run(referral.id);
 
   try {
-    db.prepare('INSERT INTO notifications (id, user_id, type, title, body) VALUES (?, ?, ?, ?, ?)')
-      .run(uuidv4(), referral.referrer_id, 'referral', 'Referral Reward Earned',
-        `You earned ₦${(referral.reward_cents / 100).toFixed(2)} store credit from your referral!`);
+    notify(referral.referrer_id, 'referral', 'Referral Reward Earned',
+      `You earned ₦${(referral.reward_cents / 100).toFixed(2)} store credit from your referral!`);
   } catch (err) {
     logger.error('Referral credit notify error:', err);
   }

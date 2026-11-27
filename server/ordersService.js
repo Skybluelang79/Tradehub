@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import db from './db.js';
 import { invoiceNumber } from './commerce.js';
+import { notify } from './src/notifications.js';
 
 export const SHIPMENT_STATUSES = new Set(['pending', 'shipped', 'in_transit', 'delivered', 'cancelled']);
 export const PAID_ORDER_STATUSES = new Set(['processing', 'partially_shipped', 'shipped', 'delivered', 'completed']);
@@ -9,13 +10,6 @@ function httpError(status, message) {
   const err = new Error(message);
   err.status = status;
   return err;
-}
-
-function notify(userId, type, title, body, data = {}) {
-  db.prepare(`
-    INSERT INTO notifications (id, user_id, type, title, body, data)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(uuidv4(), userId, type, title, body, JSON.stringify(data));
 }
 
 function event(orderId, type, actorId = null, data = {}) {
